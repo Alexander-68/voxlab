@@ -51,7 +51,9 @@ func findKokoroModelDir(configured string) (string, bool) {
 	candidates := []string{
 		configured,
 		filepath.Join("models", "kokoro-multi-lang-v1_1"),
+		filepath.Join("models", "kokoro-int8-multi-lang-v1_1"),
 		filepath.Join("models", "kokoro-multi-lang-v1_0"),
+		filepath.Join("models", "kokoro-int8-multi-lang-v1_0"),
 		filepath.Join("models", "kokoro-en-v0_19"),
 	}
 	for _, c := range candidates {
@@ -60,6 +62,9 @@ func findKokoroModelDir(configured string) (string, bool) {
 		}
 		if fi, err := os.Stat(c); err == nil && fi.IsDir() {
 			if _, err := os.Stat(filepath.Join(c, "model.onnx")); err == nil {
+				return c, true
+			}
+			if _, err := os.Stat(filepath.Join(c, "model.int8.onnx")); err == nil {
 				return c, true
 			}
 		}
@@ -114,16 +119,31 @@ func (r *SherpaRunner) Synthesize(req TTSRequest) (*TTSResult, error) {
 	tempWav := filepath.Join(os.TempDir(), fmt.Sprintf("voxlab_tts_%d.wav", time.Now().UnixNano()))
 	defer os.Remove(tempWav)
 
+	modelFile := filepath.Join(modelDir, "model.onnx")
+	if _, err := os.Stat(modelFile); os.IsNotExist(err) {
+		modelFile = filepath.Join(modelDir, "model.int8.onnx")
+	}
 	voicesPath := filepath.Join(modelDir, "voices.bin")
 	tokensPath := filepath.Join(modelDir, "tokens.txt")
 	dataDirPath := filepath.Join(modelDir, "espeak-ng-data")
 
 	args := []string{
-		fmt.Sprintf("--kokoro-model-dir=%s", modelDir),
+		fmt.Sprintf("--kokoro-model=%s", modelFile),
 		fmt.Sprintf("--kokoro-voices=%s", voicesPath),
 		fmt.Sprintf("--kokoro-tokens=%s", tokensPath),
 		fmt.Sprintf("--kokoro-data-dir=%s", dataDirPath),
-		fmt.Sprintf("--tts-wav-output=%s", tempWav),
+		fmt.Sprintf("--output-filename=%s", tempWav),
+	}
+
+	var lexicons []string
+	for _, lexName := range []string{"lexicon-us-en.txt", "lexicon-zh.txt"} {
+		lexPath := filepath.Join(modelDir, lexName)
+		if _, err := os.Stat(lexPath); err == nil {
+			lexicons = append(lexicons, lexPath)
+		}
+	}
+	if len(lexicons) > 0 {
+		args = append(args, fmt.Sprintf("--kokoro-lexicon=%s", strings.Join(lexicons, ",")))
 	}
 
 	// Map speaker voice if sid parameter is supported

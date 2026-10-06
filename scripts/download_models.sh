@@ -30,7 +30,9 @@ fi
 
 # 2. Kokoro TTS Model Selection
 KOKORO_NAME="kokoro-multi-lang-v1_1"
-if [ "$KOKORO_VER" == "v1_0" ]; then
+if [ "$KOKORO_VER" == "int8" ]; then
+    KOKORO_NAME="kokoro-int8-multi-lang-v1_1"
+elif [ "$KOKORO_VER" == "v1_0" ]; then
     KOKORO_NAME="kokoro-multi-lang-v1_0"
 elif [ "$KOKORO_VER" == "v0_19" ]; then
     KOKORO_NAME="kokoro-en-v0_19"
