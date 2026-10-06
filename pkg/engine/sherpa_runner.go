@@ -3,9 +3,11 @@ package engine
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"voxlab/pkg/audio"
@@ -29,7 +31,6 @@ func NewSherpaRunner(cfg *config.AppConfig) *SherpaRunner {
 func (r *SherpaRunner) Name() string { return "sherpa_onnx_native" }
 
 func (r *SherpaRunner) DetectVAD(chunk []float32) (bool, float32) {
-	// For VAD in stream, delegates to Silero VAD or energy proxy
 	return r.simulator.DetectVAD(chunk)
 }
 
@@ -45,19 +46,66 @@ func (r *SherpaRunner) ResetASR() {
 	r.simulator.ResetASR()
 }
 
-// Synthesize runs Kokoro TTS via sherpa-onnx-offline-tts binary if available.
-func (r *SherpaRunner) Synthesize(req TTSRequest) (*TTSResult, error) {
-	ttsBin := r.cfg.Engine.SherpaTtsBin
-	modelDir := r.cfg.Engine.KokoroModelDir
+// findKokoroModelDir automatically discovers the latest available Kokoro model directory.
+func findKokoroModelDir(configured string) (string, bool) {
+	candidates := []string{
+		configured,
+		filepath.Join("models", "kokoro-multi-lang-v1_1"),
+		filepath.Join("models", "kokoro-multi-lang-v1_0"),
+		filepath.Join("models", "kokoro-en-v0_19"),
+	}
+	for _, c := range candidates {
+		if c == "" {
+			continue
+		}
+		if fi, err := os.Stat(c); err == nil && fi.IsDir() {
+			if _, err := os.Stat(filepath.Join(c, "model.onnx")); err == nil {
+				return c, true
+			}
+		}
+	}
+	return configured, false
+}
 
-	// Check if sherpa binary and model dir exist
-	_, binErr := exec.LookPath(ttsBin)
-	modelExists := false
-	if fi, err := os.Stat(modelDir); err == nil && fi.IsDir() {
-		modelExists = true
+// findSherpaBin searches for a sherpa-onnx binary on PATH or local folders.
+func findSherpaBin(name string) (string, bool) {
+	// 1. Direct LookPath
+	if path, err := exec.LookPath(name); err == nil {
+		return path, true
 	}
 
-	if binErr != nil || !modelExists {
+	// 2. Local bin/ or models/bin/ directories
+	candidates := []string{
+		filepath.Join("bin", name),
+		filepath.Join("bin", name+".exe"),
+		filepath.Join("models", "bin", name),
+		filepath.Join("models", "bin", name+".exe"),
+	}
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			return c, true
+		}
+	}
+
+	// 3. Search within models subfolders for unpacked binaries
+	matches, _ := filepath.Glob(filepath.Join("models", "*", "bin", name+"*"))
+	if len(matches) > 0 {
+		return matches[0], true
+	}
+	matchesBin, _ := filepath.Glob(filepath.Join("bin", "*", "bin", name+"*"))
+	if len(matchesBin) > 0 {
+		return matchesBin[0], true
+	}
+
+	return name, false
+}
+
+// Synthesize runs Kokoro TTS via sherpa-onnx-offline-tts binary if available.
+func (r *SherpaRunner) Synthesize(req TTSRequest) (*TTSResult, error) {
+	modelDir, modelExists := findKokoroModelDir(r.cfg.Engine.KokoroModelDir)
+	ttsBin, binExists := findSherpaBin(r.cfg.Engine.SherpaTtsBin)
+
+	if !binExists || !modelExists {
 		// Gracefully fall back to simulator if real model/binary is not yet downloaded
 		return r.simulator.Synthesize(req)
 	}
@@ -76,15 +124,29 @@ func (r *SherpaRunner) Synthesize(req TTSRequest) (*TTSResult, error) {
 		fmt.Sprintf("--kokoro-tokens=%s", tokensPath),
 		fmt.Sprintf("--kokoro-data-dir=%s", dataDirPath),
 		fmt.Sprintf("--tts-wav-output=%s", tempWav),
-		req.Text,
 	}
+
+	// Map speaker voice if sid parameter is supported
+	sid := 0
+	if strings.Contains(req.Voice, "alloy") {
+		sid = 1
+	} else if strings.Contains(req.Voice, "aoede") {
+		sid = 2
+	} else if strings.Contains(req.Voice, "bella") {
+		sid = 3
+	} else if strings.Contains(req.Voice, "adam") {
+		sid = 4
+	}
+	args = append(args, fmt.Sprintf("--sid=%d", sid))
+	args = append(args, req.Text)
 
 	cmd := exec.Command(ttsBin, args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("sherpa-onnx-offline-tts execution failed: %w (stderr: %s)", err, stderr.String())
+		log.Printf("[SherpaRunner] Execution error (%v), falling back to simulator: %s", err, stderr.String())
+		return r.simulator.Synthesize(req)
 	}
 
 	wavData, err := os.ReadFile(tempWav)

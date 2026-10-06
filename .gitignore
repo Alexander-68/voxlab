@@ -5,10 +5,10 @@ bin/
 *.so
 *.dylib
 
-# Models directory archives and cache
-models/*.tar.bz2
-models/*.tar.gz
-models/*.zip
+# Models directory archives and downloaded models
+models/
+models/*
+
 
 # OS artifacts
 .DS_Store
