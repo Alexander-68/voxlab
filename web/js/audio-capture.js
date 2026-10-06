@@ -195,10 +195,11 @@ class AudioCapture {
     }
   }
 
-  pushRemoteWave(samples) {
+  pushRemoteWave(samples, passedGate = true) {
     if (!this.remoteBuffer) {
       this.remoteBuffer = new Float32Array(256);
     }
+    this.remoteGatePassed = passedGate;
     const n = Math.min(samples.length, 256);
     this.remoteBuffer.copyWithin(0, n);
     for (let i = 0; i < n; i++) {
@@ -223,6 +224,7 @@ class AudioCapture {
 
       const buf = this.remoteBuffer;
       const len = buf.length;
+      const isGateOpen = this.remoteGatePassed !== false;
 
       // Frequency spectrum bars (bottom half)
       const numBars = 32;
@@ -238,13 +240,13 @@ class AudioCapture {
         if (energy > 1) energy = 1;
 
         const barHeight = energy * (height * 0.45);
-        ctx.fillStyle = 'rgba(6, 182, 212, 0.4)';
+        ctx.fillStyle = isGateOpen ? 'rgba(6, 182, 212, 0.45)' : 'rgba(100, 116, 139, 0.25)';
         ctx.fillRect(b * barWidth, height - barHeight, barWidth - 1, barHeight);
       }
 
       // Time-domain wave (center)
       ctx.lineWidth = 2;
-      ctx.strokeStyle = '#06b6d4'; // Cyan for remote/host wave
+      ctx.strokeStyle = isGateOpen ? '#38bdf8' : '#64748b'; // Cyan when Gate Open, Muted Slate when Gated
       ctx.beginPath();
       const sliceWidth = width / len;
       let x = 0;

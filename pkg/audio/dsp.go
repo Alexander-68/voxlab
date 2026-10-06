@@ -50,6 +50,27 @@ func (p *DSPProcessor) SetEchoMuted(muted bool) {
 	}
 }
 
+// SetGateThreshold updates the noise floor gate cutoff level in dBFS.
+func (p *DSPProcessor) SetGateThreshold(dbfs float64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.gateDBFS = dbfs
+}
+
+// GateThreshold returns the active noise gate threshold in dBFS.
+func (p *DSPProcessor) GateThreshold() float64 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.gateDBFS
+}
+
+// SetAGCEnabled toggles automatic gain control.
+func (p *DSPProcessor) SetAGCEnabled(enabled bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.agcEnabled = enabled
+}
+
 // IsEchoMuted returns true if the processor is currently muting mic due to speaker playback.
 func (p *DSPProcessor) IsEchoMuted() bool {
 	return atomic.LoadInt32(&p.echoMuted) == 1

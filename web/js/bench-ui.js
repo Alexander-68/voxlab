@@ -128,7 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Feed remote waveform into continuous 60 FPS visualizer
     if (data.wave && data.wave.length > 0 && (!capture.isRecording || data.source !== 'web_ui_mic')) {
-      capture.pushRemoteWave(data.wave);
+      capture.pushRemoteWave(data.wave, data.passed_gate);
     }
   });
 
@@ -307,11 +307,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Sliders
   noiseGateSlider.addEventListener('input', (e) => {
-    noiseGateVal.textContent = `${e.target.value} dBFS`;
+    const val = parseFloat(e.target.value);
+    noiseGateVal.textContent = `${val} dBFS`;
+    client.setNoiseGate(val);
   });
 
   kwsThreshSlider.addEventListener('input', (e) => {
-    kwsThreshVal.textContent = parseFloat(e.target.value).toFixed(2);
+    const val = parseFloat(e.target.value);
+    kwsThreshVal.textContent = val.toFixed(2);
+    client.setKwsThreshold(val);
+  });
+
+  chkAgc.addEventListener('change', (e) => {
+    client.setAgc(e.target.checked);
   });
 
   ttsSpeedSlider.addEventListener('input', (e) => {

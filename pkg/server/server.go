@@ -268,7 +268,9 @@ func (s *Server) processIncomingAudio(rawChunk []float32) {
 	s.meterMu.Unlock()
 
 	if shouldBroadcast {
-		wave := downsampleWave(cleanChunk, 64)
+		// Use raw acoustic chunk for visualizer so soft speech and background noise are visible,
+		// while passed_gate indicates when noise floor gating is active.
+		wave := downsampleWave(rawChunk, 64)
 		s.BroadcastJSON(map[string]interface{}{
 			"event": "audio.meter",
 			"data": map[string]interface{}{
@@ -511,6 +513,24 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			case "set_source":
 				source, _ := req["source"].(string)
 				s.SwitchSource(source)
+
+			case "set_noise_gate":
+				if th, ok := req["threshold_dbfs"].(float64); ok {
+					s.dsp.SetGateThreshold(th)
+					log.Printf("[DSP] Noise gate threshold set to %.1f dBFS", th)
+				}
+
+			case "set_kws_threshold":
+				if th, ok := req["threshold"].(float64); ok {
+					s.cfg.KWS.Threshold = th
+					log.Printf("[KWS] Wake-word threshold set to %.2f", th)
+				}
+
+			case "set_agc":
+				if en, ok := req["enabled"].(bool); ok {
+					s.dsp.SetAGCEnabled(en)
+					log.Printf("[DSP] AGC enabled: %v", en)
+				}
 
 			case "inject_text":
 				text, _ := req["text"].(string)

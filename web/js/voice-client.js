@@ -115,6 +115,18 @@ class VoiceClient {
     this.sendAction('set_source', { source: sourceName });
   }
 
+  setNoiseGate(thresholdDbfs) {
+    this.sendAction('set_noise_gate', { threshold_dbfs: thresholdDbfs });
+  }
+
+  setKwsThreshold(threshold) {
+    this.sendAction('set_kws_threshold', { threshold: threshold });
+  }
+
+  setAgc(enabled) {
+    this.sendAction('set_agc', { enabled: enabled });
+  }
+
   injectText(text, mode = 'command') {
     this.sendAction('inject_text', { text, mode });
   }
