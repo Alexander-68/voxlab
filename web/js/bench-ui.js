@@ -126,9 +126,9 @@ document.addEventListener('DOMContentLoaded', () => {
       gateIndicator.textContent = 'NOISE GATED';
     }
 
-    // If audio is coming from Host Mic or WAV injection, or local Web Mic is paused:
+    // Feed remote waveform into continuous 60 FPS visualizer
     if (data.wave && data.wave.length > 0 && (!capture.isRecording || data.source !== 'web_ui_mic')) {
-      drawRemoteWaveform(data.wave);
+      capture.pushRemoteWave(data.wave);
     }
   });
 
@@ -137,17 +137,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (sourceStatusText) {
       sourceStatusText.textContent = `Active: ${data.source} (${data.device_name || 'ready'})`;
     }
-    if (data.source === 'host_native_mic') {
+    if (data.source === 'host_native_mic' || data.source === 'wav_file_injection') {
       if (capture.isRecording) capture.stop();
-      btnMicToggle.textContent = 'Web Mic Inactive (Host Mic Active)';
-      btnMicToggle.disabled = true;
-      btnMicToggle.className = 'btn btn-secondary btn-block';
-    } else if (data.source === 'wav_file_injection') {
-      if (capture.isRecording) capture.stop();
-      btnMicToggle.textContent = 'Web Mic Inactive (WAV Streaming)';
+      capture.setRemoteMode(true);
+      const label = data.source === 'host_native_mic' ? 'Host Active' : 'WAV Streaming';
+      btnMicToggle.textContent = `Web Mic Idle (${label})`;
       btnMicToggle.disabled = true;
       btnMicToggle.className = 'btn btn-secondary btn-block';
     } else {
+      capture.setRemoteMode(false);
       btnMicToggle.disabled = false;
       btnMicToggle.textContent = 'Start Web Mic';
       btnMicToggle.className = 'btn btn-primary btn-block';
@@ -286,17 +284,20 @@ document.addEventListener('DOMContentLoaded', () => {
     logEvent('source_change', `Switching audio capture to ${src}...`);
     if (src === 'host_native_mic') {
       if (capture.isRecording) capture.stop();
-      btnMicToggle.textContent = 'Web Mic Inactive (Host Mic Active)';
+      capture.setRemoteMode(true);
+      btnMicToggle.textContent = 'Web Mic Idle (Host Active)';
       btnMicToggle.disabled = true;
       btnMicToggle.className = 'btn btn-secondary btn-block';
       if (sourceStatusText) sourceStatusText.textContent = 'Connecting to Host Microphone...';
     } else if (src === 'wav_file_injection') {
       if (capture.isRecording) capture.stop();
-      btnMicToggle.textContent = 'Web Mic Inactive (WAV Streaming)';
+      capture.setRemoteMode(true);
+      btnMicToggle.textContent = 'Web Mic Idle (WAV Streaming)';
       btnMicToggle.disabled = true;
       btnMicToggle.className = 'btn btn-secondary btn-block';
       if (sourceStatusText) sourceStatusText.textContent = 'Injecting voice_test.wav in real-time...';
     } else {
+      capture.setRemoteMode(false);
       btnMicToggle.disabled = false;
       btnMicToggle.textContent = 'Start Web Mic';
       btnMicToggle.className = 'btn btn-primary btn-block';
@@ -433,30 +434,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function escapeHtml(str) {
     if (!str) return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  }
-
-  function drawRemoteWaveform(wave) {
-    if (!scopeCanvas || !wave || wave.length === 0) return;
-    const ctx = scopeCanvas.getContext('2d');
-    const width = scopeCanvas.width;
-    const height = scopeCanvas.height;
-
-    ctx.fillStyle = '#06090d';
-    ctx.fillRect(0, 0, width, height);
-
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = '#06b6d4'; // Cyan for remote/host wave
-    ctx.beginPath();
-    const sliceWidth = width / wave.length;
-    let x = 0;
-    for (let i = 0; i < wave.length; i++) {
-      const v = (wave[i] + 1.0) / 2.0;
-      const y = v * height;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-      x += sliceWidth;
-    }
-    ctx.stroke();
   }
 
   // Connect WebSocket

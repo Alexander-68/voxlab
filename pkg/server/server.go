@@ -51,6 +51,9 @@ type Server struct {
 
 	dictationDraft  string
 	dictationTarget string
+
+	meterMu       sync.Mutex
+	lastMeterTime time.Time
 }
 
 // NewServer initializes the VoxLab server with all pipelines.
@@ -255,9 +258,16 @@ func (s *Server) processIncomingAudio(rawChunk []float32) {
 	// Step 1: Preprocessing & Noise Gating
 	cleanChunk, rms, dbfs, passedGate := s.dsp.ProcessChunk(rawChunk)
 
-	// Broadcast meter update with downsampled waveform (throttled every ~60ms)
-	now := time.Now().UnixNano()
-	if (now/int64(time.Millisecond))%60 < 30 {
+	// Broadcast meter update with downsampled waveform at a steady ~30Hz (33ms)
+	s.meterMu.Lock()
+	now := time.Now()
+	shouldBroadcast := now.Sub(s.lastMeterTime) >= 33*time.Millisecond
+	if shouldBroadcast {
+		s.lastMeterTime = now
+	}
+	s.meterMu.Unlock()
+
+	if shouldBroadcast {
 		wave := downsampleWave(cleanChunk, 64)
 		s.BroadcastJSON(map[string]interface{}{
 			"event": "audio.meter",

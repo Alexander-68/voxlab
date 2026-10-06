@@ -19,6 +19,9 @@ class AudioCapture {
     this.canvas = null;
     this.canvasCtx = null;
     this.animId = null;
+    this.remoteAnimId = null;
+    this.isRemote = false;
+    this.remoteBuffer = new Float32Array(256);
   }
 
   setCanvas(canvasElement) {
@@ -30,6 +33,7 @@ class AudioCapture {
 
   async start(options = {}) {
     if (this.isRecording) return;
+    this.setRemoteMode(false);
 
     const constraints = {
       audio: {
@@ -114,7 +118,9 @@ class AudioCapture {
       this.audioCtx.close();
       this.audioCtx = null;
     }
-    this.clearVisualizer();
+    if (!this.isRemote) {
+      this.clearVisualizer();
+    }
   }
 
   startVisualizer() {
@@ -174,11 +180,96 @@ class AudioCapture {
     draw();
   }
 
+  setRemoteMode(enabled) {
+    this.isRemote = enabled;
+    if (enabled) {
+      this.startRemoteVisualizer();
+    } else {
+      if (this.remoteAnimId) {
+        cancelAnimationFrame(this.remoteAnimId);
+        this.remoteAnimId = null;
+      }
+      if (!this.isRecording) {
+        this.clearVisualizer();
+      }
+    }
+  }
+
+  pushRemoteWave(samples) {
+    if (!this.remoteBuffer) {
+      this.remoteBuffer = new Float32Array(256);
+    }
+    const n = Math.min(samples.length, 256);
+    this.remoteBuffer.copyWithin(0, n);
+    for (let i = 0; i < n; i++) {
+      this.remoteBuffer[256 - n + i] = samples[i];
+    }
+  }
+
+  startRemoteVisualizer() {
+    if (this.remoteAnimId) {
+      cancelAnimationFrame(this.remoteAnimId);
+    }
+    if (!this.canvas) return;
+
+    const draw = () => {
+      this.remoteAnimId = requestAnimationFrame(draw);
+      const ctx = this.canvasCtx;
+      const width = this.canvas.width;
+      const height = this.canvas.height;
+
+      ctx.fillStyle = '#06090d';
+      ctx.fillRect(0, 0, width, height);
+
+      const buf = this.remoteBuffer;
+      const len = buf.length;
+
+      // Frequency spectrum bars (bottom half)
+      const numBars = 32;
+      const barWidth = width / numBars;
+      for (let b = 0; b < numBars; b++) {
+        const start = Math.floor((b / numBars) * len);
+        const end = Math.floor(((b + 1) / numBars) * len);
+        let energy = 0;
+        for (let k = start; k < end; k++) {
+          energy += Math.abs(buf[k]);
+        }
+        energy = (energy / Math.max(1, end - start)) * 4.0;
+        if (energy > 1) energy = 1;
+
+        const barHeight = energy * (height * 0.45);
+        ctx.fillStyle = 'rgba(6, 182, 212, 0.4)';
+        ctx.fillRect(b * barWidth, height - barHeight, barWidth - 1, barHeight);
+      }
+
+      // Time-domain wave (center)
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#06b6d4'; // Cyan for remote/host wave
+      ctx.beginPath();
+      const sliceWidth = width / len;
+      let x = 0;
+
+      for (let i = 0; i < len; i++) {
+        const v = (buf[i] + 1.0) / 2.0;
+        const y = v * height;
+
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+        x += sliceWidth;
+      }
+      ctx.stroke();
+    };
+
+    draw();
+  }
+
   clearVisualizer() {
     if (!this.canvasCtx || !this.canvas) return;
     this.canvasCtx.fillStyle = '#06090d';
     this.canvasCtx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    // Flat line
     this.canvasCtx.lineWidth = 1;
     this.canvasCtx.strokeStyle = '#1e293b';
     this.canvasCtx.beginPath();

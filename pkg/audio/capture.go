@@ -1,7 +1,6 @@
 package audio
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -245,10 +244,14 @@ func (s *HostNativeSource) Start(ctx context.Context, out chan<- []float32) erro
 				devName = mic
 				captureCmd = exec.CommandContext(subCtx, "ffmpeg",
 					"-f", "dshow",
+					"-audio_buffer_size", "20",
+					"-fflags", "nobuffer",
+					"-flags", "low_delay",
 					"-i", "audio="+mic,
 					"-ar", "16000",
 					"-ac", "1",
 					"-f", "s16le",
+					"-flush_packets", "1",
 					"pipe:1",
 				)
 			}
@@ -268,10 +271,13 @@ func (s *HostNativeSource) Start(ctx context.Context, out chan<- []float32) erro
 			devName = "pulse/alsa"
 			captureCmd = exec.CommandContext(subCtx, "ffmpeg",
 				"-f", "pulse",
+				"-fflags", "nobuffer",
+				"-flags", "low_delay",
 				"-i", "default",
 				"-ar", "16000",
 				"-ac", "1",
 				"-f", "s16le",
+				"-flush_packets", "1",
 				"pipe:1",
 			)
 		}
@@ -299,13 +305,14 @@ func (s *HostNativeSource) Start(ctx context.Context, out chan<- []float32) erro
 
 		go func() {
 			defer func() {
-				_ = captureCmd.Process.Kill()
+				if captureCmd.Process != nil {
+					_ = captureCmd.Process.Kill()
+				}
 				s.mu.Lock()
 				s.running = false
 				s.mu.Unlock()
 			}()
 
-			reader := bufio.NewReader(stdout)
 			bytesPerChunk := s.chunkSamples * 2 // 16-bit = 2 bytes per sample
 			chunkBytes := make([]byte, bytesPerChunk)
 
@@ -314,7 +321,7 @@ func (s *HostNativeSource) Start(ctx context.Context, out chan<- []float32) erro
 				case <-subCtx.Done():
 					return
 				default:
-					_, err := io.ReadFull(reader, chunkBytes)
+					_, err := io.ReadFull(stdout, chunkBytes)
 					if err != nil {
 						return
 					}
@@ -323,7 +330,6 @@ func (s *HostNativeSource) Start(ctx context.Context, out chan<- []float32) erro
 					case out <- samples:
 					case <-subCtx.Done():
 						return
-					default:
 					}
 				}
 			}
