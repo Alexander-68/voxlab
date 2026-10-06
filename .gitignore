@@ -1,0 +1,15 @@
+# Binaries
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Models directory archives and cache
+models/*.tar.bz2
+models/*.tar.gz
+models/*.zip
+
+# OS artifacts
+.DS_Store
+Thumbs.db

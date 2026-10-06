@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VoxLab - Voice Pipeline Test Bench</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-branding">
+        <div class="logo-mark">🎙️</div>
+        <div>
+          <h1 class="app-title">VoxLab</h1>
+          <p class="app-tagline">The voice pipeline test bench for web runtimes</p>
+        </div>
+      </div>
+
+      <div class="header-status-bar">
+        <div class="status-item">
+          <span class="status-label">WS Bridge:</span>
+          <span id="ws-status" class="badge badge-disconnected">Connecting...</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Voice State:</span>
+          <span id="voice-state" class="badge badge-idle">IDLE</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Echo Gate:</span>
+          <span id="echo-status" class="badge badge-ready">READY</span>
+        </div>
+        <button id="btn-cancel" class="btn btn-sm btn-danger" title="Emergency Reset to IDLE">Cancel Turn</button>
+      </div>
+    </header>
+
+    <!-- Main Test Bench Grid -->
+    <main class="testbench-grid">
+      
+      <!-- Panel 1: Audio Input & Pre-processing Hub -->
+      <section class="panel panel-input">
+        <div class="panel-header">
+          <h2>1. Audio In & DSP</h2>
+          <span class="panel-subtitle">Capture & Noise Gate</span>
+        </div>
+
+        <div class="panel-body">
+          <!-- Audio Source Selector -->
+          <div class="form-group">
+            <label for="audio-source">Audio Capture Source</label>
+            <select id="audio-source" class="form-control">
+              <option value="web_ui_mic">Web UI Mic (getUserMedia)</option>
+              <option value="host_native_mic">Host Go App Mic (OS Native/Sim)</option>
+              <option value="wav_file_injection">WAV Sample Injection</option>
+            </select>
+          </div>
+
+          <!-- Mic Controls -->
+          <div class="btn-group mb-2">
+            <button id="btn-mic-toggle" class="btn btn-primary btn-block">Start Web Mic</button>
+          </div>
+
+          <!-- Live Visualizer -->
+          <div class="visualizer-container">
+            <canvas id="scope-canvas" width="320" height="90"></canvas>
+            <div class="meter-overlay">
+              <div class="meter-bar-container">
+                <div id="vu-bar" class="meter-bar"></div>
+              </div>
+              <div class="meter-labels">
+                <span id="meter-dbfs">-100 dBFS</span>
+                <span id="gate-indicator" class="gate-tag gate-closed">GATE CLOSED</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- DSP Controls -->
+          <div class="settings-box mt-3">
+            <h3>Noise Cancelling & Filters</h3>
+            <div class="slider-group">
+              <div class="slider-header">
+                <label for="noise-gate-slider">Noise Floor Gate</label>
+                <span id="noise-gate-val">-42 dBFS</span>
+              </div>
+              <input type="range" id="noise-gate-slider" min="-60" max="-20" value="-42" step="1">
+            </div>
+
+            <div class="toggle-list">
+              <label class="toggle-item">
+                <input type="checkbox" id="chk-highpass" checked>
+                <span>80Hz High-Pass Filter (De-rumble)</span>
+              </label>
+              <label class="toggle-item">
+                <input type="checkbox" id="chk-agc" checked>
+                <span>Software AGC (Level Normalizer)</span>
+              </label>
+              <label class="toggle-item">
+                <input type="checkbox" id="chk-webrtc-ns" checked>
+                <span>Browser WebRTC Noise Suppression</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Wake-Word Activation -->
+          <div class="settings-box mt-3">
+            <h3>Wake-Word Detector (KWS)</h3>
+            <div class="toggle-list">
+              <label class="toggle-item">
+                <input type="checkbox" id="chk-kws-enable" checked>
+                <span>Continuous Wake-Word Detection</span>
+              </label>
+            </div>
+            <div class="form-group mt-2">
+              <label for="kws-keyword">Wake Phrase</label>
+              <select id="kws-keyword" class="form-control">
+                <option value="hey voxlab">"Hey VoxLab"</option>
+                <option value="hey console">"Hey Console"</option>
+                <option value="open settings">"Open Settings" (Direct)</option>
+              </select>
+            </div>
+            <div class="slider-group">
+              <div class="slider-header">
+                <label>Sensitivity Threshold</label>
+                <span id="kws-thresh-val">0.40</span>
+              </div>
+              <input type="range" id="kws-thresh-slider" min="0.10" max="0.90" value="0.40" step="0.05">
+            </div>
+            <div class="ring-buffer-indicator">
+              <span>Pre-roll Buffer:</span>
+              <strong id="ring-buf-status">1000 ms armed</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel 2: Dual Speech Processing Lab -->
+      <section class="panel panel-center">
+        <div class="panel-header">
+          <h2>2. Speech Recognition Lab</h2>
+          <!-- Tab Switcher -->
+          <div class="tabs-nav">
+            <button id="tab-btn-commands" class="tab-btn active">Voice Commands</button>
+            <button id="tab-btn-dictation" class="tab-btn">Voice Dictations</button>
+          </div>
+        </div>
+
+        <div class="panel-body">
+          <!-- Commands Tab Content -->
+          <div id="tab-content-commands" class="tab-content active">
+            <div class="turn-controls">
+              <button id="btn-ptt-command" class="btn btn-accent">🎙️ Push-to-Talk Command</button>
+              <button id="btn-sim-command" class="btn btn-secondary">Simulate Utterance</button>
+            </div>
+
+            <!-- Streaming Transcript Card -->
+            <div class="card transcript-card">
+              <div class="card-header">
+                <span class="card-title">Streaming ASR (Sherpa-ONNX Zipformer)</span>
+                <span id="asr-status-badge" class="badge badge-subtle">Ready</span>
+              </div>
+              <div class="card-body">
+                <div id="command-transcript-box" class="transcript-box">
+                  <span class="placeholder-text">Speak a command or say "Hey VoxLab" to begin...</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Intent Inspector Card -->
+            <div class="card intent-card mt-3">
+              <div class="card-header">
+                <span class="card-title">Semantic Intent Router & Policy</span>
+                <span id="intent-decision-badge" class="badge badge-idle">None</span>
+              </div>
+              <div class="card-body">
+                <div class="intent-grid">
+                  <div class="intent-metric">
+                    <span class="metric-label">Matched Intent:</span>
+                    <strong id="matched-intent-id">--</strong>
+                  </div>
+                  <div class="intent-metric">
+                    <span class="metric-label">Confidence Score:</span>
+                    <strong id="matched-confidence">--</strong>
+                  </div>
+                  <div class="intent-metric">
+                    <span class="metric-label">Separation Margin:</span>
+                    <strong id="matched-margin">--</strong>
+                  </div>
+                </div>
+
+                <div id="slots-container" class="slots-box mt-2">
+                  <span class="metric-label">Extracted Slots:</span>
+                  <div id="slots-tags" class="tag-cloud"><span class="badge badge-subtle">None</span></div>
+                </div>
+
+                <!-- Rejection / Chatter Notice -->
+                <div id="rejection-box" class="alert-box alert-warning mt-2 hidden">
+                  <strong>Room Chatter Rejected:</strong>
+                  <span id="rejection-reason">Out-of-domain conversational speech ignored quietly.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quick Command Injection -->
+            <div class="quick-inject mt-3">
+              <label>Quick Command Injections (Zero-Mic Bench Test):</label>
+              <div class="quick-buttons">
+                <button class="btn btn-sm btn-outline btn-inject" data-text="open settings">"open settings"</button>
+                <button class="btn btn-sm btn-outline btn-inject" data-text="start recording">"start recording"</button>
+                <button class="btn btn-sm btn-outline btn-inject" data-text="stop recording">"stop recording"</button>
+                <button class="btn btn-sm btn-outline btn-inject" data-text="dim screen">"dim screen"</button>
+                <button class="btn btn-sm btn-outline btn-inject" data-text="show endoscope on the main monitor">"show endoscope on main monitor"</button>
+                <button class="btn btn-sm btn-outline btn-inject text-danger" data-text="what time is lunch">"what time is lunch" (Distractor)</button>
+                <button class="btn btn-sm btn-outline btn-inject text-danger" data-text="do not stop recording">"do not stop recording" (Negation)</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dictation Tab Content -->
+          <div id="tab-content-dictation" class="tab-content">
+            <div class="turn-controls">
+              <button id="btn-start-dictation" class="btn btn-accent">📝 Start Spoken Dictation</button>
+              <button id="btn-stop-dictation" class="btn btn-secondary">⏹️ Finish Utterance</button>
+            </div>
+
+            <!-- Live Streaming Dictation Stream -->
+            <div class="card transcript-card">
+              <div class="card-header">
+                <span class="card-title">Live Spoken Dictation Stream</span>
+                <span id="dictation-status-badge" class="badge badge-subtle">Idle</span>
+              </div>
+              <div class="card-body">
+                <div id="dictation-live-box" class="transcript-box">
+                  <span class="placeholder-text">Press 'Start Spoken Dictation' and begin speaking...</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Annotation Draft Card -->
+            <div class="card draft-card mt-3">
+              <div class="card-header">
+                <span class="card-title">Annotation Draft & Review (Safe Isolation)</span>
+                <span class="badge badge-info">Draft Mode</span>
+              </div>
+              <div class="card-body">
+                <p class="helper-text">Spoken text here is strictly isolated from command execution. Words like "stop recording" will never trigger system commands.</p>
+                <textarea id="dictation-draft-text" class="form-control draft-textarea" rows="4" placeholder="Finalized dictation draft text appears here for review..."></textarea>
+                
+                <div class="draft-metadata mt-2">
+                  <span>Target: <strong id="draft-target-label">scope_inspection_1</strong></span>
+                  <span>Word Count: <strong id="draft-word-count">0</strong></span>
+                </div>
+
+                <div class="draft-actions mt-3">
+                  <button id="btn-save-draft" class="btn btn-success">💾 Approve & Save</button>
+                  <button id="btn-copy-draft" class="btn btn-secondary">📋 Copy</button>
+                  <button id="btn-clear-draft" class="btn btn-danger">🗑️ Discard</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Panel 3: Voice Synthesis (Kokoro TTS) & Telemetry -->
+      <section class="panel panel-tts">
+        <div class="panel-header">
+          <h2>3. Kokoro TTS & Bench</h2>
+          <span class="panel-subtitle">Neural Speech Synthesis</span>
+        </div>
+
+        <div class="panel-body">
+          <!-- Voice Config -->
+          <div class="form-group">
+            <label for="tts-voice-select">Speaker Voice (Kokoro)</label>
+            <select id="tts-voice-select" class="form-control">
+              <option value="af_heart">af_heart (Warm Female American)</option>
+              <option value="af_alloy">af_alloy (Crisp Female Assistant)</option>
+              <option value="af_aoede">af_aoede (Melodic Female)</option>
+              <option value="af_bella">af_bella (Expressive Female)</option>
+              <option value="am_adam">am_adam (Deep Male American)</option>
+              <option value="am_fenrir">am_fenrir (Commanding Male)</option>
+              <option value="am_michael">am_michael (Neutral Male)</option>
+              <option value="am_puck">am_puck (Lively Male)</option>
+            </select>
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-header">
+              <label>Speech Speed</label>
+              <span id="tts-speed-val">1.0x</span>
+            </div>
+            <input type="range" id="tts-speed-slider" min="0.7" max="1.5" value="1.0" step="0.1">
+          </div>
+
+          <!-- Prompt Text -->
+          <div class="form-group mt-2">
+            <label for="tts-input-text">Text Prompt</label>
+            <textarea id="tts-input-text" class="form-control" rows="3">Settings updated successfully. Voice pipeline operational.</textarea>
+          </div>
+
+          <!-- Quick Prompts -->
+          <div class="quick-prompts">
+            <button class="btn btn-xs btn-outline btn-prompt" data-text="System preferences opened.">Settings</button>
+            <button class="btn btn-xs btn-outline btn-prompt" data-text="Recording started on channel one.">Recording</button>
+            <button class="btn btn-xs btn-outline btn-prompt" data-text="Display brightness set to dark mode.">Dark Mode</button>
+            <button class="btn btn-xs btn-outline btn-prompt" data-text="Camera two routed to main monitor.">Route Video</button>
+          </div>
+
+          <div class="toggle-list mt-2">
+            <label class="toggle-item">
+              <input type="checkbox" id="chk-auto-speak" checked>
+              <span>Auto-Speak Command Feedback</span>
+            </label>
+          </div>
+
+          <div class="btn-group mt-2">
+            <button id="btn-synthesize" class="btn btn-accent btn-block">🔊 Synthesize & Speak</button>
+          </div>
+
+          <!-- Audio Player Card -->
+          <div class="audio-playback-card mt-3">
+            <audio id="tts-audio-player" controls class="tts-player"></audio>
+            <div class="tts-metrics-row">
+              <span>Time-to-Audio: <strong id="metric-tts-latency">-- ms</strong></span>
+              <span>Duration: <strong id="metric-tts-dur">-- s</strong></span>
+            </div>
+          </div>
+
+          <!-- Benchmarks & Waterfall -->
+          <div class="settings-box mt-3">
+            <h3>Pipeline Latency Waterfall</h3>
+            <div class="latency-grid">
+              <div class="latency-pill">
+                <span>VAD / Gate:</span>
+                <strong>&lt; 2 ms</strong>
+              </div>
+              <div class="latency-pill">
+                <span>Wake KWS:</span>
+                <strong>~ 20 ms</strong>
+              </div>
+              <div class="latency-pill">
+                <span>ASR Turn:</span>
+                <strong id="metric-asr-delay">~ 180 ms</strong>
+              </div>
+              <div class="latency-pill">
+                <span>Intent Scoring:</span>
+                <strong id="metric-intent-latency">-- ms</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- WebSocket Event Stream -->
+          <div class="settings-box mt-3">
+            <div class="slider-header">
+              <h3>IPC Event Stream</h3>
+              <button id="btn-clear-log" class="btn btn-xs btn-subtle">Clear</button>
+            </div>
+            <div id="event-log" class="event-log-box"></div>
+          </div>
+
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- JavaScript Modules -->
+  <script src="js/audio-capture.js"></script>
+  <script src="js/voice-client.js"></script>
+  <script src="js/bench-ui.js"></script>
+</body>
+</html>

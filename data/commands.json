@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "commands": [
+    {
+      "id": "NAV_SETTINGS",
+      "examples": [
+        "open settings",
+        "go to preferences",
+        "show configuration",
+        "system setup",
+        "open preferences"
+      ],
+      "action_aliases": ["open", "show", "go"],
+      "preconditions": [],
+      "confirmation": "none"
+    },
+    {
+      "id": "START_RECORDING",
+      "examples": [
+        "start recording",
+        "begin recording",
+        "record now",
+        "start capture",
+        "begin capture"
+      ],
+      "action_aliases": ["start", "begin", "record"],
+      "preconditions": ["recording_state == idle"],
+      "confirmation": "none"
+    },
+    {
+      "id": "STOP_RECORDING",
+      "examples": [
+        "stop recording",
+        "finish this recording",
+        "end recording",
+        "stop capture",
+        "halt recording"
+      ],
+      "action_aliases": ["stop", "finish", "end"],
+      "preconditions": ["recording_state == active"],
+      "confirmation": "physical"
+    },
+    {
+      "id": "DISPLAY_DARK",
+      "examples": [
+        "dim screen",
+        "lower brightness",
+        "make it darker",
+        "turn down lights",
+        "enable dark mode"
+      ],
+      "action_aliases": ["dim", "dark", "lower"],
+      "preconditions": [],
+      "confirmation": "none"
+    },
+    {
+      "id": "MEDIA_NEXT",
+      "examples": [
+        "next song",
+        "skip track",
+        "play next",
+        "skip forward"
+      ],
+      "action_aliases": ["next", "skip"],
+      "preconditions": [],
+      "confirmation": "none"
+    },
+    {
+      "id": "VOLUME_UP",
+      "examples": [
+        "volume up",
+        "increase volume",
+        "make it louder",
+        "turn up sound"
+      ],
+      "action_aliases": ["increase", "louder", "up"],
+      "preconditions": [],
+      "confirmation": "none"
+    },
+    {
+      "id": "VOLUME_DOWN",
+      "examples": [
+        "volume down",
+        "decrease volume",
+        "make it quieter",
+        "turn down sound"
+      ],
+      "action_aliases": ["decrease", "quieter", "down"],
+      "preconditions": [],
+      "confirmation": "none"
+    },
+    {
+      "id": "ROUTE_VIDEO",
+      "examples": [
+        "show endoscope on the main monitor",
+        "send camera two to monitor two",
+        "route camera one to second screen",
+        "switch endoscope to second display"
+      ],
+      "action_aliases": ["show", "send", "route", "switch"],
+      "required_slots": ["source", "destination"],
+      "preconditions": ["source_available", "destination_available"],
+      "confirmation": "policy"
+    }
+  ],
+  "distractors": [
+    "how are you doing",
+    "what are you eating",
+    "see you later",
+    "let us go outside",
+    "what time is lunch",
+    "great weather today",
+    "did you hear that",
+    "what did he say",
+    "tell me a joke",
+    "so i told him to go"
+  ],
+  "entities": {
+    "source": {
+      "endoscope": ["endoscope", "scope camera", "scope"],
+      "camera_1": ["camera one", "camera 1", "cam one"],
+      "camera_2": ["camera two", "camera 2", "cam two"]
+    },
+    "destination": {
+      "main_monitor": ["main monitor", "main screen", "first monitor", "display one"],
+      "monitor_2": ["monitor two", "second monitor", "second screen", "display two"]
+    }
+  }
+}
