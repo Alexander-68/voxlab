@@ -135,3 +135,53 @@ func TestServerWebSocketHandshakeAndAction(t *testing.T) {
 		t.Errorf("did not receive expected intent_matched event over WebSocket")
 	}
 }
+
+func TestServerSwitchSource(t *testing.T) {
+	srv := setupTestServer(t)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws", srv.handleWebSocket)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("WebSocket connection failed: %v", err)
+	}
+	defer conn.Close()
+
+	// Read initial state message
+	var initMsg map[string]interface{}
+	_ = conn.ReadJSON(&initMsg)
+
+	// Send set_source action for host_native_mic
+	switchHostAction := map[string]interface{}{
+		"action": "set_source",
+		"source": "host_native_mic",
+	}
+	if err := conn.WriteJSON(switchHostAction); err != nil {
+		t.Fatalf("failed sending set_source: %v", err)
+	}
+
+	foundSourceChanged := false
+	for i := 0; i < 5; i++ {
+		var msg map[string]interface{}
+		_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		if err := conn.ReadJSON(&msg); err != nil {
+			break
+		}
+		if msg["event"] == "audio.source_changed" {
+			foundSourceChanged = true
+			data, _ := msg["data"].(map[string]interface{})
+			if data["source"] != "host_native_mic" {
+				t.Errorf("expected source host_native_mic, got %v", data["source"])
+			}
+			break
+		}
+	}
+
+	if !foundSourceChanged {
+		t.Errorf("did not receive audio.source_changed event for host_native_mic")
+	}
+}

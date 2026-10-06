@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -27,23 +28,28 @@ var upgrader = websocket.Upgrader{
 
 // Server is the main VoxLab web and voice API server.
 type Server struct {
-	cfg          *config.AppConfig
-	httpServer   *http.Server
-	dsp          *audio.DSPProcessor
-	ringBuffer   *audio.RingBuffer
-	stateMachine *statemachine.StateMachine
-	engine       engine.SpeechEngine
-	matcher      *intent.IntentMatcher
-	ttsMgr       *tts.TTSManager
-	webMicSource *audio.WebSocketSource
-	hostMicSource *audio.HostSimulatedSource
-	activeSource string
-	audioInChan  chan []float32
+	cfg           *config.AppConfig
+	httpServer    *http.Server
+	dsp           *audio.DSPProcessor
+	ringBuffer    *audio.RingBuffer
+	stateMachine  *statemachine.StateMachine
+	engine        engine.SpeechEngine
+	matcher       *intent.IntentMatcher
+	ttsMgr        *tts.TTSManager
+	webMicSource  *audio.WebSocketSource
+	hostMicSource *audio.HostNativeSource
+	wavSource     *audio.WavFileSource
+	activeSource  string
+	sourceMu      sync.Mutex
+	audioInChan   chan []float32
+
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	clientsMu sync.RWMutex
 	clients   map[*websocket.Conn]bool
 
-	dictationDraft string
+	dictationDraft  string
 	dictationTarget string
 }
 
@@ -76,7 +82,9 @@ func NewServer(cfg *config.AppConfig) (*Server, error) {
 
 	ttsMgr := tts.NewTTSManager(eng, dsp)
 	webMic := audio.NewWebSocketSource()
-	hostMic := audio.NewHostSimulatedSource(cfg.Audio.SampleRate, cfg.Audio.ChunkSamples)
+	hostMic := audio.NewHostNativeSource(cfg.Audio.SampleRate, cfg.Audio.ChunkSamples)
+
+	ctx, cancel := context.WithCancel(context.Background())
 
 	s := &Server{
 		cfg:           cfg,
@@ -90,6 +98,8 @@ func NewServer(cfg *config.AppConfig) (*Server, error) {
 		hostMicSource: hostMic,
 		activeSource:  "web_ui_mic",
 		audioInChan:   make(chan []float32, 200),
+		ctx:           ctx,
+		cancel:        cancel,
 		clients:       make(map[*websocket.Conn]bool),
 	}
 
@@ -113,12 +123,10 @@ func NewServer(cfg *config.AppConfig) (*Server, error) {
 // Start begins listening and serving HTTP & WebSocket requests.
 func (s *Server) Start() error {
 	// Start audio processing loop
-	ctx, cancel := context.WithCancel(context.Background())
-	_ = cancel
-	go s.audioPipelineLoop(ctx)
+	go s.audioPipelineLoop(s.ctx)
 
 	// Connect default web mic source
-	_ = s.webMicSource.Start(ctx, s.audioInChan)
+	_ = s.webMicSource.Start(s.ctx, s.audioInChan)
 
 	mux := http.NewServeMux()
 
@@ -146,10 +154,65 @@ func (s *Server) Start() error {
 
 // Stop gracefully shuts down the server.
 func (s *Server) Stop(ctx context.Context) error {
+	if s.cancel != nil {
+		s.cancel()
+	}
+	if s.hostMicSource != nil {
+		_ = s.hostMicSource.Stop()
+	}
+	if s.wavSource != nil {
+		_ = s.wavSource.Stop()
+	}
 	if s.httpServer != nil {
 		return s.httpServer.Shutdown(ctx)
 	}
 	return nil
+}
+
+// SwitchSource changes the active audio input source.
+func (s *Server) SwitchSource(source string) {
+	s.sourceMu.Lock()
+	defer s.sourceMu.Unlock()
+
+	if s.activeSource == source {
+		return
+	}
+
+	// Stop previous non-web sources
+	if s.activeSource == "host_native_mic" && s.hostMicSource != nil {
+		_ = s.hostMicSource.Stop()
+	} else if s.activeSource == "wav_file_injection" && s.wavSource != nil {
+		_ = s.wavSource.Stop()
+	}
+
+	s.activeSource = source
+	devName := ""
+
+	switch source {
+	case "host_native_mic":
+		if s.hostMicSource != nil {
+			_ = s.hostMicSource.Start(s.ctx, s.audioInChan)
+			devName = s.hostMicSource.DeviceName()
+		}
+	case "wav_file_injection":
+		wavPath := filepath.Join("data", "test_samples", "voice_test.wav")
+		s.wavSource = audio.NewWavFileSource(wavPath, s.cfg.Audio.SampleRate, s.cfg.Audio.ChunkSamples, true)
+		_ = s.wavSource.Start(s.ctx, s.audioInChan)
+		devName = "voice_test.wav"
+	default:
+		// web_ui_mic
+		devName = "browser_mic"
+	}
+
+	log.Printf("[VoxLab] Active audio source switched to: %s (%s)", source, devName)
+
+	s.BroadcastJSON(map[string]interface{}{
+		"event": "audio.source_changed",
+		"data": map[string]interface{}{
+			"source":      source,
+			"device_name": devName,
+		},
+	})
 }
 
 // audioPipelineLoop processes incoming PCM audio chunks through DSP, KWS, and ASR.
@@ -167,14 +230,35 @@ func (s *Server) audioPipelineLoop(ctx context.Context) {
 	}
 }
 
+// downsampleWave extracts representative points across the chunk for UI rendering.
+func downsampleWave(samples []float32, targetLen int) []float32 {
+	if len(samples) == 0 {
+		return nil
+	}
+	if len(samples) <= targetLen {
+		return samples
+	}
+	out := make([]float32, targetLen)
+	step := float64(len(samples)) / float64(targetLen)
+	for i := 0; i < targetLen; i++ {
+		idx := int(float64(i) * step)
+		if idx >= len(samples) {
+			idx = len(samples) - 1
+		}
+		out[i] = samples[idx]
+	}
+	return out
+}
+
 // processIncomingAudio handles a single 30ms audio chunk through all active filters and gates.
 func (s *Server) processIncomingAudio(rawChunk []float32) {
 	// Step 1: Preprocessing & Noise Gating
 	cleanChunk, rms, dbfs, passedGate := s.dsp.ProcessChunk(rawChunk)
 
-	// Broadcast meter update (throttled every ~90ms to save WS bandwidth)
+	// Broadcast meter update with downsampled waveform (throttled every ~60ms)
 	now := time.Now().UnixNano()
-	if (now/int64(time.Millisecond))%90 < 30 {
+	if (now/int64(time.Millisecond))%60 < 30 {
+		wave := downsampleWave(cleanChunk, 64)
 		s.BroadcastJSON(map[string]interface{}{
 			"event": "audio.meter",
 			"data": map[string]interface{}{
@@ -182,6 +266,8 @@ func (s *Server) processIncomingAudio(rawChunk []float32) {
 				"dbfs":        dbfs,
 				"passed_gate": passedGate,
 				"echo_muted":  s.dsp.IsEchoMuted(),
+				"source":      s.activeSource,
+				"wave":        wave,
 			},
 		})
 	}
@@ -357,8 +443,9 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	_ = conn.WriteJSON(map[string]interface{}{
 		"event": "voice.state",
 		"data": map[string]interface{}{
-			"to_state":  s.stateMachine.Current(),
-			"timestamp": time.Now().Format(time.RFC3339),
+			"to_state":      s.stateMachine.Current(),
+			"timestamp":     time.Now().Format(time.RFC3339),
+			"active_source": s.activeSource,
 		},
 	})
 
@@ -413,8 +500,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 			case "set_source":
 				source, _ := req["source"].(string)
-				s.activeSource = source
-				log.Printf("[VoxLab] Active audio source set to: %s", source)
+				s.SwitchSource(source)
 
 			case "inject_text":
 				text, _ := req["text"].(string)

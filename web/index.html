@@ -51,9 +51,10 @@
             <label for="audio-source">Audio Capture Source</label>
             <select id="audio-source" class="form-control">
               <option value="web_ui_mic">Web UI Mic (getUserMedia)</option>
-              <option value="host_native_mic">Host Go App Mic (OS Native/Sim)</option>
-              <option value="wav_file_injection">WAV Sample Injection</option>
+              <option value="host_native_mic">Host Go App Mic (OS Native DirectShow / ALSA)</option>
+              <option value="wav_file_injection">WAV Sample Injection (voice_test.wav)</option>
             </select>
+            <div id="source-status-text" class="helper-text mt-1" style="font-size: 11px; color: var(--cyan);">Source: Web Browser Audio</div>
           </div>
 
           <!-- Mic Controls -->
