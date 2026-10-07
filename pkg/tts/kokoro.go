@@ -1,6 +1,7 @@
 package tts
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -8,28 +9,11 @@ import (
 	"voxlab/pkg/engine"
 )
 
-// VoiceProfile holds metadata for a Kokoro speaker voice.
-type VoiceProfile struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Gender      string `json:"gender"`
-	Description string `json:"description"`
-}
+// VoiceProfile aliases engine.VoiceProfile.
+type VoiceProfile = engine.VoiceProfile
 
-// AvailableKokoroVoices lists the pre-trained Kokoro speaker IDs available in model weights.
-var AvailableKokoroVoices = []VoiceProfile{
-	{ID: "af", Name: "Heart (Female)", Gender: "female", Description: "Warm, natural American English (Default)"},
-	{ID: "am_adam", Name: "Adam (Male)", Gender: "male", Description: "Deep, crisp American English male"},
-	{ID: "am_michael", Name: "Michael (Male)", Gender: "male", Description: "Neutral and professional American male"},
-	{ID: "bm_george", Name: "George (British Male)", Gender: "male", Description: "Refined, classic British English male"},
-	{ID: "bm_lewis", Name: "Lewis (British Male)", Gender: "male", Description: "Deep, resonant British narrator male"},
-	{ID: "af_bella", Name: "Bella (Female)", Gender: "female", Description: "Friendly and expressive American female"},
-	{ID: "af_nicole", Name: "Nicole (Female)", Gender: "female", Description: "Calm, clear American narrator female"},
-	{ID: "af_sarah", Name: "Sarah (Female)", Gender: "female", Description: "Casual and bright American female"},
-	{ID: "af_sky", Name: "Sky (Female)", Gender: "female", Description: "Soft, melodic conversational American voice"},
-	{ID: "bf_emma", Name: "Emma (British Female)", Gender: "female", Description: "Polite, articulate British English female"},
-	{ID: "bf_isabella", Name: "Isabella (British Female)", Gender: "female", Description: "Warm British conversational female"},
-}
+// AvailableKokoroVoices references engine.AvailableKokoroV11Voices.
+var AvailableKokoroVoices = engine.AvailableKokoroV11Voices
 
 // TTSManager coordinates speech synthesis requests and half-duplex echo suppression.
 type TTSManager struct {
@@ -83,9 +67,13 @@ func (m *TTSManager) IsSpeaking() bool {
 	return m.isSpeaking
 }
 
-// Voices returns the list of available Kokoro voices.
+// Voices returns the list of available Kokoro voices for the currently active model.
 func (m *TTSManager) Voices() []VoiceProfile {
-	return AvailableKokoroVoices
+	model, _ := m.ActiveModel()
+	if strings.Contains(strings.ToLower(model), "v0_19") || strings.Contains(strings.ToLower(model), "v0.19") {
+		return engine.AvailableKokoroV019Voices
+	}
+	return engine.AvailableKokoroV11Voices
 }
 
 // ActiveModel returns the current TTS model name and neural capability.

@@ -352,8 +352,11 @@ func (r *SherpaRunner) Synthesize(req TTSRequest) (*TTSResult, error) {
 	}
 	args = append(args, fmt.Sprintf("--speed=%.2f", speed))
 
+	base := filepath.Base(modelDir)
+	isV019 := strings.Contains(strings.ToLower(base), "v0_19") || strings.Contains(strings.ToLower(base), "v0.19")
+
 	// Map requested speaker voice to Kokoro speaker ID
-	sid := mapVoiceToSID(req.Voice)
+	sid := mapVoiceToSID(req.Voice, isV019)
 	args = append(args, fmt.Sprintf("--sid=%d", sid))
 	args = append(args, req.Text)
 
@@ -410,66 +413,70 @@ func (r *SherpaRunner) TTSModelInfo() (string, bool) {
 }
 
 // mapVoiceToSID maps a voice identifier or name to the correct Kokoro speaker ID.
-func mapVoiceToSID(voice string) int {
+func mapVoiceToSID(voice string, isV019 bool) int {
 	v := strings.ToLower(strings.TrimSpace(voice))
-	switch v {
-	case "af", "af_heart", "heart":
+
+	if isV019 {
+		if sid, ok := KokoroV019VoiceToSID[v]; ok {
+			return sid
+		}
+		// Substring heuristics for legacy v0.19
+		if strings.Contains(v, "adam") {
+			return 5
+		}
+		if strings.Contains(v, "michael") {
+			return 6
+		}
+		if strings.Contains(v, "george") || strings.Contains(v, "fenrir") {
+			return 9
+		}
+		if strings.Contains(v, "lewis") || strings.Contains(v, "puck") {
+			return 10
+		}
+		if strings.HasPrefix(v, "am_") || strings.HasPrefix(v, "bm_") || strings.Contains(v, "male") {
+			return 5
+		}
+		if strings.Contains(v, "bella") {
+			return 1
+		}
+		if strings.Contains(v, "nicole") || strings.Contains(v, "alloy") {
+			return 2
+		}
+		if strings.Contains(v, "sarah") {
+			return 3
+		}
+		if strings.Contains(v, "sky") || strings.Contains(v, "aoede") {
+			return 4
+		}
+		if strings.Contains(v, "emma") {
+			return 7
+		}
+		if strings.Contains(v, "isabella") {
+			return 8
+		}
 		return 0
-	case "af_bella", "bella":
-		return 1
-	case "af_nicole", "nicole", "af_alloy", "alloy":
-		return 2
-	case "af_sarah", "sarah":
-		return 3
-	case "af_sky", "sky", "af_aoede", "aoede":
-		return 4
-	case "am_adam", "adam":
-		return 5
-	case "am_michael", "michael":
-		return 6
-	case "bf_emma", "emma":
-		return 7
-	case "bf_isabella", "isabella":
-		return 8
-	case "bm_george", "george", "am_fenrir", "fenrir":
-		return 9
-	case "bm_lewis", "lewis", "am_puck", "puck":
-		return 10
 	}
 
-	// Substring & prefix heuristics
-	if strings.Contains(v, "adam") {
-		return 5
+	// v1.1 Model (Default)
+	if sid, ok := KokoroV11VoiceToSID[v]; ok {
+		return sid
 	}
-	if strings.Contains(v, "michael") {
-		return 6
+
+	// Heuristics for v1.1
+	if v == "af" || strings.Contains(v, "maple") {
+		return 0
 	}
-	if strings.Contains(v, "george") || strings.Contains(v, "fenrir") {
-		return 9
-	}
-	if strings.Contains(v, "lewis") || strings.Contains(v, "puck") {
-		return 10
-	}
-	if strings.HasPrefix(v, "am_") || strings.HasPrefix(v, "bm_") || strings.Contains(v, "male") {
-		return 5 // Guarantee a male voice
-	}
-	if strings.Contains(v, "bella") {
+	if strings.Contains(v, "sol") {
 		return 1
 	}
-	if strings.Contains(v, "nicole") || strings.Contains(v, "alloy") {
+	if strings.Contains(v, "vale") {
 		return 2
 	}
-	if strings.Contains(v, "sarah") {
-		return 3
+	if strings.HasPrefix(v, "zm_") || strings.Contains(v, "male") {
+		return 58 // Default male in v1.1 (zm_009)
 	}
-	if strings.Contains(v, "sky") || strings.Contains(v, "aoede") {
-		return 4
-	}
-	if strings.Contains(v, "emma") {
-		return 7
-	}
-	if strings.Contains(v, "isabella") {
-		return 8
+	if strings.HasPrefix(v, "zf_") || strings.Contains(v, "female") {
+		return 0 // Default female in v1.1 (af_maple)
 	}
 
 	return 0

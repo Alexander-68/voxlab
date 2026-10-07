@@ -594,8 +594,8 @@ document.addEventListener('DOMContentLoaded', () => {
     voices.forEach((v) => {
       const opt = document.createElement('option');
       opt.value = v.id;
-      const icon = v.gender === 'male' ? '👨' : '👩';
-      opt.textContent = `${icon} ${v.id} - ${v.name} (${v.description})`;
+      const dot = v.gender === 'male' ? '🔵' : '🟣';
+      opt.textContent = `${dot} ${v.id} - ${v.name}`;
       ttsVoiceSelect.appendChild(opt);
     });
     if (curVal && Array.from(ttsVoiceSelect.options).some(o => o.value === curVal)) {
