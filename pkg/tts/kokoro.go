@@ -46,29 +46,31 @@ func NewTTSManager(eng engine.SpeechEngine, dsp *audio.DSPProcessor) *TTSManager
 	}
 }
 
-// Synthesize generates speech audio and applies half-duplex echo suppression.
+// Synthesize generates speech audio without muting input (since speaker playback has not started yet).
 func (m *TTSManager) Synthesize(req engine.TTSRequest) (*engine.TTSResult, error) {
-	m.mu.Lock()
-	m.isSpeaking = true
-	if m.dsp != nil {
-		m.dsp.SetEchoMuted(true)
-	}
-	m.mu.Unlock()
+	return m.engine.Synthesize(req)
+}
 
-	defer func() {
-		// Asynchronously clear echo mute after playback duration + tail delay
+// SetSpeaking manages half-duplex echo suppression during actual audio playback through speakers.
+func (m *TTSManager) SetSpeaking(speaking bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.isSpeaking = speaking
+	if speaking {
+		if m.dsp != nil {
+			m.dsp.SetEchoMuted(true)
+		}
+	} else {
+		// Asynchronously clear echo mute after tail delay to suppress acoustic room reverberation
 		go func() {
 			time.Sleep(m.tailDelayMs)
 			m.mu.Lock()
-			m.isSpeaking = false
-			if m.dsp != nil {
+			if !m.isSpeaking && m.dsp != nil {
 				m.dsp.SetEchoMuted(false)
 			}
 			m.mu.Unlock()
 		}()
-	}()
-
-	return m.engine.Synthesize(req)
+	}
 }
 
 // IsSpeaking returns true if TTS is currently active.

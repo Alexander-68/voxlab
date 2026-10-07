@@ -185,3 +185,59 @@ func TestServerSwitchSource(t *testing.T) {
 		t.Errorf("did not receive audio.source_changed event for host_native_mic")
 	}
 }
+
+func TestServerPlaybackStatusEchoSuppression(t *testing.T) {
+	srv := setupTestServer(t)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws", srv.handleWebSocket)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("WebSocket connection failed: %v", err)
+	}
+	defer conn.Close()
+
+	// Initially not muted
+	if srv.dsp.IsEchoMuted() {
+		t.Errorf("expected echo to be unmuted initially")
+	}
+
+	// 1. Send playback_status: true (speaker playback starts)
+	playAction := map[string]interface{}{
+		"action":  "playback_status",
+		"playing": true,
+	}
+	if err := conn.WriteJSON(playAction); err != nil {
+		t.Fatalf("failed sending playback_status true: %v", err)
+	}
+
+	time.Sleep(20 * time.Millisecond)
+	if !srv.dsp.IsEchoMuted() {
+		t.Errorf("expected echo to be MUTED when playback_status: true is sent")
+	}
+
+	// 2. Send playback_status: false (speaker playback finishes)
+	stopAction := map[string]interface{}{
+		"action":  "playback_status",
+		"playing": false,
+	}
+	if err := conn.WriteJSON(stopAction); err != nil {
+		t.Fatalf("failed sending playback_status false: %v", err)
+	}
+
+	// Immediately after stop, tail delay should still keep it muted
+	if !srv.dsp.IsEchoMuted() {
+		t.Errorf("expected echo to remain muted immediately after playback ends (tail delay)")
+	}
+
+	// Wait for tail delay to clear (default 150ms)
+	time.Sleep(200 * time.Millisecond)
+	if srv.dsp.IsEchoMuted() {
+		t.Errorf("expected echo to be UNMUTED after tail delay has passed")
+	}
+}
+

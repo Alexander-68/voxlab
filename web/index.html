@@ -20,6 +20,10 @@
 
       <div class="header-status-bar">
         <div class="status-item">
+          <span class="status-label">Engine:</span>
+          <span id="engine-status" class="badge badge-info" title="Speech Processing Engine">DETECTING...</span>
+        </div>
+        <div class="status-item">
           <span class="status-label">WS Bridge:</span>
           <span id="ws-status" class="badge badge-disconnected">Connecting...</span>
         </div>
@@ -94,11 +98,15 @@
               </label>
               <label class="toggle-item">
                 <input type="checkbox" id="chk-agc" checked>
-                <span>Software AGC (Level Normalizer)</span>
+                <span id="agc-label">Software AGC (<strong id="agc-val">1.0x</strong>)</span>
               </label>
               <label class="toggle-item">
                 <input type="checkbox" id="chk-webrtc-ns" checked>
-                <span>Browser WebRTC Noise Suppression</span>
+                <span id="webrtc-ns-label">Browser WebRTC Noise Suppression (Web Mic)</span>
+              </label>
+              <label class="toggle-item">
+                <input type="checkbox" id="chk-monitor">
+                <span>🎧 Live Headphone Audio Monitor (Hear Mic)</span>
               </label>
             </div>
           </div>

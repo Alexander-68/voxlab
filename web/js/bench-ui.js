@@ -3,6 +3,7 @@
  */
 document.addEventListener('DOMContentLoaded', () => {
   // DOM Elements
+  const engineStatus = document.getElementById('engine-status');
   const wsStatus = document.getElementById('ws-status');
   const voiceState = document.getElementById('voice-state');
   const echoStatus = document.getElementById('echo-status');
@@ -20,7 +21,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const noiseGateVal = document.getElementById('noise-gate-val');
   const chkHighpass = document.getElementById('chk-highpass');
   const chkAgc = document.getElementById('chk-agc');
+  const agcVal = document.getElementById('agc-val');
   const chkWebrtcNs = document.getElementById('chk-webrtc-ns');
+  const webrtcNsLabel = document.getElementById('webrtc-ns-label');
+  const chkMonitor = document.getElementById('chk-monitor');
 
   // KWS
   const chkKwsEnable = document.getElementById('chk-kws-enable');
@@ -91,10 +95,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  function updateSourceControls(src) {
+    if (src === 'host_native_mic' || src === 'wav_file_injection') {
+      chkWebrtcNs.disabled = true;
+      if (webrtcNsLabel) webrtcNsLabel.textContent = 'Browser WebRTC Noise Suppression (Web Mic only)';
+    } else {
+      chkWebrtcNs.disabled = false;
+      if (webrtcNsLabel) webrtcNsLabel.textContent = 'Browser WebRTC Noise Suppression (Web Mic)';
+    }
+  }
+
   client.on('voice.state', (data) => {
     const state = data.to_state || data.state;
     voiceState.textContent = state;
     voiceState.className = 'badge ' + getStateBadgeClass(state);
+
+    if (data.engine_mode && engineStatus) {
+      if (data.engine_mode.includes('sherpa')) {
+        engineStatus.textContent = 'SHERPA NEURAL';
+        engineStatus.className = 'badge badge-connected';
+        engineStatus.title = 'Real streaming Zipformer neural ASR active';
+      } else {
+        engineStatus.textContent = 'SIMULATOR';
+        engineStatus.className = 'badge badge-muted';
+        engineStatus.title = 'Mock testbench simulation active (models not found)';
+      }
+    }
 
     if (state === 'SPEAKING') {
       echoStatus.textContent = 'MUTED (HALF-DUPLEX)';
@@ -115,6 +141,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const norm = Math.max(0, Math.min(100, ((dbfs + 60) / 60) * 100));
     vuBar.style.width = `${norm}%`;
 
+    if (agcVal && data.agc_gain !== undefined) {
+      agcVal.textContent = `${data.agc_gain.toFixed(1)}x`;
+    }
+
     if (data.echo_muted) {
       gateIndicator.className = 'gate-tag gate-closed';
       gateIndicator.textContent = 'ECHO MUTED';
@@ -134,6 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   client.on('audio.source_changed', (data) => {
     logEvent('audio.source_changed', `Source: ${data.source} (${data.device_name || 'active'})`);
+    updateSourceControls(data.source);
     if (sourceStatusText) {
       sourceStatusText.textContent = `Active: ${data.source} (${data.device_name || 'ready'})`;
     }
@@ -234,18 +265,51 @@ document.addEventListener('DOMContentLoaded', () => {
 
   client.on('tts.started', (data) => {
     logEvent('tts.started', `"${data.text}" (${data.voice})`);
+    btnSynthesize.disabled = true;
+    btnSynthesize.textContent = '⏳ Synthesizing Audio...';
   });
 
   client.on('tts.finished', (data) => {
     logEvent('tts.finished', `Duration: ${data.duration_sec.toFixed(2)}s, TTFA: ${data.latency_ms}ms`);
     metricTtsLatency.textContent = `${data.latency_ms} ms`;
     metricTtsDur.textContent = `${data.duration_sec.toFixed(2)} s`;
+    btnSynthesize.disabled = false;
+    btnSynthesize.textContent = '🔊 Synthesize & Speak';
 
     if (data.wav_base64) {
       const audioUrl = `data:audio/wav;base64,${data.wav_base64}`;
       ttsAudioPlayer.src = audioUrl;
-      ttsAudioPlayer.play().catch((e) => console.log('Autoplay policy caught:', e));
+      ttsAudioPlayer.play().catch((e) => {
+        console.warn('Autoplay prevented or failed:', e);
+        client.sendPlaybackStatus(false);
+      });
     }
+  });
+
+  // Half-duplex echo suppression: coordinate physical speaker output with server echo gate
+  ttsAudioPlayer.addEventListener('play', () => {
+    logEvent('playback.start', 'Audio playback started -> Echo Gate MUTED');
+    client.sendPlaybackStatus(true);
+  });
+
+  ttsAudioPlayer.addEventListener('playing', () => {
+    client.sendPlaybackStatus(true);
+  });
+
+  ttsAudioPlayer.addEventListener('ended', () => {
+    logEvent('playback.end', 'Audio playback completed -> Echo Gate OPEN');
+    client.sendPlaybackStatus(false);
+  });
+
+  ttsAudioPlayer.addEventListener('pause', () => {
+    if (ttsAudioPlayer.paused || ttsAudioPlayer.currentTime >= ttsAudioPlayer.duration) {
+      client.sendPlaybackStatus(false);
+    }
+  });
+
+  ttsAudioPlayer.addEventListener('error', (e) => {
+    console.warn('[TTS] Audio player error:', e);
+    client.sendPlaybackStatus(false);
   });
 
   client.on('telemetry.benchmark', (data) => {
@@ -280,6 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Source selection
   audioSourceSelect.addEventListener('change', (e) => {
     const src = e.target.value;
+    updateSourceControls(src);
     client.setSource(src);
     logEvent('source_change', `Switching audio capture to ${src}...`);
     if (src === 'host_native_mic') {
@@ -318,9 +383,27 @@ document.addEventListener('DOMContentLoaded', () => {
     client.setKwsThreshold(val);
   });
 
+  chkHighpass.addEventListener('change', (e) => {
+    client.setHighPass(e.target.checked);
+    logEvent('dsp.highpass', `80Hz Highpass De-rumble: ${e.target.checked ? 'ENABLED' : 'BYPASSED'}`);
+  });
+
   chkAgc.addEventListener('change', (e) => {
     client.setAgc(e.target.checked);
+    logEvent('dsp.agc', `Software AGC: ${e.target.checked ? 'ENABLED' : 'DISABLED'}`);
   });
+
+  chkWebrtcNs.addEventListener('change', (e) => {
+    capture.setWebRtcNoiseSuppression(e.target.checked);
+    logEvent('dsp.webrtc_ns', `WebRTC Noise Suppression: ${e.target.checked ? 'ENABLED' : 'DISABLED'}`);
+  });
+
+  if (chkMonitor) {
+    chkMonitor.addEventListener('change', (e) => {
+      capture.setMonitoring(e.target.checked);
+      logEvent('dsp.monitor', `Headphone Audio Monitor: ${e.target.checked ? 'ON (Live Ear)' : 'MUTED'}`);
+    });
+  }
 
   ttsSpeedSlider.addEventListener('input', (e) => {
     ttsSpeedVal.textContent = `${parseFloat(e.target.value).toFixed(1)}x`;
@@ -328,6 +411,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Buttons
   btnCancel.addEventListener('click', () => {
+    if (!ttsAudioPlayer.paused) {
+      ttsAudioPlayer.pause();
+      ttsAudioPlayer.currentTime = 0;
+      client.sendPlaybackStatus(false);
+    }
     client.cancelTurn();
     commandTranscriptBox.innerHTML = '<span class="placeholder-text">Session cancelled. Returned to IDLE.</span>';
     asrStatusBadge.textContent = 'Idle';
@@ -335,6 +423,11 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   btnPttCommand.addEventListener('click', () => {
+    if (!ttsAudioPlayer.paused) {
+      ttsAudioPlayer.pause();
+      ttsAudioPlayer.currentTime = 0;
+      client.sendPlaybackStatus(false);
+    }
     client.activateCommand();
     commandTranscriptBox.innerHTML = '<span style="color:#60a5fa;">[Manual Push-to-Talk] Listening for command...</span>';
     asrStatusBadge.textContent = 'Listening';
@@ -443,6 +536,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!str) return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
+
+  // Initialize source UI controls
+  updateSourceControls(audioSourceSelect.value);
 
   // Connect WebSocket
   client.connect();

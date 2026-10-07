@@ -111,11 +111,12 @@ func NewServer(cfg *config.AppConfig) (*Server, error) {
 		s.BroadcastJSON(map[string]interface{}{
 			"event": "voice.state",
 			"data": map[string]interface{}{
-				"from_state": ev.FromState,
-				"to_state":   ev.ToState,
-				"trigger":    ev.Trigger,
-				"timestamp":  ev.Timestamp.Format(time.RFC3339Nano),
-				"extra":      ev.Data,
+				"from_state":  ev.FromState,
+				"to_state":    ev.ToState,
+				"trigger":     ev.Trigger,
+				"timestamp":   ev.Timestamp.Format(time.RFC3339Nano),
+				"extra":       ev.Data,
+				"engine_mode": s.engine.Name(),
 			},
 		})
 	})
@@ -280,6 +281,10 @@ func (s *Server) processIncomingAudio(rawChunk []float32) {
 				"echo_muted":  s.dsp.IsEchoMuted(),
 				"source":      s.activeSource,
 				"wave":        wave,
+				"clean_wave":  downsampleWave(cleanChunk, 64),
+				"agc_gain":    s.dsp.CurrentGain(),
+				"highpass_on": s.dsp.IsHighPassEnabled(),
+				"agc_on":      s.dsp.IsAGCEnabled(),
 			},
 		})
 	}
@@ -458,6 +463,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			"to_state":      s.stateMachine.Current(),
 			"timestamp":     time.Now().Format(time.RFC3339),
 			"active_source": s.activeSource,
+			"engine_mode":   s.engine.Name(),
 		},
 	})
 
@@ -492,8 +498,13 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				}
 
 			case "cancel":
+				s.SetPlaybackActive(false)
 				s.stateMachine.Cancel()
 				s.engine.ResetASR()
+
+			case "playback_status":
+				playing, _ := req["playing"].(bool)
+				s.SetPlaybackActive(playing)
 
 			case "confirm":
 				approved, _ := req["approved"].(bool)
@@ -532,6 +543,12 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 					log.Printf("[DSP] AGC enabled: %v", en)
 				}
 
+			case "set_highpass":
+				if en, ok := req["enabled"].(bool); ok {
+					s.dsp.SetHighPassEnabled(en)
+					log.Printf("[DSP] High-pass filter (80Hz de-rumble) enabled: %v", en)
+				}
+
 			case "inject_text":
 				text, _ := req["text"].(string)
 				mode, _ := req["mode"].(string)
@@ -553,6 +570,13 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// SetPlaybackActive coordinates half-duplex echo suppression with actual speaker playback.
+func (s *Server) SetPlaybackActive(playing bool) {
+	s.ttsMgr.SetSpeaking(playing)
+	s.stateMachine.SetSpeaking(playing)
+	log.Printf("[TTS] Speaker playback status changed: playing=%v (echo_muted=%v)", playing, s.dsp.IsEchoMuted())
+}
+
 // executeTTS executes Kokoro TTS and broadcasts audio waveform and metrics.
 func (s *Server) executeTTS(text, voice string, speed float64) {
 	if text == "" {
@@ -562,9 +586,8 @@ func (s *Server) executeTTS(text, voice string, speed float64) {
 		voice = s.cfg.TTS.DefaultVoice
 	}
 
-	s.stateMachine.SetSpeaking(true)
-	defer s.stateMachine.SetSpeaking(false)
-
+	// Synthesis is model computation only (no sound is playing from speakers yet).
+	// We broadcast tts.started so the UI can show progress, but mic remains unmuted.
 	s.BroadcastJSON(map[string]interface{}{
 		"event": "tts.started",
 		"data": map[string]interface{}{
@@ -597,6 +620,16 @@ func (s *Server) executeTTS(text, voice string, speed float64) {
 			"wav_base64":   wavB64,
 		},
 	})
+
+	// Failsafe timer: if client starts playback but drops connection or fails to report ended,
+	// ensure echo suppression is automatically cleared after audio duration + margin.
+	go func(durSec float64) {
+		time.Sleep(time.Duration((durSec+4.0)*1000) * time.Millisecond)
+		if s.ttsMgr.IsSpeaking() {
+			log.Printf("[TTS] Failsafe timer: automatically clearing echo suppression after %.1fs", durSec)
+			s.SetPlaybackActive(false)
+		}
+	}(ttsRes.DurationSec)
 }
 
 // BroadcastJSON sends a JSON event to all connected WebSocket clients.

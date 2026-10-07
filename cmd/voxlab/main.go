@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -40,9 +41,25 @@ func main() {
 	if *hostFlag != "0.0.0.0" || cfg.Host == "" {
 		cfg.Host = *hostFlag
 	}
-	if *engineFlag != "simulator" {
+	engineExplicit := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "engine" {
+			engineExplicit = true
+		}
+	})
+
+	if engineExplicit {
 		cfg.Engine.Mode = *engineFlag
+	} else if cfg.Engine.Mode == "simulator" {
+		// Auto-detect if sherpa tools and models are installed on disk
+		binMatch, _ := filepath.Glob("bin/sherpa-onnx*")
+		modelMatch, _ := filepath.Glob("models/sherpa-onnx-streaming-zipformer*")
+		if len(binMatch) > 0 && len(modelMatch) > 0 {
+			log.Printf("[VoxLab] Detected installed Sherpa-ONNX binaries and Zipformer model: Auto-activating 'sherpa' neural engine!")
+			cfg.Engine.Mode = "sherpa"
+		}
 	}
+
 	if *modelsFlag != "models" {
 		cfg.Engine.ModelDir = *modelsFlag
 	}

@@ -12,14 +12,15 @@ type DSPProcessor struct {
 	mu           sync.Mutex
 	sampleRate   float64
 	cutoffHz     float64
-	alpha        float64
-	prevInput    float64
-	prevOutput   float64
-	gateDBFS     float64
-	agcEnabled   bool
-	targetRMS    float64
-	currentGain  float64
-	echoMuted    int32 // atomic 1 if muted during speaker playback
+	highpassEnabled bool
+	alpha           float64
+	prevInput       float64
+	prevOutput      float64
+	gateDBFS        float64
+	agcEnabled      bool
+	targetRMS       float64
+	currentGain     float64
+	echoMuted       int32 // atomic 1 if muted during speaker playback
 }
 
 // NewDSPProcessor creates a new DSPProcessor with the specified settings.
@@ -31,14 +32,31 @@ func NewDSPProcessor(sampleRate int, cutoffHz float64, gateDBFS float64, agcEnab
 	alpha := rc / (rc + dt)
 
 	return &DSPProcessor{
-		sampleRate:  sr,
-		cutoffHz:    cutoffHz,
-		alpha:       alpha,
-		gateDBFS:    gateDBFS,
-		agcEnabled:  agcEnabled,
-		targetRMS:   targetRMS,
-		currentGain: 1.0,
+		sampleRate:      sr,
+		cutoffHz:        cutoffHz,
+		highpassEnabled: true,
+		alpha:           alpha,
+		gateDBFS:        gateDBFS,
+		agcEnabled:      agcEnabled,
+		targetRMS:       targetRMS,
+		currentGain:     1.0,
 	}
+}
+
+// SetHighPassEnabled enables or disables the 80Hz de-rumble high-pass filter.
+func (p *DSPProcessor) SetHighPassEnabled(enabled bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.highpassEnabled = enabled
+	p.prevInput = 0
+	p.prevOutput = 0
+}
+
+// IsHighPassEnabled returns true if the high-pass filter is active.
+func (p *DSPProcessor) IsHighPassEnabled() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.highpassEnabled
 }
 
 // SetEchoMuted enables or disables the half-duplex echo suppression latch.
@@ -69,6 +87,26 @@ func (p *DSPProcessor) SetAGCEnabled(enabled bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.agcEnabled = enabled
+	if !enabled {
+		p.currentGain = 1.0
+	}
+}
+
+// IsAGCEnabled returns whether AGC is currently active.
+func (p *DSPProcessor) IsAGCEnabled() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.agcEnabled
+}
+
+// CurrentGain returns the current software AGC multiplier.
+func (p *DSPProcessor) CurrentGain() float64 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.agcEnabled {
+		return 1.0
+	}
+	return p.currentGain
 }
 
 // IsEchoMuted returns true if the processor is currently muting mic due to speaker playback.
@@ -115,19 +153,23 @@ func (p *DSPProcessor) ProcessChunk(samples []float32) (processed []float32, rms
 	out := make([]float32, len(samples))
 
 	// Step 1: Highpass filter (DC removal and rumble elimination)
-	alpha := p.alpha
-	prevIn := p.prevInput
-	prevOut := p.prevOutput
+	if p.highpassEnabled {
+		alpha := p.alpha
+		prevIn := p.prevInput
+		prevOut := p.prevOutput
 
-	for i, s := range samples {
-		in := float64(s)
-		filtered := alpha * (prevOut + in - prevIn)
-		prevIn = in
-		prevOut = filtered
-		out[i] = float32(filtered)
+		for i, s := range samples {
+			in := float64(s)
+			filtered := alpha * (prevOut + in - prevIn)
+			prevIn = in
+			prevOut = filtered
+			out[i] = float32(filtered)
+		}
+		p.prevInput = prevIn
+		p.prevOutput = prevOut
+	} else {
+		copy(out, samples)
 	}
-	p.prevInput = prevIn
-	p.prevOutput = prevOut
 
 	// Step 2: Measure energy
 	rms, dbfs = CalculateRMS(out)

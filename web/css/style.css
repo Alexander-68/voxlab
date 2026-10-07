@@ -81,7 +81,8 @@ body {
 .header-status-bar {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+  flex-wrap: nowrap;
 }
 
 .status-item {
@@ -89,22 +90,45 @@ body {
   align-items: center;
   gap: 6px;
   font-size: 12px;
+  white-space: nowrap;
 }
 
 .status-label {
   color: var(--text-muted);
+  font-weight: 500;
 }
 
-/* Badges */
+/* Badges with stable fixed width to prevent header text jumping */
 .badge {
   display: inline-flex;
+  justify-content: center;
   align-items: center;
-  padding: 3px 8px;
+  text-align: center;
+  padding: 3px 6px;
   border-radius: 4px;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.3px;
   text-transform: uppercase;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+/* Stable fixed widths: only the badge color/text changes, never shifting line layout */
+#engine-status {
+  width: 140px;
+}
+
+#ws-status {
+  width: 110px;
+}
+
+#voice-state {
+  width: 140px;
+}
+
+#echo-status {
+  width: 155px;
 }
 
 .badge-connected { background: rgba(16, 185, 129, 0.15); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.3); }

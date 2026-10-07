@@ -67,6 +67,16 @@ class AudioCapture {
         if (!this.isRecording) return;
         const inputData = e.inputBuffer.getChannelData(0);
 
+        // Optional headphone monitoring for audio testing
+        const outData = e.outputBuffer.getChannelData(0);
+        if (this.isMonitoring) {
+          for (let i = 0; i < inputData.length; i++) {
+            outData[i] = inputData[i];
+          }
+        } else {
+          outData.fill(0);
+        }
+
         for (let i = 0; i < inputData.length; i++) {
           bufferAccumulator.push(inputData[i]);
           if (bufferAccumulator.length >= this.chunkSize) {
@@ -121,6 +131,20 @@ class AudioCapture {
     if (!this.isRemote) {
       this.clearVisualizer();
     }
+  }
+
+  setWebRtcNoiseSuppression(enabled) {
+    if (this.mediaStream) {
+      this.mediaStream.getAudioTracks().forEach((track) => {
+        track.applyConstraints({ noiseSuppression: enabled }).catch((err) => {
+          console.warn('[AudioCapture] Could not update noiseSuppression constraint:', err);
+        });
+      });
+    }
+  }
+
+  setMonitoring(enabled) {
+    this.isMonitoring = enabled;
   }
 
   startVisualizer() {

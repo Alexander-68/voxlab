@@ -2,12 +2,14 @@ package engine
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"voxlab/pkg/audio"
@@ -16,8 +18,13 @@ import (
 
 // SherpaRunner executes official Sherpa-ONNX binaries or falls back to simulation.
 type SherpaRunner struct {
-	cfg       *config.AppConfig
-	simulator *SimulatorEngine
+	cfg           *config.AppConfig
+	simulator     *SimulatorEngine
+	mu            sync.Mutex
+	turnAudio     []float32
+	speechChunks  int
+	silenceChunks int
+	lastPartial   time.Time
 }
 
 // NewSherpaRunner creates a new SherpaRunner instance.
@@ -28,7 +35,14 @@ func NewSherpaRunner(cfg *config.AppConfig) *SherpaRunner {
 	}
 }
 
-func (r *SherpaRunner) Name() string { return "sherpa_onnx_native" }
+func (r *SherpaRunner) Name() string {
+	tok, enc, _, _, exists := findZipformerModelDir(r.cfg.Engine.ZipformerDir)
+	bin, binExists := findSherpaBin("sherpa-onnx")
+	if exists && binExists && tok != "" && enc != "" && bin != "" {
+		return "sherpa_onnx_native"
+	}
+	return "simulator"
+}
 
 func (r *SherpaRunner) DetectVAD(chunk []float32) (bool, float32) {
 	return r.simulator.DetectVAD(chunk)
@@ -39,11 +53,169 @@ func (r *SherpaRunner) DetectWakeWord(chunk []float32) (bool, string, float64) {
 }
 
 func (r *SherpaRunner) ProcessASRChunk(chunk []float32, isDictation bool) (*ASRResult, error) {
-	return r.simulator.ProcessASRChunk(chunk, isDictation)
+	tok, enc, dec, joi, modelsExist := findZipformerModelDir(r.cfg.Engine.ZipformerDir)
+	binPath, binExists := findSherpaBin("sherpa-onnx")
+
+	if !modelsExist || !binExists {
+		return r.simulator.ProcessASRChunk(chunk, isDictation)
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	_, dbfs := audio.CalculateRMS(chunk)
+	isVoice := dbfs > -38.0
+
+	if isVoice {
+		r.speechChunks++
+		r.silenceChunks = 0
+		r.turnAudio = append(r.turnAudio, chunk...)
+	} else {
+		if r.speechChunks > 0 {
+			r.silenceChunks++
+			r.turnAudio = append(r.turnAudio, chunk...) // include trailing silence for natural endpointing
+		}
+	}
+
+	// Endpointing: when speech occurred and trailing silence hits ~450ms (15 chunks @ 30ms)
+	// and we have at least 0.4s of audio
+	if r.speechChunks >= 8 && r.silenceChunks >= 15 && len(r.turnAudio) >= 16000*4/10 {
+		audioToTranscribe := make([]float32, len(r.turnAudio))
+		copy(audioToTranscribe, r.turnAudio)
+		r.turnAudio = nil
+		r.speechChunks = 0
+		r.silenceChunks = 0
+
+		res, err := r.transcribeWAV(binPath, tok, enc, dec, joi, audioToTranscribe)
+		if err != nil {
+			log.Printf("[SherpaRunner] ASR inference error: %v, falling back to simulator", err)
+			return r.simulator.ProcessASRChunk(chunk, isDictation)
+		}
+		res.IsFinal = true
+		return res, nil
+	}
+
+	// While speaking, stream partial preview
+	if r.speechChunks >= 8 && time.Since(r.lastPartial) >= 400*time.Millisecond {
+		r.lastPartial = time.Now()
+		return &ASRResult{
+			Transcript: "(recognizing speech...)",
+			IsFinal:    false,
+		}, nil
+	}
+
+	return nil, nil
+}
+
+func (r *SherpaRunner) transcribeWAV(bin, tok, enc, dec, joi string, samples []float32) (*ASRResult, error) {
+	tempWav := filepath.Join(os.TempDir(), fmt.Sprintf("voxlab_asr_%d.wav", time.Now().UnixNano()))
+	defer os.Remove(tempWav)
+
+	wavBytes, err := audio.EncodeWAV(samples, 16000)
+	if err != nil {
+		return nil, fmt.Errorf("failed encoding WAV: %w", err)
+	}
+	if err := os.WriteFile(tempWav, wavBytes, 0644); err != nil {
+		return nil, fmt.Errorf("failed writing temp WAV: %w", err)
+	}
+
+	cmd := exec.Command(bin,
+		"--tokens="+tok,
+		"--encoder="+enc,
+		"--decoder="+dec,
+		"--joiner="+joi,
+		"--num-threads=2",
+		tempWav,
+	)
+
+	outBytes, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("sherpa-onnx execution error (%w): %s", err, string(outBytes))
+	}
+
+	outStr := string(outBytes)
+	var text string
+	var tokens []string
+
+	lines := strings.Split(outStr, "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "{") && strings.Contains(trimmed, `"text"`) {
+			var parsed struct {
+				Text   string   `json:"text"`
+				Tokens []string `json:"tokens"`
+			}
+			if err := json.Unmarshal([]byte(trimmed), &parsed); err == nil {
+				text = strings.TrimSpace(parsed.Text)
+				tokens = parsed.Tokens
+				break
+			}
+		}
+	}
+
+	if text == "" {
+		for _, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if len(trimmed) > 0 && !strings.HasPrefix(trimmed, "OnlineRecognizer") &&
+				!strings.HasPrefix(trimmed, "Start") && !strings.HasPrefix(trimmed, "Recognizer") &&
+				!strings.HasPrefix(trimmed, "Number of threads") && !strings.HasPrefix(trimmed, "D:") &&
+				!strings.HasPrefix(trimmed, "{") {
+				text = trimmed
+				break
+			}
+		}
+	}
+
+	log.Printf("[SherpaRunner] Real Neural ASR Result: '%s' (%d tokens)", text, len(tokens))
+
+	return &ASRResult{
+		Transcript: text,
+		Tokens:     tokens,
+		Confidence: 0.95,
+	}, nil
 }
 
 func (r *SherpaRunner) ResetASR() {
+	r.mu.Lock()
+	r.turnAudio = nil
+	r.speechChunks = 0
+	r.silenceChunks = 0
+	r.mu.Unlock()
 	r.simulator.ResetASR()
+}
+
+// findZipformerModelDir searches for streaming Zipformer model components.
+func findZipformerModelDir(configured string) (tokens, encoder, decoder, joiner string, exists bool) {
+	candidates := []string{
+		configured,
+		filepath.Join("models", "sherpa-onnx-streaming-zipformer-en-2023-06-26"),
+	}
+	for _, c := range candidates {
+		if fi, err := os.Stat(c); err == nil && fi.IsDir() {
+			tok := filepath.Join(c, "tokens.txt")
+			enc := filepath.Join(c, "encoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx")
+			if _, err := os.Stat(enc); os.IsNotExist(err) {
+				enc = filepath.Join(c, "encoder-epoch-99-avg-1-chunk-16-left-128.onnx")
+			}
+			dec := filepath.Join(c, "decoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx")
+			if _, err := os.Stat(dec); os.IsNotExist(err) {
+				dec = filepath.Join(c, "decoder-epoch-99-avg-1-chunk-16-left-128.onnx")
+			}
+			joi := filepath.Join(c, "joiner-epoch-99-avg-1-chunk-16-left-128.int8.onnx")
+			if _, err := os.Stat(joi); os.IsNotExist(err) {
+				joi = filepath.Join(c, "joiner-epoch-99-avg-1-chunk-16-left-128.onnx")
+			}
+			if isRegularFile(tok) && isRegularFile(enc) && isRegularFile(dec) && isRegularFile(joi) {
+				return tok, enc, dec, joi, true
+			}
+		}
+	}
+	return "", "", "", "", false
+}
+
+func isRegularFile(p string) bool {
+	fi, err := os.Stat(p)
+	return err == nil && !fi.IsDir()
 }
 
 // findKokoroModelDir automatically discovers the latest available Kokoro model directory.

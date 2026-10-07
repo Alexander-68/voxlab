@@ -112,3 +112,50 @@ func TestWAVEncodeDecode(t *testing.T) {
 		t.Errorf("expected %d samples, got %d", len(samples), len(decoded))
 	}
 }
+
+func TestDSPHighPassAndAGC(t *testing.T) {
+	dsp := NewDSPProcessor(16000, 80.0, -60.0, true, 0.2)
+
+	if !dsp.IsHighPassEnabled() {
+		t.Errorf("expected highpass to be enabled by default")
+	}
+	if !dsp.IsAGCEnabled() {
+		t.Errorf("expected AGC to be enabled")
+	}
+
+	// Disable highpass
+	dsp.SetHighPassEnabled(false)
+	if dsp.IsHighPassEnabled() {
+		t.Errorf("expected highpass to be disabled")
+	}
+
+	// DC signal: without highpass, output should preserve DC
+	dcChunk := make([]float32, 100)
+	for i := range dcChunk {
+		dcChunk[i] = 0.05
+	}
+	out, _, _, _ := dsp.ProcessChunk(dcChunk)
+	if math.Abs(float64(out[50])) < 0.01 {
+		t.Errorf("expected DC to pass through when highpass is disabled")
+	}
+
+	// Re-enable highpass: DC should be attenuated towards 0
+	dsp.SetHighPassEnabled(true)
+	for k := 0; k < 5; k++ {
+		out, _, _, _ = dsp.ProcessChunk(dcChunk)
+	}
+	// High-pass filter removes constant DC
+	if math.Abs(float64(out[len(out)-1])) > 0.02 {
+		t.Errorf("expected DC to be attenuated by highpass filter, got %f", out[len(out)-1])
+	}
+
+	// Test AGC toggle and CurrentGain
+	dsp.SetAGCEnabled(false)
+	if dsp.IsAGCEnabled() {
+		t.Errorf("expected AGC to be disabled")
+	}
+	if dsp.CurrentGain() != 1.0 {
+		t.Errorf("expected gain to be 1.0 when AGC is disabled")
+	}
+}
+

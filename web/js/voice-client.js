@@ -127,6 +127,14 @@ class VoiceClient {
     this.sendAction('set_agc', { enabled: enabled });
   }
 
+  setHighPass(enabled) {
+    this.sendAction('set_highpass', { enabled: enabled });
+  }
+
+  sendPlaybackStatus(playing) {
+    this.sendAction('playback_status', { playing });
+  }
+
   injectText(text, mode = 'command') {
     this.sendAction('inject_text', { text, mode });
   }
