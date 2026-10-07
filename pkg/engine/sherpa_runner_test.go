@@ -1,6 +1,9 @@
 package engine
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestMapVoiceToSID(t *testing.T) {
 	tests := []struct {
@@ -35,6 +38,16 @@ func TestMapVoiceToSID(t *testing.T) {
 		maleSIDs := map[int]bool{5: true, 6: true, 9: true, 10: true}
 		if tc.isMale && !maleSIDs[sid] {
 			t.Errorf("for male voice %q expected male SID (5,6,9,10), got female SID %d", tc.voice, sid)
+		}
+	}
+}
+
+func TestFindKokoroModelDir(t *testing.T) {
+	modelDir, found := findKokoroModelDir("models/kokoro-en-v0_19")
+	if found {
+		// Since kokoro-multi-lang-v1_1 is present on disk, it must be selected
+		if !strings.Contains(modelDir, "kokoro-multi-lang-v1_1") {
+			t.Errorf("expected kokoro-multi-lang-v1_1 to be preferred over v0_19, got: %s", modelDir)
 		}
 	}
 }

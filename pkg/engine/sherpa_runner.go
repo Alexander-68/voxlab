@@ -218,27 +218,49 @@ func isRegularFile(p string) bool {
 	return err == nil && !fi.IsDir()
 }
 
+// isValidKokoroDir checks if a directory contains a valid Kokoro ONNX model weight.
+func isValidKokoroDir(dir string) bool {
+	fi, err := os.Stat(dir)
+	if err != nil || !fi.IsDir() {
+		return false
+	}
+	if _, err := os.Stat(filepath.Join(dir, "model.onnx")); err == nil {
+		return true
+	}
+	if _, err := os.Stat(filepath.Join(dir, "model.int8.onnx")); err == nil {
+		return true
+	}
+	return false
+}
+
 // findKokoroModelDir automatically discovers the latest available Kokoro model directory.
+// Priority order: latest multi-lang v1.1 -> int8 v1.1 -> v1.0 -> explicitly configured custom path -> legacy v0.19.
 func findKokoroModelDir(configured string) (string, bool) {
+	// If user explicitly configured a custom path (not default v1.1 and not legacy v0.19), try it first
+	if configured != "" &&
+		!strings.Contains(configured, "kokoro-en-v0_19") &&
+		!strings.Contains(configured, "kokoro-multi-lang-v1_1") &&
+		!strings.Contains(configured, "kokoro-int8-multi-lang-v1_1") {
+		if isValidKokoroDir(configured) {
+			return configured, true
+		}
+	}
+
 	candidates := []string{
-		configured,
 		filepath.Join("models", "kokoro-multi-lang-v1_1"),
 		filepath.Join("models", "kokoro-int8-multi-lang-v1_1"),
 		filepath.Join("models", "kokoro-multi-lang-v1_0"),
 		filepath.Join("models", "kokoro-int8-multi-lang-v1_0"),
+		configured,
 		filepath.Join("models", "kokoro-en-v0_19"),
 	}
+
 	for _, c := range candidates {
 		if c == "" {
 			continue
 		}
-		if fi, err := os.Stat(c); err == nil && fi.IsDir() {
-			if _, err := os.Stat(filepath.Join(c, "model.onnx")); err == nil {
-				return c, true
-			}
-			if _, err := os.Stat(filepath.Join(c, "model.int8.onnx")); err == nil {
-				return c, true
-			}
+		if isValidKokoroDir(c) {
+			return c, true
 		}
 	}
 	return configured, false
@@ -308,7 +330,7 @@ func (r *SherpaRunner) Synthesize(req TTSRequest) (*TTSResult, error) {
 	}
 
 	var lexicons []string
-	for _, lexName := range []string{"lexicon-us-en.txt", "lexicon-zh.txt"} {
+	for _, lexName := range []string{"lexicon-us-en.txt", "lexicon-gb-en.txt", "lexicon-zh.txt"} {
 		lexPath := filepath.Join(modelDir, lexName)
 		if _, err := os.Stat(lexPath); err == nil {
 			lexicons = append(lexicons, lexPath)
