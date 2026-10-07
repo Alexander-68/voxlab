@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VoxLab - Voice Pipeline Test Bench</title>
+  <title>VoxLab 1.0.261007 - Voice Pipeline Test Bench</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -13,7 +13,7 @@
       <div class="header-branding">
         <div class="logo-mark">🎙️</div>
         <div>
-          <h1 class="app-title">VoxLab</h1>
+          <h1 class="app-title">VoxLab <span class="app-version">1.0.261007</span></h1>
           <p class="app-tagline">The voice pipeline test bench for web runtimes</p>
         </div>
       </div>
@@ -275,14 +275,20 @@
       <!-- Panel 3: Voice Synthesis (Kokoro TTS) & Telemetry -->
       <section class="panel panel-tts">
         <div class="panel-header">
-          <h2>3. Kokoro TTS & Bench</h2>
+          <div class="panel-title-row">
+            <h2>3. Kokoro TTS & Bench</h2>
+            <span id="tts-model-badge" class="badge badge-info" title="Current TTS Synthesis Model">DETECTING...</span>
+          </div>
           <span class="panel-subtitle">Neural Speech Synthesis</span>
         </div>
 
         <div class="panel-body">
           <!-- Voice Config -->
           <div class="form-group">
-            <label for="tts-voice-select">Speaker Voice (Kokoro)</label>
+            <div class="slider-header mb-1">
+              <label for="tts-voice-select">Speaker Voice (Kokoro)</label>
+              <span class="helper-text" style="font-size: 11px;">Active Model: <strong id="tts-model-name" style="color: var(--cyan);">Detecting...</strong></span>
+            </div>
             <select id="tts-voice-select" class="form-control">
               <option value="af_heart">af_heart (Warm Female American)</option>
               <option value="af_alloy">af_alloy (Crisp Female Assistant)</option>
@@ -332,6 +338,7 @@
           <div class="audio-playback-card mt-3">
             <audio id="tts-audio-player" controls class="tts-player"></audio>
             <div class="tts-metrics-row">
+              <span>Model: <strong id="tts-player-model">--</strong></span>
               <span>Time-to-Audio: <strong id="metric-tts-latency">-- ms</strong></span>
               <span>Duration: <strong id="metric-tts-dur">-- s</strong></span>
             </div>

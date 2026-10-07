@@ -108,15 +108,18 @@ func NewServer(cfg *config.AppConfig) (*Server, error) {
 
 	// Listen for state transitions and broadcast them
 	sm.AddListener(func(ev statemachine.StateEvent) {
+		ttsModel, isNeural := s.ttsMgr.ActiveModel()
 		s.BroadcastJSON(map[string]interface{}{
 			"event": "voice.state",
 			"data": map[string]interface{}{
-				"from_state":  ev.FromState,
-				"to_state":    ev.ToState,
-				"trigger":     ev.Trigger,
-				"timestamp":   ev.Timestamp.Format(time.RFC3339Nano),
-				"extra":       ev.Data,
-				"engine_mode": s.engine.Name(),
+				"from_state":    ev.FromState,
+				"to_state":      ev.ToState,
+				"trigger":       ev.Trigger,
+				"timestamp":     ev.Timestamp.Format(time.RFC3339Nano),
+				"extra":         ev.Data,
+				"engine_mode":   s.engine.Name(),
+				"tts_model":     ttsModel,
+				"tts_is_neural": isNeural,
 			},
 		})
 	})
@@ -457,6 +460,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	// Send initial state snapshot
+	ttsModel, isNeural := s.ttsMgr.ActiveModel()
 	_ = conn.WriteJSON(map[string]interface{}{
 		"event": "voice.state",
 		"data": map[string]interface{}{
@@ -464,6 +468,8 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			"timestamp":     time.Now().Format(time.RFC3339),
 			"active_source": s.activeSource,
 			"engine_mode":   s.engine.Name(),
+			"tts_model":     ttsModel,
+			"tts_is_neural": isNeural,
 		},
 	})
 
@@ -588,12 +594,15 @@ func (s *Server) executeTTS(text, voice string, speed float64) {
 
 	// Synthesis is model computation only (no sound is playing from speakers yet).
 	// We broadcast tts.started so the UI can show progress, but mic remains unmuted.
+	ttsModel, isNeural := s.ttsMgr.ActiveModel()
 	s.BroadcastJSON(map[string]interface{}{
 		"event": "tts.started",
 		"data": map[string]interface{}{
-			"text":  text,
-			"voice": voice,
-			"speed": speed,
+			"text":      text,
+			"voice":     voice,
+			"speed":     speed,
+			"model":     ttsModel,
+			"is_neural": isNeural,
 		},
 	})
 
@@ -614,6 +623,9 @@ func (s *Server) executeTTS(text, voice string, speed float64) {
 		"event": "tts.finished",
 		"data": map[string]interface{}{
 			"text":         text,
+			"voice":        voice,
+			"model":        ttsModel,
+			"is_neural":    isNeural,
 			"duration_sec": ttsRes.DurationSec,
 			"latency_ms":   ttsRes.LatencyMs,
 			"sample_rate":  ttsRes.SampleRate,
@@ -656,7 +668,12 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleVoices(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(s.ttsMgr.Voices())
+	modelName, isNeural := s.ttsMgr.ActiveModel()
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"model":     modelName,
+		"is_neural": isNeural,
+		"voices":    s.ttsMgr.Voices(),
+	})
 }
 
 func (s *Server) handleTTS(w http.ResponseWriter, r *http.Request) {

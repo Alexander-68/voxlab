@@ -56,8 +56,12 @@ type TTSConfig struct {
 	EchoMute     bool    `json:"echo_mute"`     // Half-duplex echo cancellation
 }
 
+// Version is the current application version formatted as 1.0.yymmdd.
+const Version = "1.0.261007"
+
 // AppConfig is the root configuration struct.
 type AppConfig struct {
+	Version     string          `json:"version"`
 	Host        string          `json:"host"`
 	Port        int             `json:"port"`
 	StaticDir   string          `json:"static_dir"`
@@ -72,6 +76,7 @@ type AppConfig struct {
 // DefaultConfig returns the default production-ready configuration.
 func DefaultConfig() *AppConfig {
 	return &AppConfig{
+		Version:   Version,
 		Host:      "0.0.0.0",
 		Port:      8080,
 		StaticDir: "web",
@@ -129,6 +134,9 @@ func LoadConfig(path string) (*AppConfig, error) {
 	}
 	if err := json.Unmarshal(data, cfg); err != nil {
 		return nil, err
+	}
+	if cfg.Version == "" {
+		cfg.Version = Version
 	}
 	return cfg, nil
 }

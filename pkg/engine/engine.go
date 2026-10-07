@@ -33,4 +33,5 @@ type SpeechEngine interface {
 	ProcessASRChunk(chunk []float32, isDictation bool) (*ASRResult, error)
 	ResetASR()
 	Synthesize(req TTSRequest) (*TTSResult, error)
+	TTSModelInfo() (modelName string, isNeural bool)
 }

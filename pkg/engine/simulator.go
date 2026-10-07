@@ -215,3 +215,8 @@ func (s *SimulatorEngine) Synthesize(req TTSRequest) (*TTSResult, error) {
 		LatencyMs:    latency,
 	}, nil
 }
+
+// TTSModelInfo returns simulator model information.
+func (s *SimulatorEngine) TTSModelInfo() (string, bool) {
+	return "Harmonic Simulator (Mock)", false
+}

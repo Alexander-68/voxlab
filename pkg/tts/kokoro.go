@@ -84,3 +84,11 @@ func (m *TTSManager) IsSpeaking() bool {
 func (m *TTSManager) Voices() []VoiceProfile {
 	return AvailableKokoroVoices
 }
+
+// ActiveModel returns the current TTS model name and neural capability.
+func (m *TTSManager) ActiveModel() (string, bool) {
+	if m.engine != nil {
+		return m.engine.TTSModelInfo()
+	}
+	return "None", false
+}

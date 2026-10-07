@@ -76,6 +76,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const eventLog = document.getElementById('event-log');
   const btnClearLog = document.getElementById('btn-clear-log');
 
+  const ttsModelBadge = document.getElementById('tts-model-badge');
+  const ttsModelName = document.getElementById('tts-model-name');
+  const ttsPlayerModel = document.getElementById('tts-player-model');
+
   // Instantiate Voice Client and Audio Capture
   const client = new VoiceClient();
   const capture = new AudioCapture((chunk) => {
@@ -105,10 +109,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function updateTtsModelDisplay(model, isNeural) {
+    if (!model) return;
+    if (ttsModelBadge) {
+      ttsModelBadge.textContent = model.toUpperCase();
+      ttsModelBadge.className = isNeural ? 'badge badge-connected' : 'badge badge-muted';
+      ttsModelBadge.title = `Active TTS Model: ${model}`;
+    }
+    if (ttsModelName) {
+      ttsModelName.textContent = model;
+    }
+    if (ttsPlayerModel) {
+      ttsPlayerModel.textContent = model;
+    }
+  }
+
   client.on('voice.state', (data) => {
     const state = data.to_state || data.state;
     voiceState.textContent = state;
     voiceState.className = 'badge ' + getStateBadgeClass(state);
+
+    if (data.tts_model) {
+      updateTtsModelDisplay(data.tts_model, data.tts_is_neural);
+    }
 
     if (data.engine_mode && engineStatus) {
       if (data.engine_mode.includes('sherpa')) {
@@ -264,15 +287,23 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   client.on('tts.started', (data) => {
-    logEvent('tts.started', `"${data.text}" (${data.voice})`);
+    const modelTag = data.model ? ` [${data.model}]` : '';
+    logEvent('tts.started', `"${data.text}" (${data.voice})${modelTag}`);
+    if (data.model) {
+      updateTtsModelDisplay(data.model, data.is_neural);
+    }
     btnSynthesize.disabled = true;
     btnSynthesize.textContent = '⏳ Synthesizing Audio...';
   });
 
   client.on('tts.finished', (data) => {
-    logEvent('tts.finished', `Duration: ${data.duration_sec.toFixed(2)}s, TTFA: ${data.latency_ms}ms`);
+    const modelTag = data.model ? ` [${data.model}]` : '';
+    logEvent('tts.finished', `Duration: ${data.duration_sec.toFixed(2)}s, TTFA: ${data.latency_ms}ms${modelTag}`);
     metricTtsLatency.textContent = `${data.latency_ms} ms`;
     metricTtsDur.textContent = `${data.duration_sec.toFixed(2)} s`;
+    if (ttsPlayerModel && data.model) {
+      ttsPlayerModel.textContent = data.model;
+    }
     btnSynthesize.disabled = false;
     btnSynthesize.textContent = '🔊 Synthesize & Speak';
 
@@ -539,6 +570,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize source UI controls
   updateSourceControls(audioSourceSelect.value);
+
+  // Initial TTS model info fetch
+  fetch('/api/voices')
+    .then(r => r.json())
+    .then(data => {
+      if (data && data.model) {
+        updateTtsModelDisplay(data.model, data.is_neural);
+      }
+    })
+    .catch(() => {});
 
   // Connect WebSocket
   client.connect();

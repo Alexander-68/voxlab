@@ -362,3 +362,22 @@ func (r *SherpaRunner) Synthesize(req TTSRequest) (*TTSResult, error) {
 		LatencyMs:    latency,
 	}, nil
 }
+
+// TTSModelInfo discovers and returns the current active Kokoro model name and neural status.
+func (r *SherpaRunner) TTSModelInfo() (string, bool) {
+	modelDir, modelExists := findKokoroModelDir(r.cfg.Engine.KokoroModelDir)
+	_, binExists := findSherpaBin(r.cfg.Engine.SherpaTtsBin)
+
+	if !binExists || !modelExists {
+		return "Simulator (Fallback: Model Not Found)", false
+	}
+
+	base := filepath.Base(modelDir)
+	modelFile := filepath.Join(modelDir, "model.onnx")
+	variant := "FP32"
+	if _, err := os.Stat(modelFile); os.IsNotExist(err) {
+		variant = "INT8"
+	}
+
+	return fmt.Sprintf("%s (%s)", base, variant), true
+}

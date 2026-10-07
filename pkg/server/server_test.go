@@ -12,6 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 	"voxlab/pkg/config"
 	"voxlab/pkg/engine"
+	"voxlab/pkg/tts"
 )
 
 func setupTestServer(t *testing.T) *Server {
@@ -38,6 +39,9 @@ func TestServerRESTEndpoints(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&cfg); err != nil {
 		t.Errorf("failed to decode config JSON: %v", err)
 	}
+	if cfg.Version != config.Version {
+		t.Errorf("expected version %s, got %s", config.Version, cfg.Version)
+	}
 
 	// 2. GET /api/catalog
 	reqCat := httptest.NewRequest(http.MethodGet, "/api/catalog", nil)
@@ -53,6 +57,17 @@ func TestServerRESTEndpoints(t *testing.T) {
 	srv.handleVoices(wVoices, reqVoices)
 	if wVoices.Code != http.StatusOK {
 		t.Errorf("expected 200 OK for /api/voices, got %d", wVoices.Code)
+	}
+	var voicesResp struct {
+		Model    string             `json:"model"`
+		IsNeural bool               `json:"is_neural"`
+		Voices   []tts.VoiceProfile `json:"voices"`
+	}
+	if err := json.NewDecoder(wVoices.Body).Decode(&voicesResp); err != nil {
+		t.Errorf("failed to decode voices JSON: %v", err)
+	}
+	if voicesResp.Model == "" {
+		t.Errorf("expected non-empty model name in /api/voices response")
 	}
 
 	// 4. POST /api/tts

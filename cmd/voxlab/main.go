@@ -25,7 +25,7 @@ func main() {
 	flag.Parse()
 
 	log.Printf("=====================================================")
-	log.Printf(" VoxLab - The Voice Pipeline Test Bench for Web Runtimes")
+	log.Printf(" VoxLab v%s - Voice Pipeline Test Bench for Web Runtimes", config.Version)
 	log.Printf("=====================================================")
 
 	cfg, err := config.LoadConfig(*configFlag)
@@ -82,7 +82,7 @@ func main() {
 		}
 	}()
 
-	fmt.Printf("\n VoxLab is active!\n Web UI:   http://localhost:%d\n Engine:   %s\n Press Ctrl+C to stop.\n\n", cfg.Port, cfg.Engine.Mode)
+	fmt.Printf("\n VoxLab v%s is active!\n Web UI:   http://localhost:%d\n Engine:   %s\n Press Ctrl+C to stop.\n\n", config.Version, cfg.Port, cfg.Engine.Mode)
 
 	<-sigChan
 	log.Println("[VoxLab] Shutting down...")

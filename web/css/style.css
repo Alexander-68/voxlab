@@ -71,6 +71,20 @@ body {
   font-weight: 700;
   letter-spacing: -0.5px;
   color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-version {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.28);
+  border-radius: 4px;
+  padding: 1px 7px;
+  letter-spacing: 0.3px;
 }
 
 .app-tagline {
@@ -172,6 +186,22 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.panel-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#tts-model-badge {
+  font-size: 10px;
+  padding: 2px 7px;
+  letter-spacing: 0.3px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .panel-header h2 {
