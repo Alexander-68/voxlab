@@ -326,8 +326,16 @@ func findSherpaBin(name string) (string, bool) {
 	candidates := []string{
 		filepath.Join("bin", name),
 		filepath.Join("bin", name+".exe"),
+		filepath.Join("..", "bin", name),
+		filepath.Join("..", "bin", name+".exe"),
+		filepath.Join("..", "..", "bin", name),
+		filepath.Join("..", "..", "bin", name+".exe"),
 		filepath.Join("models", "bin", name),
 		filepath.Join("models", "bin", name+".exe"),
+		filepath.Join("..", "models", "bin", name),
+		filepath.Join("..", "models", "bin", name+".exe"),
+		filepath.Join("..", "..", "models", "bin", name),
+		filepath.Join("..", "..", "models", "bin", name+".exe"),
 	}
 	for _, c := range candidates {
 		if _, err := os.Stat(c); err == nil {
@@ -389,6 +397,17 @@ func (r *SherpaRunner) Synthesize(req TTSRequest) (*TTSResult, error) {
 		args = append(args, fmt.Sprintf("--kokoro-lexicon=%s", strings.Join(lexicons, ",")))
 	}
 
+	var ruleFsts []string
+	for _, fstName := range []string{"date-zh.fst", "number-zh.fst", "phone-zh.fst"} {
+		fstPath := filepath.Join(modelDir, fstName)
+		if _, err := os.Stat(fstPath); err == nil {
+			ruleFsts = append(ruleFsts, fstPath)
+		}
+	}
+	if len(ruleFsts) > 0 {
+		args = append(args, fmt.Sprintf("--tts-rule-fsts=%s", strings.Join(ruleFsts, ",")))
+	}
+
 	// Speech speed parameter (0.5x to 2.0x)
 	speed := req.Speed
 	if speed <= 0 {
@@ -406,8 +425,9 @@ func (r *SherpaRunner) Synthesize(req TTSRequest) (*TTSResult, error) {
 
 	// Map requested speaker voice to Kokoro speaker ID
 	sid := mapVoiceToSID(req.Voice, isV019)
+	cleanText := normalizeTTSText(req.Text)
 	args = append(args, fmt.Sprintf("--sid=%d", sid))
-	args = append(args, req.Text)
+	args = append(args, cleanText)
 
 	log.Printf("[SherpaRunner] Synthesizing speech: voice='%s' -> sid=%d, speed=%.2f", req.Voice, sid, speed)
 
@@ -562,4 +582,26 @@ func mapVoiceToSID(voice string, isV019 bool) int {
 	}
 
 	return 0
+}
+
+// normalizeTTSText converts full-width and non-ASCII punctuation to standard ASCII equivalents for TTS.
+func normalizeTTSText(text string) string {
+	r := strings.NewReplacer(
+		"，", ", ",
+		"。", ". ",
+		"！", "! ",
+		"？", "? ",
+		"；", "; ",
+		"：", ": ",
+		"、", ", ",
+		"（", " (",
+		"）", ") ",
+		"“", "\"",
+		"”", "\"",
+		"‘", "'",
+		"’", "'",
+		"—", "-",
+		"…", "...",
+	)
+	return strings.TrimSpace(r.Replace(text))
 }

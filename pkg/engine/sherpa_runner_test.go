@@ -3,6 +3,8 @@ package engine
 import (
 	"strings"
 	"testing"
+
+	"voxlab/pkg/config"
 )
 
 func TestMapVoiceToSID(t *testing.T) {
@@ -82,5 +84,23 @@ func TestFindKokoroModelDir(t *testing.T) {
 	installed := FindInstalledKokoroModels("models")
 	if len(installed) == 0 {
 		t.Errorf("expected installed models to be found in models/ directory")
+	}
+}
+
+func TestSynthesizeChinese(t *testing.T) {
+	cfg := &config.AppConfig{}
+	cfg.Engine.KokoroModelDir = "models/kokoro-multi-lang-v1_1"
+	cfg.Engine.SherpaTtsBin = "sherpa-onnx-offline-tts"
+	runner := NewSherpaRunner(cfg)
+	res, err := runner.Synthesize(TTSRequest{
+		Text:  "你好，世界。",
+		Voice: "zf_001",
+		Speed: 1.0,
+	})
+	if err != nil {
+		t.Fatalf("Synthesize failed: %v", err)
+	}
+	if res.DurationSec < 0.8 {
+		t.Errorf("expected synthesized audio duration > 0.8s for '你好，世界。', got %.2fs", res.DurationSec)
 	}
 }
