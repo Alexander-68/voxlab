@@ -343,4 +343,80 @@ func TestServerMonitorAudioStreaming(t *testing.T) {
 	}
 }
 
+func TestServerModelManagement(t *testing.T) {
+	srv := setupTestServer(t)
+
+	// 1. GET /api/voices with model query param
+	reqV019 := httptest.NewRequest(http.MethodGet, "/api/voices?model=kokoro-en-v0_19", nil)
+	wV019 := httptest.NewRecorder()
+	srv.handleVoices(wV019, reqV019)
+	if wV019.Code != http.StatusOK {
+		t.Errorf("expected 200 OK for /api/voices?model=kokoro-en-v0_19, got %d", wV019.Code)
+	}
+	var respV019 struct {
+		InstalledModels []string           `json:"installed_models"`
+		Voices          []tts.VoiceProfile `json:"voices"`
+	}
+	if err := json.NewDecoder(wV019.Body).Decode(&respV019); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if len(respV019.Voices) != 11 {
+		t.Errorf("expected 11 voices for v0_19 query, got %d", len(respV019.Voices))
+	}
+
+	// 2. POST /api/models to switch model
+	body, _ := json.Marshal(map[string]string{"model": "kokoro-en-v0_19"})
+	reqPostModel := httptest.NewRequest(http.MethodPost, "/api/models", bytes.NewReader(body))
+	wPostModel := httptest.NewRecorder()
+	srv.handleModels(wPostModel, reqPostModel)
+	if wPostModel.Code != http.StatusOK {
+		t.Errorf("expected 200 OK for POST /api/models, got %d", wPostModel.Code)
+	}
+
+	activeModel, _ := srv.ttsMgr.ActiveModel()
+	if !strings.Contains(activeModel, "kokoro-en-v0_19") {
+		t.Errorf("expected active model kokoro-en-v0_19, got %s", activeModel)
+	}
+
+	// 3. Test WebSocket set_tts_model action
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws", srv.handleWebSocket)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("WebSocket connection failed: %v", err)
+	}
+	defer conn.Close()
+
+	if err := conn.WriteJSON(map[string]interface{}{
+		"action": "set_tts_model",
+		"model":  "kokoro-multi-lang-v1_1",
+	}); err != nil {
+		t.Fatalf("failed to send set_tts_model action: %v", err)
+	}
+
+	foundModelChanged := false
+	for i := 0; i < 5; i++ {
+		var msg map[string]interface{}
+		_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		if err := conn.ReadJSON(&msg); err != nil {
+			break
+		}
+		if msg["event"] == "tts.model_changed" {
+			foundModelChanged = true
+			data, _ := msg["data"].(map[string]interface{})
+			if data["model_id"] != "kokoro-multi-lang-v1_1" {
+				t.Errorf("expected model_id kokoro-multi-lang-v1_1, got %v", data["model_id"])
+			}
+			break
+		}
+	}
+	if !foundModelChanged {
+		t.Errorf("expected tts.model_changed event over WebSocket")
+	}
+}
+
 

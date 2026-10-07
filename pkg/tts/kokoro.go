@@ -70,7 +70,13 @@ func (m *TTSManager) IsSpeaking() bool {
 // Voices returns the list of available Kokoro voices for the currently active model.
 func (m *TTSManager) Voices() []VoiceProfile {
 	model, _ := m.ActiveModel()
-	if strings.Contains(strings.ToLower(model), "v0_19") || strings.Contains(strings.ToLower(model), "v0.19") {
+	return m.VoicesForModel(model)
+}
+
+// VoicesForModel returns the voice profiles matching a given model name.
+func (m *TTSManager) VoicesForModel(modelName string) []VoiceProfile {
+	low := strings.ToLower(modelName)
+	if strings.Contains(low, "v0_19") || strings.Contains(low, "v0.19") {
 		return engine.AvailableKokoroV019Voices
 	}
 	return engine.AvailableKokoroV11Voices
@@ -82,4 +88,22 @@ func (m *TTSManager) ActiveModel() (string, bool) {
 		return m.engine.TTSModelInfo()
 	}
 	return "None", false
+}
+
+// SetModel switches the active TTS model in the speech engine.
+func (m *TTSManager) SetModel(modelName string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.engine != nil {
+		return m.engine.SetTTSModel(modelName)
+	}
+	return nil
+}
+
+// InstalledModels returns the list of installed TTS model directory names.
+func (m *TTSManager) InstalledModels() []string {
+	if m.engine != nil {
+		return m.engine.InstalledTTSModels()
+	}
+	return nil
 }

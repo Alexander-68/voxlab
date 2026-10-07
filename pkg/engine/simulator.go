@@ -21,6 +21,7 @@ type SimulatorEngine struct {
 	samplePhrases    []string
 	dictationPhrases []string
 	phraseIdx        int
+	activeModel      string
 }
 
 // NewSimulatorEngine creates an initialized testbench simulator.
@@ -218,5 +219,27 @@ func (s *SimulatorEngine) Synthesize(req TTSRequest) (*TTSResult, error) {
 
 // TTSModelInfo returns simulator model information.
 func (s *SimulatorEngine) TTSModelInfo() (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.activeModel != "" {
+		return s.activeModel, false
+	}
 	return "Harmonic Simulator (Mock)", false
+}
+
+// SetTTSModel updates simulator model.
+func (s *SimulatorEngine) SetTTSModel(modelName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.activeModel = modelName
+	return nil
+}
+
+// InstalledTTSModels returns available installed models or default mock.
+func (s *SimulatorEngine) InstalledTTSModels() []string {
+	models := FindInstalledKokoroModels("models")
+	if len(models) == 0 {
+		return []string{"simulator-mock"}
+	}
+	return models
 }

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +30,9 @@ type SherpaRunner struct {
 
 // NewSherpaRunner creates a new SherpaRunner instance.
 func NewSherpaRunner(cfg *config.AppConfig) *SherpaRunner {
+	if dir, ok := findKokoroModelDir(cfg.Engine.KokoroModelDir); ok {
+		cfg.Engine.KokoroModelDir = dir
+	}
 	return &SherpaRunner{
 		cfg:       cfg,
 		simulator: NewSimulatorEngine(),
@@ -233,32 +237,77 @@ func isValidKokoroDir(dir string) bool {
 	return false
 }
 
-// findKokoroModelDir automatically discovers the latest available Kokoro model directory.
-// Priority order: latest multi-lang v1.1 -> int8 v1.1 -> v1.0 -> explicitly configured custom path -> legacy v0.19.
+// FindInstalledKokoroModels scans the models directory and returns all valid Kokoro model folder names.
+func FindInstalledKokoroModels(modelsRoot string) []string {
+	if modelsRoot == "" {
+		modelsRoot = "models"
+	}
+	candidates := []string{
+		modelsRoot,
+		filepath.Join("..", modelsRoot),
+		filepath.Join("..", "..", modelsRoot),
+	}
+	var root string
+	for _, c := range candidates {
+		if fi, err := os.Stat(c); err == nil && fi.IsDir() {
+			root = c
+			break
+		}
+	}
+	if root == "" {
+		root = modelsRoot
+	}
+
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		dirPath := filepath.Join(root, e.Name())
+		if isValidKokoroDir(dirPath) && strings.Contains(strings.ToLower(e.Name()), "kokoro") {
+			out = append(out, e.Name())
+		}
+	}
+	// Sort so v1_1 models appear before older ones
+	sort.Slice(out, func(i, j int) bool {
+		return out[i] > out[j]
+	})
+	return out
+}
+
+// findKokoroModelDir automatically discovers the Kokoro model directory.
+// Priority: explicitly configured valid dir -> latest multi-lang v1.1 -> int8 v1.1 -> v1.0 -> legacy v0.19.
 func findKokoroModelDir(configured string) (string, bool) {
-	// If user explicitly configured a custom path (not default v1.1 and not legacy v0.19), try it first
-	if configured != "" &&
-		!strings.Contains(configured, "kokoro-en-v0_19") &&
-		!strings.Contains(configured, "kokoro-multi-lang-v1_1") &&
-		!strings.Contains(configured, "kokoro-int8-multi-lang-v1_1") {
-		if isValidKokoroDir(configured) {
-			return configured, true
+	if configured != "" {
+		for _, prefix := range []string{"", "..", filepath.Join("..", "..")} {
+			p := filepath.Join(prefix, configured)
+			if isValidKokoroDir(p) {
+				return p, true
+			}
 		}
 	}
 
 	candidates := []string{
 		filepath.Join("models", "kokoro-multi-lang-v1_1"),
+		filepath.Join("..", "models", "kokoro-multi-lang-v1_1"),
+		filepath.Join("..", "..", "models", "kokoro-multi-lang-v1_1"),
 		filepath.Join("models", "kokoro-int8-multi-lang-v1_1"),
+		filepath.Join("..", "models", "kokoro-int8-multi-lang-v1_1"),
+		filepath.Join("..", "..", "models", "kokoro-int8-multi-lang-v1_1"),
 		filepath.Join("models", "kokoro-multi-lang-v1_0"),
+		filepath.Join("..", "models", "kokoro-multi-lang-v1_0"),
 		filepath.Join("models", "kokoro-int8-multi-lang-v1_0"),
-		configured,
+		filepath.Join("..", "models", "kokoro-int8-multi-lang-v1_0"),
 		filepath.Join("models", "kokoro-en-v0_19"),
+		filepath.Join("..", "models", "kokoro-en-v0_19"),
+		filepath.Join("..", "..", "models", "kokoro-en-v0_19"),
 	}
 
 	for _, c := range candidates {
-		if c == "" {
-			continue
-		}
 		if isValidKokoroDir(c) {
 			return c, true
 		}
@@ -410,6 +459,39 @@ func (r *SherpaRunner) TTSModelInfo() (string, bool) {
 	}
 
 	return fmt.Sprintf("%s (%s)", base, variant), true
+}
+
+// InstalledTTSModels returns all installed Kokoro models found in the models directory.
+func (r *SherpaRunner) InstalledTTSModels() []string {
+	modelsRoot := r.cfg.Engine.ModelDir
+	if modelsRoot == "" {
+		modelsRoot = "models"
+	}
+	return FindInstalledKokoroModels(modelsRoot)
+}
+
+// SetTTSModel switches the active Kokoro model directory to the requested model.
+func (r *SherpaRunner) SetTTSModel(modelName string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	modelsRoot := r.cfg.Engine.ModelDir
+	if modelsRoot == "" {
+		modelsRoot = "models"
+	}
+
+	targetDir := filepath.Join(modelsRoot, modelName)
+	if !isValidKokoroDir(targetDir) {
+		if isValidKokoroDir(modelName) {
+			targetDir = modelName
+		} else {
+			return fmt.Errorf("model directory not found or invalid: %s", targetDir)
+		}
+	}
+
+	r.cfg.Engine.KokoroModelDir = targetDir
+	log.Printf("[SherpaRunner] Switched active Kokoro model to: %s", targetDir)
+	return nil
 }
 
 // mapVoiceToSID maps a voice identifier or name to the correct Kokoro speaker ID.

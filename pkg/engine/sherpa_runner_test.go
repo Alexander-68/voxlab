@@ -62,11 +62,25 @@ func TestMapVoiceToSID(t *testing.T) {
 }
 
 func TestFindKokoroModelDir(t *testing.T) {
-	modelDir, found := findKokoroModelDir("models/kokoro-en-v0_19")
+	// When empty string is passed, it should discover and prefer kokoro-multi-lang-v1_1
+	modelDir, found := findKokoroModelDir("")
 	if found {
-		// Since kokoro-multi-lang-v1_1 is present on disk, it must be selected
 		if !strings.Contains(modelDir, "kokoro-multi-lang-v1_1") {
-			t.Errorf("expected kokoro-multi-lang-v1_1 to be preferred over v0_19, got: %s", modelDir)
+			t.Errorf("expected kokoro-multi-lang-v1_1 to be preferred candidate, got: %s", modelDir)
 		}
+	}
+
+	// When an explicit valid directory is passed, it must be honored
+	explicitDir, explicitFound := findKokoroModelDir("models/kokoro-en-v0_19")
+	if explicitFound {
+		if !strings.Contains(explicitDir, "kokoro-en-v0_19") {
+			t.Errorf("expected explicit model dir to be retained, got: %s", explicitDir)
+		}
+	}
+
+	// Test FindInstalledKokoroModels
+	installed := FindInstalledKokoroModels("models")
+	if len(installed) == 0 {
+		t.Errorf("expected installed models to be found in models/ directory")
 	}
 }

@@ -63,7 +63,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnClearDraft = document.getElementById('btn-clear-draft');
 
   // Kokoro TTS
+  const ttsModelSelect = document.getElementById('tts-model-select');
   const ttsVoiceSelect = document.getElementById('tts-voice-select');
+  const ttsVoiceCount = document.getElementById('tts-voice-count');
   const ttsSpeedSlider = document.getElementById('tts-speed-slider');
   const ttsSpeedVal = document.getElementById('tts-speed-val');
   const ttsInputText = document.getElementById('tts-input-text');
@@ -124,6 +126,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (ttsPlayerModel) {
       ttsPlayerModel.textContent = model;
+    }
+    if (ttsModelSelect) {
+      for (const opt of ttsModelSelect.options) {
+        if (opt.value && model.toLowerCase().includes(opt.value.toLowerCase())) {
+          ttsModelSelect.value = opt.value;
+          break;
+        }
+      }
     }
   }
 
@@ -325,6 +335,17 @@ document.addEventListener('DOMContentLoaded', () => {
         console.warn('Autoplay prevented or failed:', e);
         client.sendPlaybackStatus(false);
       });
+    }
+  });
+
+  client.on('tts.model_changed', (data) => {
+    logEvent('tts.model_changed', `Model changed: ${data.model} (${data.voices ? data.voices.length : 0} voices)`);
+    updateTtsModelDisplay(data.model, data.is_neural);
+    if (data.installed_models) {
+      populateModelsDropdown(data.installed_models, data.model);
+    }
+    if (data.voices) {
+      populateVoicesDropdown(data.voices);
     }
   });
 
@@ -587,7 +608,37 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize source UI controls
   updateSourceControls(audioSourceSelect.value);
 
+  function populateModelsDropdown(models, activeModel) {
+    if (!ttsModelSelect || !models || !models.length) return;
+    const curVal = ttsModelSelect.value;
+    ttsModelSelect.innerHTML = '';
+    models.forEach((m) => {
+      const opt = document.createElement('option');
+      opt.value = m;
+      let label = m;
+      if (m.includes('v1_1')) label += ' (103 voices, Multi-lang)';
+      else if (m.includes('v0_19')) label += ' (11 voices, English)';
+      opt.textContent = label;
+      ttsModelSelect.appendChild(opt);
+    });
+
+    if (activeModel) {
+      for (const opt of ttsModelSelect.options) {
+        if (activeModel.toLowerCase().includes(opt.value.toLowerCase())) {
+          ttsModelSelect.value = opt.value;
+          break;
+        }
+      }
+    } else if (curVal && Array.from(ttsModelSelect.options).some(o => o.value === curVal)) {
+      ttsModelSelect.value = curVal;
+    }
+  }
+
   function populateVoicesDropdown(voices) {
+    if (!ttsVoiceSelect) return;
+    if (ttsVoiceCount) {
+      ttsVoiceCount.textContent = `${voices ? voices.length : 0}`;
+    }
     if (!voices || !voices.length) return;
     const curVal = ttsVoiceSelect.value;
     ttsVoiceSelect.innerHTML = '';
@@ -603,12 +654,34 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  if (ttsModelSelect) {
+    ttsModelSelect.addEventListener('change', (e) => {
+      const chosenModel = e.target.value;
+      if (!chosenModel) return;
+      client.setTtsModel(chosenModel);
+      logEvent('tts.model_select', `Switched model -> ${chosenModel}`);
+
+      // Optimistically fetch voices for the selected model
+      fetch(`/api/voices?model=${encodeURIComponent(chosenModel)}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data && data.voices) {
+            populateVoicesDropdown(data.voices);
+          }
+        })
+        .catch(() => {});
+    });
+  }
+
   // Initial TTS model info fetch
   fetch('/api/voices')
     .then(r => r.json())
     .then(data => {
       if (data && data.model) {
         updateTtsModelDisplay(data.model, data.is_neural);
+      }
+      if (data && data.installed_models) {
+        populateModelsDropdown(data.installed_models, data.model);
       }
       if (data && data.voices) {
         populateVoicesDropdown(data.voices);

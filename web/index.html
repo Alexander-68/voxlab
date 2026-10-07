@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VoxLab 1.0.261007 - Voice Pipeline Test Bench</title>
+  <title>VoxLab 1.0.261008 - Voice Pipeline Test Bench</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -13,7 +13,7 @@
       <div class="header-branding">
         <div class="logo-mark">🎙️</div>
         <div>
-          <h1 class="app-title">VoxLab <span class="app-version">1.0.261007</span></h1>
+          <h1 class="app-title">VoxLab <span class="app-version">1.0.261008</span></h1>
           <p class="app-tagline">The voice pipeline test bench for web runtimes</p>
         </div>
       </div>
@@ -279,20 +279,25 @@
         </div>
 
         <div class="panel-body">
-          <!-- Voice Config -->
+          <!-- Model Selection -->
           <div class="form-group">
             <div class="slider-header mb-1">
-              <label for="tts-voice-select">Speaker Voice (Kokoro)</label>
-              <span class="helper-text" style="font-size: 11px;">Active Model: <strong id="tts-model-name" style="color: var(--cyan);">Detecting...</strong></span>
+              <label for="tts-model-select">Model</label>
+              <span class="helper-text" style="font-size: 11px;">Active: <strong id="tts-model-name" style="color: var(--cyan);">Detecting...</strong></span>
+            </div>
+            <select id="tts-model-select" class="form-control">
+              <option value="">Detecting installed models...</option>
+            </select>
+          </div>
+
+          <!-- Voice Selection -->
+          <div class="form-group mt-2">
+            <div class="slider-header mb-1">
+              <label for="tts-voice-select">Voice</label>
+              <span class="helper-text" style="font-size: 11px;"><span id="tts-voice-count">--</span> voices</span>
             </div>
             <select id="tts-voice-select" class="form-control">
               <option value="af_maple">🟣 af_maple - Maple (American Female, Default)</option>
-              <option value="af_sol">🟣 af_sol - Sol (American Female)</option>
-              <option value="bf_vale">🟣 bf_vale - Vale (British Female)</option>
-              <option value="zm_009">🔵 zm_009 - zm_009 (Bilingual Male)</option>
-              <option value="zm_010">🔵 zm_010 - zm_010 (Bilingual Male)</option>
-              <option value="zf_001">🟣 zf_001 - zf_001 (Bilingual Female)</option>
-              <option value="zf_002">🟣 zf_002 - zf_002 (Bilingual Female)</option>
             </select>
           </div>
 

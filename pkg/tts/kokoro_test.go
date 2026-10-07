@@ -61,3 +61,35 @@ func TestTTSManagerEchoSuppression(t *testing.T) {
 		t.Errorf("expected IsSpeaking() to be false")
 	}
 }
+
+func TestTTSManagerModelAndVoices(t *testing.T) {
+	dsp := audio.NewDSPProcessor(16000, 80.0, -42.0, true, 0.12)
+	sim := engine.NewSimulatorEngine()
+	mgr := NewTTSManager(sim, dsp)
+
+	// Check model-specific voices
+	v11Voices := mgr.VoicesForModel("kokoro-multi-lang-v1_1")
+	if len(v11Voices) != 103 {
+		t.Errorf("expected 103 voices for kokoro-multi-lang-v1_1, got %d", len(v11Voices))
+	}
+
+	v019Voices := mgr.VoicesForModel("kokoro-en-v0_19")
+	if len(v019Voices) != 11 {
+		t.Errorf("expected 11 voices for kokoro-en-v0_19, got %d", len(v019Voices))
+	}
+
+	// Test SetModel
+	if err := mgr.SetModel("kokoro-en-v0_19"); err != nil {
+		t.Errorf("SetModel failed: %v", err)
+	}
+
+	active, _ := mgr.ActiveModel()
+	if active != "kokoro-en-v0_19" {
+		t.Errorf("expected active model kokoro-en-v0_19, got %s", active)
+	}
+
+	curVoices := mgr.Voices()
+	if len(curVoices) != 11 {
+		t.Errorf("expected 11 voices after switching to v0_19, got %d", len(curVoices))
+	}
+}

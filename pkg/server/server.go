@@ -150,6 +150,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/config", s.handleConfig)
 	mux.HandleFunc("/api/catalog", s.handleCatalog)
 	mux.HandleFunc("/api/voices", s.handleVoices)
+	mux.HandleFunc("/api/models", s.handleModels)
 	mux.HandleFunc("/api/tts", s.handleTTS)
 
 	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
@@ -592,6 +593,28 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				} else {
 					s.handleFinalCommandTranscript(text)
 				}
+
+			case "set_tts_model":
+				model, _ := req["model"].(string)
+				if model != "" {
+					if err := s.ttsMgr.SetModel(model); err != nil {
+						log.Printf("[Error] Failed setting TTS model %s: %v", model, err)
+					} else {
+						activeModel, isNeural := s.ttsMgr.ActiveModel()
+						voices := s.ttsMgr.Voices()
+						installed := s.ttsMgr.InstalledModels()
+						s.BroadcastJSON(map[string]interface{}{
+							"event": "tts.model_changed",
+							"data": map[string]interface{}{
+								"model":            activeModel,
+								"model_id":         model,
+								"is_neural":        isNeural,
+								"installed_models": installed,
+								"voices":           voices,
+							},
+						})
+					}
+				}
 			}
 		}
 	}
@@ -733,11 +756,57 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleVoices(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	reqModel := r.URL.Query().Get("model")
+	var voices []engine.VoiceProfile
+	if reqModel != "" {
+		voices = s.ttsMgr.VoicesForModel(reqModel)
+	} else {
+		voices = s.ttsMgr.Voices()
+	}
 	modelName, isNeural := s.ttsMgr.ActiveModel()
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"model":     modelName,
-		"is_neural": isNeural,
-		"voices":    s.ttsMgr.Voices(),
+		"model":            modelName,
+		"is_neural":        isNeural,
+		"installed_models": s.ttsMgr.InstalledModels(),
+		"voices":           voices,
+	})
+}
+
+func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method == http.MethodPost {
+		var body struct {
+			Model string `json:"model"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if body.Model != "" {
+			if err := s.ttsMgr.SetModel(body.Model); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			activeModel, isNeural := s.ttsMgr.ActiveModel()
+			voices := s.ttsMgr.Voices()
+			installed := s.ttsMgr.InstalledModels()
+			s.BroadcastJSON(map[string]interface{}{
+				"event": "tts.model_changed",
+				"data": map[string]interface{}{
+					"model":            activeModel,
+					"model_id":         body.Model,
+					"is_neural":        isNeural,
+					"installed_models": installed,
+					"voices":           voices,
+				},
+			})
+		}
+	}
+	modelName, isNeural := s.ttsMgr.ActiveModel()
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"model":            modelName,
+		"is_neural":        isNeural,
+		"installed_models": s.ttsMgr.InstalledModels(),
 	})
 }
 

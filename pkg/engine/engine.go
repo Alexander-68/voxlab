@@ -34,4 +34,6 @@ type SpeechEngine interface {
 	ResetASR()
 	Synthesize(req TTSRequest) (*TTSResult, error)
 	TTSModelInfo() (modelName string, isNeural bool)
+	SetTTSModel(modelName string) error
+	InstalledTTSModels() []string
 }

@@ -144,4 +144,8 @@ class VoiceClient {
   injectText(text, mode = 'command') {
     this.sendAction('inject_text', { text, mode });
   }
+
+  setTtsModel(modelName) {
+    this.sendAction('set_tts_model', { model: modelName });
+  }
 }
