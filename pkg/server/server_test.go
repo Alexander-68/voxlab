@@ -256,3 +256,91 @@ func TestServerPlaybackStatusEchoSuppression(t *testing.T) {
 	}
 }
 
+func TestServerMonitorAudioStreaming(t *testing.T) {
+	srv := setupTestServer(t)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws", srv.handleWebSocket)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("WebSocket connection failed: %v", err)
+	}
+	defer conn.Close()
+
+	// Drain initial voice.state
+	var initMsg map[string]interface{}
+	_ = conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+	if err := conn.ReadJSON(&initMsg); err != nil {
+		t.Fatalf("failed reading initial WS message: %v", err)
+	}
+
+	// 1. Initially monitor is disabled
+	if srv.IsMonitorEnabled() {
+		t.Errorf("expected monitor to be disabled initially")
+	}
+
+	// 2. Enable monitor via WebSocket action
+	if err := conn.WriteJSON(map[string]interface{}{
+		"action":  "set_monitor",
+		"enabled": true,
+	}); err != nil {
+		t.Fatalf("failed to send set_monitor action: %v", err)
+	}
+
+	time.Sleep(20 * time.Millisecond)
+	if !srv.IsMonitorEnabled() {
+		t.Errorf("expected monitor to be enabled after set_monitor: true")
+	}
+
+	// 3. Set active source to host_native_mic
+	srv.sourceMu.Lock()
+	srv.activeSource = "host_native_mic"
+	srv.sourceMu.Unlock()
+
+	// 4. Feed a synthetic audio chunk (16kHz sine wave, 480 samples = 30ms)
+	chunk := make([]float32, 480)
+	for i := range chunk {
+		chunk[i] = 0.5 // above noise floor
+	}
+	srv.processIncomingAudio(chunk)
+
+	// 5. Read binary audio chunk from WebSocket
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	foundBinary := false
+	for i := 0; i < 5; i++ {
+		msgType, data, err := conn.ReadMessage()
+		if err != nil {
+			break
+		}
+		if msgType == websocket.BinaryMessage {
+			foundBinary = true
+			if len(data) != 480*2 {
+				t.Errorf("expected 960 bytes (480 int16 samples), got %d bytes", len(data))
+			}
+			break
+		}
+	}
+
+	if !foundBinary {
+		t.Errorf("expected binary PCM chunk over WebSocket for headphone monitoring")
+	}
+
+	// 6. Disable monitor via WebSocket action
+	if err := conn.WriteJSON(map[string]interface{}{
+		"action":  "set_monitor",
+		"enabled": false,
+	}); err != nil {
+		t.Fatalf("failed to send set_monitor action: %v", err)
+	}
+
+	time.Sleep(20 * time.Millisecond)
+	if srv.IsMonitorEnabled() {
+		t.Errorf("expected monitor to be disabled after set_monitor: false")
+	}
+}
+
+

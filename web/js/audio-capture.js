@@ -22,6 +22,11 @@ class AudioCapture {
     this.remoteAnimId = null;
     this.isRemote = false;
     this.remoteBuffer = new Float32Array(256);
+
+    // Live headphone monitor for remote audio (Host Native Mic and WAV injection)
+    this.isMonitoring = false;
+    this.monitorCtx = null;
+    this.nextScheduleTime = 0;
   }
 
   setCanvas(canvasElement) {
@@ -145,6 +150,24 @@ class AudioCapture {
 
   setMonitoring(enabled) {
     this.isMonitoring = enabled;
+    if (enabled) {
+      try {
+        if (!this.monitorCtx) {
+          this.monitorCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (this.monitorCtx.state === 'suspended') {
+          this.monitorCtx.resume();
+        }
+      } catch (e) {
+        console.warn('[AudioCapture] Failed to initialize monitor audio context:', e);
+      }
+      this.nextScheduleTime = 0;
+    } else {
+      this.nextScheduleTime = 0;
+      if (this.monitorCtx && this.monitorCtx.state === 'running') {
+        this.monitorCtx.suspend().catch(() => {});
+      }
+    }
   }
 
   startVisualizer() {
@@ -206,6 +229,7 @@ class AudioCapture {
 
   setRemoteMode(enabled) {
     this.isRemote = enabled;
+    this.nextScheduleTime = 0;
     if (enabled) {
       this.startRemoteVisualizer();
     } else {
@@ -302,5 +326,40 @@ class AudioCapture {
     this.canvasCtx.moveTo(0, this.canvas.height / 2);
     this.canvasCtx.lineTo(this.canvas.width, this.canvas.height / 2);
     this.canvasCtx.stroke();
+  }
+
+  playRemotePCM(arrayBuffer) {
+    if (!this.isMonitoring) return;
+    try {
+      if (!this.monitorCtx) {
+        this.monitorCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (this.monitorCtx.state === 'suspended') {
+        this.monitorCtx.resume();
+      }
+
+      const int16View = new Int16Array(arrayBuffer);
+      const numSamples = int16View.length;
+      if (numSamples === 0) return;
+
+      const audioBuf = this.monitorCtx.createBuffer(1, numSamples, 16000);
+      const channelData = audioBuf.getChannelData(0);
+      for (let i = 0; i < numSamples; i++) {
+        channelData[i] = int16View[i] / 32768.0;
+      }
+
+      const now = this.monitorCtx.currentTime;
+      if (this.nextScheduleTime < now || this.nextScheduleTime > now + 0.200) {
+        this.nextScheduleTime = now + 0.025;
+      }
+
+      const source = this.monitorCtx.createBufferSource();
+      source.buffer = audioBuf;
+      source.connect(this.monitorCtx.destination);
+      source.start(this.nextScheduleTime);
+      this.nextScheduleTime += audioBuf.duration;
+    } catch (e) {
+      console.warn('[AudioCapture] Error playing remote PCM chunk:', e);
+    }
   }
 }

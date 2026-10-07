@@ -93,6 +93,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (connected) {
       wsStatus.className = 'badge badge-connected';
       wsStatus.textContent = 'CONNECTED';
+      if (chkMonitor && chkMonitor.checked) {
+        client.setMonitor(true);
+      }
     } else {
       wsStatus.className = 'badge badge-disconnected';
       wsStatus.textContent = 'DISCONNECTED';
@@ -204,6 +207,13 @@ document.addEventListener('DOMContentLoaded', () => {
       btnMicToggle.textContent = 'Start Web Mic';
       btnMicToggle.className = 'btn btn-primary btn-block';
     }
+    if (chkMonitor && chkMonitor.checked) {
+      client.setMonitor(true);
+    }
+  });
+
+  client.on('audio.chunk', (buf) => {
+    capture.playRemotePCM(buf);
   });
 
   client.on('wake_word_detected', (data) => {
@@ -378,6 +388,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const src = e.target.value;
     updateSourceControls(src);
     client.setSource(src);
+    if (chkMonitor && chkMonitor.checked) {
+      client.setMonitor(true);
+    }
     logEvent('source_change', `Switching audio capture to ${src}...`);
     if (src === 'host_native_mic') {
       if (capture.isRecording) capture.stop();
@@ -432,8 +445,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (chkMonitor) {
     chkMonitor.addEventListener('change', (e) => {
-      capture.setMonitoring(e.target.checked);
-      logEvent('dsp.monitor', `Headphone Audio Monitor: ${e.target.checked ? 'ON (Live Ear)' : 'MUTED'}`);
+      const enabled = e.target.checked;
+      capture.setMonitoring(enabled);
+      client.setMonitor(enabled);
+      logEvent('dsp.monitor', `Headphone Audio Monitor: ${enabled ? 'ON (Live Ear)' : 'MUTED'}`);
     });
   }
 

@@ -46,6 +46,8 @@ class VoiceClient {
           } catch (e) {
             console.error('[VoiceClient] Failed to parse JSON message:', e);
           }
+        } else if (event.data instanceof ArrayBuffer) {
+          this.emit('audio.chunk', event.data);
         }
       };
     } catch (e) {
@@ -129,6 +131,10 @@ class VoiceClient {
 
   setHighPass(enabled) {
     this.sendAction('set_highpass', { enabled: enabled });
+  }
+
+  setMonitor(enabled) {
+    this.sendAction('set_monitor', { enabled: !!enabled });
   }
 
   sendPlaybackStatus(playing) {

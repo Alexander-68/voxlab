@@ -47,7 +47,10 @@ type Server struct {
 	cancel context.CancelFunc
 
 	clientsMu sync.RWMutex
-	clients   map[*websocket.Conn]bool
+	clients   map[*websocket.Conn]*sync.Mutex
+
+	monitorMu      sync.RWMutex
+	monitorEnabled bool
 
 	dictationDraft  string
 	dictationTarget string
@@ -103,7 +106,7 @@ func NewServer(cfg *config.AppConfig) (*Server, error) {
 		audioInChan:   make(chan []float32, 200),
 		ctx:           ctx,
 		cancel:        cancel,
-		clients:       make(map[*websocket.Conn]bool),
+		clients:       make(map[*websocket.Conn]*sync.Mutex),
 	}
 
 	// Listen for state transitions and broadcast them
@@ -261,6 +264,15 @@ func downsampleWave(samples []float32, targetLen int) []float32 {
 func (s *Server) processIncomingAudio(rawChunk []float32) {
 	// Step 1: Preprocessing & Noise Gating
 	cleanChunk, rms, dbfs, passedGate := s.dsp.ProcessChunk(rawChunk)
+
+	// Stream clean audio chunk to clients for live headphone monitoring if remote input active
+	s.sourceMu.Lock()
+	currSource := s.activeSource
+	s.sourceMu.Unlock()
+	if currSource != "web_ui_mic" && s.IsMonitorEnabled() {
+		pcmBytes := audio.Float32ToBytesPCM(cleanChunk)
+		s.BroadcastBinary(pcmBytes)
+	}
 
 	// Broadcast meter update with downsampled waveform at a steady ~30Hz (33ms)
 	s.meterMu.Lock()
@@ -449,8 +461,9 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
+	connMu := &sync.Mutex{}
 	s.clientsMu.Lock()
-	s.clients[conn] = true
+	s.clients[conn] = connMu
 	s.clientsMu.Unlock()
 
 	defer func() {
@@ -459,8 +472,9 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		s.clientsMu.Unlock()
 	}()
 
-	// Send initial state snapshot
+	// Send initial state snapshot safely under connMu
 	ttsModel, isNeural := s.ttsMgr.ActiveModel()
+	connMu.Lock()
 	_ = conn.WriteJSON(map[string]interface{}{
 		"event": "voice.state",
 		"data": map[string]interface{}{
@@ -472,6 +486,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			"tts_is_neural": isNeural,
 		},
 	})
+	connMu.Unlock()
 
 	for {
 		messageType, payload, err := conn.ReadMessage()
@@ -553,6 +568,12 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				if en, ok := req["enabled"].(bool); ok {
 					s.dsp.SetHighPassEnabled(en)
 					log.Printf("[DSP] High-pass filter (80Hz de-rumble) enabled: %v", en)
+				}
+
+			case "set_monitor":
+				if en, ok := req["enabled"].(bool); ok {
+					s.SetMonitorEnabled(en)
+					log.Printf("[Server] Headphone audio monitor: enabled=%v", en)
 				}
 
 			case "inject_text":
@@ -644,13 +665,57 @@ func (s *Server) executeTTS(text, voice string, speed float64) {
 	}(ttsRes.DurationSec)
 }
 
+// SetMonitorEnabled toggles streaming raw PCM audio chunks to clients for headphone monitoring.
+func (s *Server) SetMonitorEnabled(enabled bool) {
+	s.monitorMu.Lock()
+	defer s.monitorMu.Unlock()
+	s.monitorEnabled = enabled
+}
+
+// IsMonitorEnabled returns whether client headphone monitoring is currently active.
+func (s *Server) IsMonitorEnabled() bool {
+	s.monitorMu.RLock()
+	defer s.monitorMu.RUnlock()
+	return s.monitorEnabled
+}
+
 // BroadcastJSON sends a JSON event to all connected WebSocket clients.
 func (s *Server) BroadcastJSON(v interface{}) {
 	s.clientsMu.RLock()
-	defer s.clientsMu.RUnlock()
+	type clientTarget struct {
+		conn *websocket.Conn
+		mu   *sync.Mutex
+	}
+	targets := make([]clientTarget, 0, len(s.clients))
+	for client, mu := range s.clients {
+		targets = append(targets, clientTarget{conn: client, mu: mu})
+	}
+	s.clientsMu.RUnlock()
 
-	for client := range s.clients {
-		_ = client.WriteJSON(v)
+	for _, t := range targets {
+		t.mu.Lock()
+		_ = t.conn.WriteJSON(v)
+		t.mu.Unlock()
+	}
+}
+
+// BroadcastBinary sends raw binary message (e.g. PCM audio) to all connected WebSocket clients.
+func (s *Server) BroadcastBinary(data []byte) {
+	s.clientsMu.RLock()
+	type clientTarget struct {
+		conn *websocket.Conn
+		mu   *sync.Mutex
+	}
+	targets := make([]clientTarget, 0, len(s.clients))
+	for client, mu := range s.clients {
+		targets = append(targets, clientTarget{conn: client, mu: mu})
+	}
+	s.clientsMu.RUnlock()
+
+	for _, t := range targets {
+		t.mu.Lock()
+		_ = t.conn.WriteMessage(websocket.BinaryMessage, data)
+		t.mu.Unlock()
 	}
 }
 
