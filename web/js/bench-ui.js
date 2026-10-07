@@ -288,7 +288,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   client.on('tts.started', (data) => {
     const modelTag = data.model ? ` [${data.model}]` : '';
-    logEvent('tts.started', `"${data.text}" (${data.voice})${modelTag}`);
+    const speedTag = data.speed ? ` @ ${data.speed}x` : '';
+    logEvent('tts.started', `"${data.text}" (${data.voice}${speedTag})${modelTag}`);
     if (data.model) {
       updateTtsModelDisplay(data.model, data.is_neural);
     }
@@ -571,12 +572,31 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize source UI controls
   updateSourceControls(audioSourceSelect.value);
 
+  function populateVoicesDropdown(voices) {
+    if (!voices || !voices.length) return;
+    const curVal = ttsVoiceSelect.value;
+    ttsVoiceSelect.innerHTML = '';
+    voices.forEach((v) => {
+      const opt = document.createElement('option');
+      opt.value = v.id;
+      const icon = v.gender === 'male' ? '👨' : '👩';
+      opt.textContent = `${icon} ${v.id} - ${v.name} (${v.description})`;
+      ttsVoiceSelect.appendChild(opt);
+    });
+    if (curVal && Array.from(ttsVoiceSelect.options).some(o => o.value === curVal)) {
+      ttsVoiceSelect.value = curVal;
+    }
+  }
+
   // Initial TTS model info fetch
   fetch('/api/voices')
     .then(r => r.json())
     .then(data => {
       if (data && data.model) {
         updateTtsModelDisplay(data.model, data.is_neural);
+      }
+      if (data && data.voices) {
+        populateVoicesDropdown(data.voices);
       }
     })
     .catch(() => {});

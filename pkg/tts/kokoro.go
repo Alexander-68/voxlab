@@ -16,16 +16,19 @@ type VoiceProfile struct {
 	Description string `json:"description"`
 }
 
-// AvailableKokoroVoices lists the primary pre-trained Kokoro speaker IDs.
+// AvailableKokoroVoices lists the pre-trained Kokoro speaker IDs available in model weights.
 var AvailableKokoroVoices = []VoiceProfile{
-	{ID: "af_heart", Name: "Heart (Female)", Gender: "female", Description: "Warm, natural American English"},
-	{ID: "af_alloy", Name: "Alloy (Female)", Gender: "female", Description: "Crisp and clear assistant tone"},
-	{ID: "af_aoede", Name: "Aoede (Female)", Gender: "female", Description: "Melodic conversational voice"},
-	{ID: "af_bella", Name: "Bella (Female)", Gender: "female", Description: "Friendly and expressive"},
-	{ID: "am_adam", Name: "Adam (Male)", Gender: "male", Description: "Deep, calm American English"},
-	{ID: "am_fenrir", Name: "Fenrir (Male)", Gender: "male", Description: "Commanding and authoritative"},
-	{ID: "am_michael", Name: "Michael (Male)", Gender: "male", Description: "Neutral and professional"},
-	{ID: "am_puck", Name: "Puck (Male)", Gender: "male", Description: "Energetic and lively"},
+	{ID: "af", Name: "Heart (Female)", Gender: "female", Description: "Warm, natural American English (Default)"},
+	{ID: "am_adam", Name: "Adam (Male)", Gender: "male", Description: "Deep, crisp American English male"},
+	{ID: "am_michael", Name: "Michael (Male)", Gender: "male", Description: "Neutral and professional American male"},
+	{ID: "bm_george", Name: "George (British Male)", Gender: "male", Description: "Refined, classic British English male"},
+	{ID: "bm_lewis", Name: "Lewis (British Male)", Gender: "male", Description: "Deep, resonant British narrator male"},
+	{ID: "af_bella", Name: "Bella (Female)", Gender: "female", Description: "Friendly and expressive American female"},
+	{ID: "af_nicole", Name: "Nicole (Female)", Gender: "female", Description: "Calm, clear American narrator female"},
+	{ID: "af_sarah", Name: "Sarah (Female)", Gender: "female", Description: "Casual and bright American female"},
+	{ID: "af_sky", Name: "Sky (Female)", Gender: "female", Description: "Soft, melodic conversational American voice"},
+	{ID: "bf_emma", Name: "Emma (British Female)", Gender: "female", Description: "Polite, articulate British English female"},
+	{ID: "bf_isabella", Name: "Isabella (British Female)", Gender: "female", Description: "Warm British conversational female"},
 }
 
 // TTSManager coordinates speech synthesis requests and half-duplex echo suppression.

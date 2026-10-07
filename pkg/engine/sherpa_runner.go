@@ -318,19 +318,24 @@ func (r *SherpaRunner) Synthesize(req TTSRequest) (*TTSResult, error) {
 		args = append(args, fmt.Sprintf("--kokoro-lexicon=%s", strings.Join(lexicons, ",")))
 	}
 
-	// Map speaker voice if sid parameter is supported
-	sid := 0
-	if strings.Contains(req.Voice, "alloy") {
-		sid = 1
-	} else if strings.Contains(req.Voice, "aoede") {
-		sid = 2
-	} else if strings.Contains(req.Voice, "bella") {
-		sid = 3
-	} else if strings.Contains(req.Voice, "adam") {
-		sid = 4
+	// Speech speed parameter (0.5x to 2.0x)
+	speed := req.Speed
+	if speed <= 0 {
+		speed = 1.0
 	}
+	if speed < 0.5 {
+		speed = 0.5
+	} else if speed > 2.0 {
+		speed = 2.0
+	}
+	args = append(args, fmt.Sprintf("--speed=%.2f", speed))
+
+	// Map requested speaker voice to Kokoro speaker ID
+	sid := mapVoiceToSID(req.Voice)
 	args = append(args, fmt.Sprintf("--sid=%d", sid))
 	args = append(args, req.Text)
+
+	log.Printf("[SherpaRunner] Synthesizing speech: voice='%s' -> sid=%d, speed=%.2f", req.Voice, sid, speed)
 
 	cmd := exec.Command(ttsBin, args...)
 	var stderr bytes.Buffer
@@ -380,4 +385,70 @@ func (r *SherpaRunner) TTSModelInfo() (string, bool) {
 	}
 
 	return fmt.Sprintf("%s (%s)", base, variant), true
+}
+
+// mapVoiceToSID maps a voice identifier or name to the correct Kokoro speaker ID.
+func mapVoiceToSID(voice string) int {
+	v := strings.ToLower(strings.TrimSpace(voice))
+	switch v {
+	case "af", "af_heart", "heart":
+		return 0
+	case "af_bella", "bella":
+		return 1
+	case "af_nicole", "nicole", "af_alloy", "alloy":
+		return 2
+	case "af_sarah", "sarah":
+		return 3
+	case "af_sky", "sky", "af_aoede", "aoede":
+		return 4
+	case "am_adam", "adam":
+		return 5
+	case "am_michael", "michael":
+		return 6
+	case "bf_emma", "emma":
+		return 7
+	case "bf_isabella", "isabella":
+		return 8
+	case "bm_george", "george", "am_fenrir", "fenrir":
+		return 9
+	case "bm_lewis", "lewis", "am_puck", "puck":
+		return 10
+	}
+
+	// Substring & prefix heuristics
+	if strings.Contains(v, "adam") {
+		return 5
+	}
+	if strings.Contains(v, "michael") {
+		return 6
+	}
+	if strings.Contains(v, "george") || strings.Contains(v, "fenrir") {
+		return 9
+	}
+	if strings.Contains(v, "lewis") || strings.Contains(v, "puck") {
+		return 10
+	}
+	if strings.HasPrefix(v, "am_") || strings.HasPrefix(v, "bm_") || strings.Contains(v, "male") {
+		return 5 // Guarantee a male voice
+	}
+	if strings.Contains(v, "bella") {
+		return 1
+	}
+	if strings.Contains(v, "nicole") || strings.Contains(v, "alloy") {
+		return 2
+	}
+	if strings.Contains(v, "sarah") {
+		return 3
+	}
+	if strings.Contains(v, "sky") || strings.Contains(v, "aoede") {
+		return 4
+	}
+	if strings.Contains(v, "emma") {
+		return 7
+	}
+	if strings.Contains(v, "isabella") {
+		return 8
+	}
+
+	return 0
 }

@@ -114,7 +114,7 @@ func DefaultConfig() *AppConfig {
 			ZipformerDir:   "models/sherpa-onnx-streaming-zipformer-en-2023-06-26",
 		},
 		TTS: TTSConfig{
-			DefaultVoice: "af_heart",
+			DefaultVoice: "af",
 			DefaultSpeed: 1.0,
 			SampleRate:   24000,
 			EchoMute:     true,
