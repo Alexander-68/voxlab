@@ -109,12 +109,12 @@ VoxLab auto-discovers all installed Kokoro models located in `models/`:
 | Model Identifier | Precision | Weights File | Voices | Footprint |
 | :--- | :--- | :--- | :--- | :--- |
 | `kokoro-multi-lang-v1_1` | FP32 | `model.onnx` | 103 voices | ~325 MB |
-| `kokoro-int8-multi-lang-v1_1` | INT8 | `model.int8.onnx` | 103 voices | ~114 MB |
+| `kokoro-multi-lang-v1_1 (INT8)` | **INT8** | `model.int8.onnx` | 103 voices | ~114 MB |
 | `kokoro-multi-lang-v1_0` | FP32 | `model.onnx` | 54 voices | ~325 MB |
 | `kokoro-multi-lang-v1_0 (FP16)` | **FP16** | `model.fp16.onnx` | 54 voices | ~163 MB |
 | `kokoro-en-v0_19` | FP32 | `model.onnx` | 11 voices | ~345 MB |
 
-Whenever a model directory contains `model.fp16.onnx`, VoxLab automatically exposes an additional model selection with the `(FP16)` suffix in the Web UI, REST API (`/api/voices`, `/api/models`), and WebSocket actions.
+Model weight variants (`model.int8.onnx`, `model.fp16.onnx`) can be co-located within the same model folder, sharing lexicons and voice embeddings. VoxLab automatically exposes them with their respective suffix (`(INT8)`, `(FP16)`) in the Web UI, REST API (`/api/voices`, `/api/models`), and WebSocket actions.
 
 See [`models/README.md`](file:///C:/Alex/voxlab/models/README.md) for full architecture and directory details.
 

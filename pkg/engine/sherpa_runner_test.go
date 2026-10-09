@@ -221,3 +221,49 @@ func TestKokoroFP16Model(t *testing.T) {
 		t.Errorf("expected duration > 0.8s, got %.2fs", res.DurationSec)
 	}
 }
+
+func TestKokoroINT8Model(t *testing.T) {
+	// 1. Test model list contains INT8 entry
+	installed := FindInstalledKokoroModels("models")
+	hasINT8 := false
+	for _, m := range installed {
+		if m == "kokoro-multi-lang-v1_1 (INT8)" {
+			hasINT8 = true
+			break
+		}
+	}
+	if !hasINT8 {
+		t.Errorf("expected 'kokoro-multi-lang-v1_1 (INT8)' in installed models, got: %v", installed)
+	}
+
+	// 2. Test SetTTSModel with INT8
+	cfg := &config.AppConfig{}
+	cfg.Engine.KokoroModelDir = "models/kokoro-multi-lang-v1_1"
+	cfg.Engine.SherpaTtsBin = "sherpa-onnx-offline-tts"
+	runner := NewSherpaRunner(cfg)
+
+	if err := runner.SetTTSModel("kokoro-multi-lang-v1_1 (INT8)"); err != nil {
+		t.Fatalf("failed to set model to INT8: %v", err)
+	}
+
+	modelInfo, isNeural := runner.TTSModelInfo()
+	if !strings.Contains(modelInfo, "INT8") {
+		t.Errorf("expected model info to contain INT8, got: %s", modelInfo)
+	}
+	if !isNeural {
+		t.Errorf("expected neural to be true for INT8 model")
+	}
+
+	// 3. Test Synthesize with INT8
+	res, err := runner.Synthesize(TTSRequest{
+		Text:  "Testing Kokoro v1.1 INT8 quantized model.",
+		Voice: "af_maple",
+		Speed: 1.0,
+	})
+	if err != nil {
+		t.Fatalf("Synthesize failed with INT8 model: %v", err)
+	}
+	if res.DurationSec < 0.8 {
+		t.Errorf("expected duration > 0.8s, got %.2fs", res.DurationSec)
+	}
+}

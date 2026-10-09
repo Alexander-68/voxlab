@@ -138,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
           break;
         }
       }
-      // 2. Specific FP16 match
+      // 2. Specific variant match (FP16 or INT8)
       if (!matched && lowModel.includes('fp16')) {
         for (const opt of ttsModelSelect.options) {
           if (opt.value && opt.value.toLowerCase().includes('fp16')) {
@@ -148,11 +148,21 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         }
       }
-      // 3. Fallback contains match (skipping FP16 options if active model is not FP16)
+      if (!matched && lowModel.includes('int8')) {
+        for (const opt of ttsModelSelect.options) {
+          if (opt.value && opt.value.toLowerCase().includes('int8')) {
+            ttsModelSelect.value = opt.value;
+            matched = true;
+            break;
+          }
+        }
+      }
+      // 3. Fallback contains match (skipping FP16/INT8 options if active model is standard FP32)
       if (!matched) {
         for (const opt of ttsModelSelect.options) {
-          const isFp16Opt = opt.value && opt.value.toLowerCase().includes('fp16');
-          if (opt.value && !isFp16Opt && lowModel.includes(opt.value.toLowerCase())) {
+          const optLow = (opt.value || '').toLowerCase();
+          const isVariantOpt = optLow.includes('fp16') || optLow.includes('int8');
+          if (opt.value && !isVariantOpt && lowModel.includes(optLow)) {
             ttsModelSelect.value = opt.value;
             matched = true;
             break;
@@ -698,7 +708,7 @@ document.addEventListener('DOMContentLoaded', () => {
           break;
         }
       }
-      // 2. Specific FP16 match
+      // 2. Specific variant match (FP16 or INT8)
       if (!matched && lowActive.includes('fp16')) {
         for (const opt of ttsModelSelect.options) {
           if (opt.value && opt.value.toLowerCase().includes('fp16')) {
@@ -708,11 +718,21 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         }
       }
-      // 3. Fallback contains match (skipping FP16 options if active model is not FP16)
+      if (!matched && lowActive.includes('int8')) {
+        for (const opt of ttsModelSelect.options) {
+          if (opt.value && opt.value.toLowerCase().includes('int8')) {
+            ttsModelSelect.value = opt.value;
+            matched = true;
+            break;
+          }
+        }
+      }
+      // 3. Fallback contains match (skipping FP16/INT8 options if active model is standard FP32)
       if (!matched) {
         for (const opt of ttsModelSelect.options) {
-          const isFp16Opt = opt.value && opt.value.toLowerCase().includes('fp16');
-          if (opt.value && !isFp16Opt && lowActive.includes(opt.value.toLowerCase())) {
+          const optLow = (opt.value || '').toLowerCase();
+          const isVariantOpt = optLow.includes('fp16') || optLow.includes('int8');
+          if (opt.value && !isVariantOpt && lowActive.includes(optLow)) {
             ttsModelSelect.value = opt.value;
             matched = true;
             break;

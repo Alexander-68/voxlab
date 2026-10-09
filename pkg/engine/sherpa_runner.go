@@ -31,8 +31,11 @@ type SherpaRunner struct {
 
 // NewSherpaRunner creates a new SherpaRunner instance.
 func NewSherpaRunner(cfg *config.AppConfig) *SherpaRunner {
-	if strings.Contains(strings.ToLower(cfg.Engine.KokoroModelDir), "fp16") && cfg.Engine.KokoroModelFile == "" {
+	low := strings.ToLower(cfg.Engine.KokoroModelDir)
+	if strings.Contains(low, "fp16") && cfg.Engine.KokoroModelFile == "" {
 		cfg.Engine.KokoroModelFile = "model.fp16.onnx"
+	} else if strings.Contains(low, "int8") && cfg.Engine.KokoroModelFile == "" {
+		cfg.Engine.KokoroModelFile = "model.int8.onnx"
 	}
 	if dir, ok := findKokoroModelDir(cfg.Engine.KokoroModelDir); ok {
 		cfg.Engine.KokoroModelDir = dir
@@ -292,8 +295,13 @@ func FindInstalledKokoroModels(modelsRoot string) []string {
 				}
 			}
 			if _, err := os.Stat(filepath.Join(dirPath, "model.int8.onnx")); err == nil {
-				if !hasBase {
-					out = append(out, e.Name())
+				if strings.Contains(strings.ToLower(e.Name()), "int8") {
+					if !hasBase {
+						out = append(out, e.Name())
+						hasBase = true
+					}
+				} else {
+					out = append(out, e.Name()+" (INT8)")
 				}
 			}
 		}
@@ -332,7 +340,9 @@ func FindInstalledKokoroModels(modelsRoot string) []string {
 // Priority: explicitly configured valid dir -> latest multi-lang v1.1 -> int8 v1.1 -> v1.0 -> legacy v0.19.
 func findKokoroModelDir(configured string) (string, bool) {
 	if configured != "" {
-		clean := strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(configured, "(FP16)", ""), "(fp16)", ""))
+		clean := strings.TrimSpace(configured)
+		clean = strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(clean, "(FP16)", ""), "(fp16)", ""))
+		clean = strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(clean, "(INT8)", ""), "(int8)", ""))
 		prefixes := []string{
 			"",
 			"..",
@@ -587,7 +597,10 @@ func (r *SherpaRunner) SetTTSModel(modelName string) error {
 
 	clean := strings.TrimSpace(modelName)
 	isFP16 := strings.Contains(strings.ToLower(clean), "fp16")
-	baseName := strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(clean, "(FP16)", ""), "(fp16)", ""))
+	isINT8 := strings.Contains(strings.ToLower(clean), "int8")
+	baseName := clean
+	baseName = strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(baseName, "(FP16)", ""), "(fp16)", ""))
+	baseName = strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(baseName, "(INT8)", ""), "(int8)", ""))
 
 	targetDir := filepath.Join(modelsRoot, baseName)
 	if !isValidKokoroDir(targetDir) {
@@ -607,6 +620,13 @@ func (r *SherpaRunner) SetTTSModel(modelName string) error {
 			r.cfg.Engine.KokoroModelFile = "model.fp16.onnx"
 		} else {
 			return fmt.Errorf("fp16 model not found in directory: %s", fp16Path)
+		}
+	} else if isINT8 {
+		int8Path := filepath.Join(targetDir, "model.int8.onnx")
+		if _, err := os.Stat(int8Path); err == nil {
+			r.cfg.Engine.KokoroModelFile = "model.int8.onnx"
+		} else {
+			return fmt.Errorf("int8 model not found in directory: %s", int8Path)
 		}
 	} else {
 		if _, err := os.Stat(filepath.Join(targetDir, "model.onnx")); err == nil {

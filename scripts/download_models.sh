@@ -39,12 +39,23 @@ elif [ "$KOKORO_VER" == "v0_19" ]; then
 fi
 
 KOKORO_FOLDER="$MODELS_DIR/$KOKORO_NAME"
-if [ ! -d "$KOKORO_FOLDER" ]; then
+ALREADY_INSTALLED=false
+if [ -d "$KOKORO_FOLDER" ]; then
+    ALREADY_INSTALLED=true
+elif [ "$KOKORO_VER" == "int8" ] && [ -f "$MODELS_DIR/kokoro-multi-lang-v1_1/model.int8.onnx" ]; then
+    ALREADY_INSTALLED=true
+fi
+
+if [ "$ALREADY_INSTALLED" = false ]; then
     echo "[2/3] Downloading latest Kokoro TTS Model ($KOKORO_NAME)..."
     KOKORO_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/$KOKORO_NAME.tar.bz2"
     wget -c "$KOKORO_URL" -O "$MODELS_DIR/$KOKORO_NAME.tar.bz2"
     tar -xjf "$MODELS_DIR/$KOKORO_NAME.tar.bz2" -C "$MODELS_DIR"
     rm -f "$MODELS_DIR/$KOKORO_NAME.tar.bz2"
+    if [ "$KOKORO_VER" == "int8" ] && [ -d "$MODELS_DIR/kokoro-multi-lang-v1_1" ]; then
+        cp "$KOKORO_FOLDER/model.int8.onnx" "$MODELS_DIR/kokoro-multi-lang-v1_1/model.int8.onnx"
+        rm -rf "$KOKORO_FOLDER"
+    fi
     echo "Kokoro TTS ($KOKORO_NAME) installed!"
 else
     echo "[2/3] Kokoro TTS Model already present."

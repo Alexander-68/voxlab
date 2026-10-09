@@ -463,6 +463,35 @@ func TestServerModelManagement(t *testing.T) {
 	if !strings.Contains(activeFP16, "FP16") {
 		t.Errorf("expected active model to contain FP16, got %s", activeFP16)
 	}
+
+	// 5. Test GET /api/voices and POST /api/models with INT8
+	reqINT8 := httptest.NewRequest(http.MethodGet, "/api/voices?model=kokoro-multi-lang-v1_1%20(INT8)", nil)
+	wINT8 := httptest.NewRecorder()
+	srv.handleVoices(wINT8, reqINT8)
+	if wINT8.Code != http.StatusOK {
+		t.Errorf("expected 200 OK for INT8 voices query, got %d", wINT8.Code)
+	}
+	var respINT8 struct {
+		Voices []tts.VoiceProfile `json:"voices"`
+	}
+	if err := json.NewDecoder(wINT8.Body).Decode(&respINT8); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if len(respINT8.Voices) != 103 {
+		t.Errorf("expected 103 voices for INT8 query, got %d", len(respINT8.Voices))
+	}
+
+	bodyINT8, _ := json.Marshal(map[string]string{"model": "kokoro-multi-lang-v1_1 (INT8)"})
+	reqPostINT8 := httptest.NewRequest(http.MethodPost, "/api/models", bytes.NewReader(bodyINT8))
+	wPostINT8 := httptest.NewRecorder()
+	srv.handleModels(wPostINT8, reqPostINT8)
+	if wPostINT8.Code != http.StatusOK {
+		t.Errorf("expected 200 OK for POST /api/models with INT8, got %d", wPostINT8.Code)
+	}
+	activeINT8, _ := srv.ttsMgr.ActiveModel()
+	if !strings.Contains(activeINT8, "INT8") {
+		t.Errorf("expected active model to contain INT8, got %s", activeINT8)
+	}
 }
 
 

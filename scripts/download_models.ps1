@@ -69,7 +69,9 @@ if (-not $SkipBinaries) {
 if (-not $SkipKokoro) {
     $HasV019 = Test-Path (Join-Path $ModelsDir "kokoro-en-v0_19\model.onnx")
     $HasV10  = (Test-Path (Join-Path $ModelsDir "kokoro-multi-lang-v1_0\model.onnx")) -or (Test-Path (Join-Path $ModelsDir "kokoro-multi-lang-v1_0\model.fp16.onnx"))
-    $HasV11  = (Test-Path (Join-Path $ModelsDir "kokoro-multi-lang-v1_1\model.onnx")) -or (Test-Path (Join-Path $ModelsDir "kokoro-int8-multi-lang-v1_1\model.int8.onnx"))
+    $HasV11  = (Test-Path (Join-Path $ModelsDir "kokoro-multi-lang-v1_1\model.onnx")) -or `
+               (Test-Path (Join-Path $ModelsDir "kokoro-multi-lang-v1_1\model.int8.onnx")) -or `
+               (Test-Path (Join-Path $ModelsDir "kokoro-int8-multi-lang-v1_1\model.int8.onnx"))
 
     if ($KokoroVersion -eq "auto") {
         if ($HasV11) {
@@ -95,7 +97,10 @@ if (-not $SkipKokoro) {
             $KokoroTargetDir = Join-Path $ModelsDir "kokoro-multi-lang-v1_0"
         }
 
-        if (-not (Test-Path $KokoroTargetDir)) {
+        $AlreadyInstalled = (Test-Path $KokoroTargetDir) -or `
+                            ($KokoroVersion -eq "int8" -and (Test-Path (Join-Path $ModelsDir "kokoro-multi-lang-v1_1\model.int8.onnx")))
+
+        if (-not $AlreadyInstalled) {
             Write-Host "[2/3] Downloading Kokoro TTS Model ($KokoroArchiveName)..." -ForegroundColor White
             $KokoroUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/$KokoroArchiveName.tar.bz2"
             $KokoroArchive = Join-Path $ModelsDir "$KokoroArchiveName.tar.bz2"
@@ -103,6 +108,11 @@ if (-not $SkipKokoro) {
             Write-Host "Extracting $KokoroArchiveName..." -ForegroundColor Yellow
             tar -xjf $KokoroArchive -C $ModelsDir
             Remove-Item $KokoroArchive -Force -ErrorAction SilentlyContinue
+            # If kokoro-multi-lang-v1_1 already exists and int8 was downloaded, consolidate model.int8.onnx into it
+            if ($KokoroVersion -eq "int8" -and (Test-Path (Join-Path $ModelsDir "kokoro-multi-lang-v1_1"))) {
+                Copy-Item (Join-Path $KokoroTargetDir "model.int8.onnx") (Join-Path $ModelsDir "kokoro-multi-lang-v1_1\model.int8.onnx") -Force
+                Remove-Item $KokoroTargetDir -Recurse -Force -ErrorAction SilentlyContinue
+            }
             Write-Host "[OK] Kokoro TTS ($KokoroArchiveName) installed!" -ForegroundColor Green
         } else {
             Write-Host "[2/3] Kokoro model ($KokoroArchiveName) already installed." -ForegroundColor Yellow

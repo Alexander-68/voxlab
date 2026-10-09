@@ -16,10 +16,12 @@ VoxLab supports multiple generations and quantization variants:
 | Model Folder | Model Identifier | Precision | Weights File | Speaker Voices | Disk Footprint |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | `models/kokoro-multi-lang-v1_1` | `kokoro-multi-lang-v1_1` | **FP32** | `model.onnx` | 103 voices | ~325 MB |
-| `models/kokoro-int8-multi-lang-v1_1` | `kokoro-int8-multi-lang-v1_1` | **INT8** | `model.int8.onnx` | 103 voices | ~114 MB |
+| `models/kokoro-multi-lang-v1_1` | `kokoro-multi-lang-v1_1 (INT8)` | **INT8** | `model.int8.onnx` | 103 voices | **~114 MB** |
 | `models/kokoro-multi-lang-v1_0` | `kokoro-multi-lang-v1_0` | **FP32** | `model.onnx` | 54 voices | ~325 MB |
 | `models/kokoro-multi-lang-v1_0` | `kokoro-multi-lang-v1_0 (FP16)` | **FP16** | `model.fp16.onnx` | 54 voices | **~163 MB** |
 | `models/kokoro-en-v0_19` | `kokoro-en-v0_19` | **FP32** | `model.onnx` | 11 voices | ~345 MB |
+
+*(Note: Standalone legacy directory `models/kokoro-int8-multi-lang-v1_1` is also supported for backwards compatibility).*
 
 ### Zipformer ASR (Automatic Speech Recognition)
 - **Model Path**: `models/sherpa-onnx-streaming-zipformer-en-2023-06-26`
@@ -32,13 +34,21 @@ VoxLab supports multiple generations and quantization variants:
 
 ---
 
-## 2. FP16 Precision Variant
+## 2. Quantization & Precision Variants (INT8 & FP16)
 
-The FP16 model (`model.fp16.onnx` in `models/kokoro-multi-lang-v1_0/`) offers:
+VoxLab supports co-locating multiple weight variants inside a single Kokoro directory, sharing lexicons, dictionaries, and `voices.bin`:
+
+### INT8 Quantized Model (`model.int8.onnx`)
+- **~3x Smaller Weights**: ~114 MB compared to ~325 MB for FP32.
+- **Fast CPU Inference**: Optimized for INT8 matrix multiplication across x86-64 and ARM.
+- **Co-located Assets**: Lives inside `models/kokoro-multi-lang-v1_1/` sharing all 103 voice profiles and multilingual lexicons without duplicating ~60 MB of files.
+- **Automatic Discovery**: Discovered and surfaced with the `(INT8)` suffix (e.g. `kokoro-multi-lang-v1_1 (INT8)`).
+
+### FP16 Half-Precision Model (`model.fp16.onnx`)
 - **50% Smaller Footprint**: ~163 MB compared to ~325 MB for FP32.
 - **Lower Memory Usage**: Halves RAM usage for model tensor loading.
 - **Preserved Speech Quality**: Retains full vocal timbre, prosody, and speaker characteristics across all 54 voices.
-- **Extra Model Selection**: Whenever `model.fp16.onnx` is detected in a Kokoro folder, VoxLab automatically surfaces an extra selection with the `(FP16)` suffix (e.g. `kokoro-multi-lang-v1_0 (FP16)`).
+- **Automatic Discovery**: Discovered and surfaced with the `(FP16)` suffix (e.g. `kokoro-multi-lang-v1_0 (FP16)`).
 
 ---
 
@@ -49,7 +59,7 @@ VoxLab supports hot-swapping active models at runtime without service restarts:
 ```
 ┌────────────────────────────────────────────────────────┐
 │                        Web UI                          │
-│     Dropdown Option: "kokoro-multi-lang-v1_0 (FP16)"   │
+│     Dropdown Option: "kokoro-multi-lang-v1_1 (INT8)"   │
 └───────────────────────────┬────────────────────────────┘
                             │ WS: action="set_tts_model"
                             │ REST: POST /api/models
@@ -62,15 +72,15 @@ VoxLab supports hot-swapping active models at runtime without service restarts:
                             ▼
 ┌────────────────────────────────────────────────────────┐
 │                  SherpaRunner Engine                   │
-│  - Sets KokoroModelDir = "models/kokoro-multi-lang-v1_0"│
-│  - Sets KokoroModelFile = "model.fp16.onnx"             │
-│  - Detects version ("v1_0") -> maps 54 speaker profiles│
+│  - Sets KokoroModelDir = "models/kokoro-multi-lang-v1_1"│
+│  - Sets KokoroModelFile = "model.int8.onnx"            │
+│  - Detects version ("v1_1") -> maps 103 speaker profiles│
 └───────────────────────────┬────────────────────────────┘
                             │
                             ▼
 ┌────────────────────────────────────────────────────────┐
 │             sherpa-onnx-offline-tts.exe                │
-│  --kokoro-model=.../model.fp16.onnx                    │
+│  --kokoro-model=.../model.int8.onnx                    │
 │  --kokoro-voices=.../voices.bin                        │
 │  --kokoro-tokens=.../tokens.txt                        │
 │  --kokoro-data-dir=.../espeak-ng-data                  │
@@ -82,21 +92,21 @@ VoxLab supports hot-swapping active models at runtime without service restarts:
 ### API Endpoints
 1. **Query Available Voices & Models**:
    ```http
-   GET /api/voices?model=kokoro-multi-lang-v1_0 (FP16)
+   GET /api/voices?model=kokoro-multi-lang-v1_1 (INT8)
    ```
    Returns:
    ```json
    {
-     "model": "kokoro-multi-lang-v1_0 (FP16)",
+     "model": "kokoro-multi-lang-v1_1 (INT8)",
      "is_neural": true,
      "installed_models": [
        "kokoro-multi-lang-v1_1",
-       "kokoro-int8-multi-lang-v1_1",
+       "kokoro-multi-lang-v1_1 (INT8)",
        "kokoro-multi-lang-v1_0",
        "kokoro-multi-lang-v1_0 (FP16)",
        "kokoro-en-v0_19"
      ],
-     "voices": [ ... 54 profiles ... ]
+     "voices": [ ... 103 profiles ... ]
    }
    ```
 
@@ -105,7 +115,7 @@ VoxLab supports hot-swapping active models at runtime without service restarts:
    POST /api/models
    Content-Type: application/json
 
-   {"model": "kokoro-multi-lang-v1_0 (FP16)"}
+   {"model": "kokoro-multi-lang-v1_1 (INT8)"}
    ```
 
 3. **WebSocket Action**:
