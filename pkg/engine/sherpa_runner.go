@@ -22,6 +22,7 @@ import (
 type SherpaRunner struct {
 	cfg           *config.AppConfig
 	simulator     *SimulatorEngine
+	warmTTS       WarmTTS
 	mu            sync.Mutex
 	turnAudio     []float32
 	speechChunks  int
@@ -427,69 +428,111 @@ func findSherpaBin(name string) (string, bool) {
 	return name, false
 }
 
-// Synthesize runs Kokoro TTS via sherpa-onnx-offline-tts binary if available.
-func (r *SherpaRunner) Synthesize(req TTSRequest) (*TTSResult, error) {
-	modelDir, modelExists := findKokoroModelDir(r.cfg.Engine.KokoroModelDir)
-	ttsBin, binExists := findSherpaBin(r.cfg.Engine.SherpaTtsBin)
-
-	if !binExists || !modelExists {
-		// Gracefully fall back to simulator if real model/binary is not yet downloaded
-		return r.simulator.Synthesize(req)
+// resolveKokoroModelFile finds the active model weights file (.onnx, .fp16.onnx, .int8.onnx) in modelDir.
+func (r *SherpaRunner) resolveKokoroModelFile(modelDir string) string {
+	if modelDir == "" {
+		return ""
 	}
-
-	startTime := time.Now()
-	tempWav := filepath.Join(os.TempDir(), fmt.Sprintf("voxlab_tts_%d.wav", time.Now().UnixNano()))
-	defer os.Remove(tempWav)
-
-	var modelFile string
 	if r.cfg.Engine.KokoroModelFile != "" {
 		candidate := filepath.Join(modelDir, r.cfg.Engine.KokoroModelFile)
 		if isRegularFile(candidate) {
-			modelFile = candidate
+			return candidate
 		}
 	}
-	if modelFile == "" {
-		modelFile = filepath.Join(modelDir, "model.onnx")
-		if _, err := os.Stat(modelFile); os.IsNotExist(err) {
-			modelFile = filepath.Join(modelDir, "model.int8.onnx")
-			if _, err := os.Stat(modelFile); os.IsNotExist(err) {
-				modelFile = filepath.Join(modelDir, "model.fp16.onnx")
-			}
+	for _, name := range []string{"model.onnx", "model.fp16.onnx", "model.int8.onnx"} {
+		p := filepath.Join(modelDir, name)
+		if isRegularFile(p) {
+			return p
 		}
 	}
+	return ""
+}
+
+// getWarmTTS returns or initializes the resident in-memory TTS engine if the C-API DLL is available.
+func (r *SherpaRunner) getWarmTTS(modelDir string, modelFile string) WarmTTS {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	numThreads := r.cfg.Engine.NumThreads
+	if numThreads <= 0 {
+		numThreads = 4
+	}
+	provider := r.cfg.Engine.Provider
+	if provider == "" {
+		provider = "cpu"
+	}
+
+	key := fmt.Sprintf("%s|t%d|%s", modelFile, numThreads, provider)
+	if r.warmTTS != nil && r.warmTTS.IsWarm() && r.warmTTS.ModelKey() == key {
+		return r.warmTTS
+	}
+
+	if r.warmTTS != nil {
+		r.warmTTS.Close()
+		r.warmTTS = nil
+	}
+
+	// Search for directory containing sherpa-onnx-c-api.dll
+	binCandidates := []string{"bin", filepath.Join("..", "bin"), filepath.Join("..", "..", "bin")}
+	var dllDir string
+	for _, c := range binCandidates {
+		if isRegularFile(filepath.Join(c, "sherpa-onnx-c-api.dll")) {
+			dllDir = c
+			break
+		}
+	}
+	if dllDir == "" {
+		return nil
+	}
+
 	voicesPath := filepath.Join(modelDir, "voices.bin")
 	tokensPath := filepath.Join(modelDir, "tokens.txt")
 	dataDirPath := filepath.Join(modelDir, "espeak-ng-data")
 
-	args := []string{
-		fmt.Sprintf("--kokoro-model=%s", modelFile),
-		fmt.Sprintf("--kokoro-voices=%s", voicesPath),
-		fmt.Sprintf("--kokoro-tokens=%s", tokensPath),
-		fmt.Sprintf("--kokoro-data-dir=%s", dataDirPath),
-		fmt.Sprintf("--output-filename=%s", tempWav),
-	}
-
 	var lexicons []string
 	for _, lexName := range []string{"lexicon-us-en.txt", "lexicon-gb-en.txt", "lexicon-zh.txt"} {
-		lexPath := filepath.Join(modelDir, lexName)
-		if _, err := os.Stat(lexPath); err == nil {
-			lexicons = append(lexicons, lexPath)
+		lp := filepath.Join(modelDir, lexName)
+		if isRegularFile(lp) {
+			absL, _ := filepath.Abs(lp)
+			lexicons = append(lexicons, absL)
 		}
 	}
-	if len(lexicons) > 0 {
-		args = append(args, fmt.Sprintf("--kokoro-lexicon=%s", strings.Join(lexicons, ",")))
-	}
+	lexPath := strings.Join(lexicons, ",")
 
 	var ruleFsts []string
 	for _, fstName := range []string{"date-zh.fst", "number-zh.fst", "phone-zh.fst"} {
-		fstPath := filepath.Join(modelDir, fstName)
-		if _, err := os.Stat(fstPath); err == nil {
-			ruleFsts = append(ruleFsts, fstPath)
+		fp := filepath.Join(modelDir, fstName)
+		if isRegularFile(fp) {
+			absF, _ := filepath.Abs(fp)
+			ruleFsts = append(ruleFsts, absF)
 		}
 	}
-	if len(ruleFsts) > 0 {
-		args = append(args, fmt.Sprintf("--tts-rule-fsts=%s", strings.Join(ruleFsts, ",")))
+	ruleFstsStr := strings.Join(ruleFsts, ",")
+
+	warm, err := newPlatformWarmTTS(dllDir, modelFile, voicesPath, tokensPath, dataDirPath, lexPath, ruleFstsStr, numThreads, provider)
+	if err != nil {
+		log.Printf("[SherpaRunner] In-process warm TTS init notice: %v (will use CLI fallback)", err)
+		return nil
 	}
+	r.warmTTS = warm
+	return warm
+}
+
+// Synthesize runs Kokoro TTS via in-process warm engine if available, or falls back to sherpa-onnx-offline-tts binary / simulator.
+func (r *SherpaRunner) Synthesize(req TTSRequest) (*TTSResult, error) {
+	modelDir, modelExists := findKokoroModelDir(r.cfg.Engine.KokoroModelDir)
+	ttsBin, binExists := findSherpaBin(r.cfg.Engine.SherpaTtsBin)
+
+	if !modelExists && !binExists {
+		// Gracefully fall back to simulator if real model/binary is not yet downloaded
+		return r.simulator.Synthesize(req)
+	}
+
+	modelFile := r.resolveKokoroModelFile(modelDir)
+	base := filepath.Base(modelDir)
+	version := detectKokoroVersion(base)
+	sid := mapVoiceToSID(req.Voice, version)
+	cleanText := normalizeTTSText(req.Text)
 
 	// Speech speed parameter (0.5x to 2.0x)
 	speed := req.Speed
@@ -501,18 +544,81 @@ func (r *SherpaRunner) Synthesize(req TTSRequest) (*TTSResult, error) {
 	} else if speed > 2.0 {
 		speed = 2.0
 	}
+
+	// 1. Try In-Memory Warm Engine (sub-second latency, eliminates ~1.8s cold-start)
+	if isRegularFile(modelFile) {
+		if warm := r.getWarmTTS(modelDir, modelFile); warm != nil {
+			log.Printf("[SherpaRunner] Synthesizing speech (WARM in-memory): voice='%s' -> sid=%d, speed=%.2f", req.Voice, sid, speed)
+			result, err := warm.Synthesize(cleanText, sid, speed)
+			if err == nil {
+				log.Printf("[SherpaRunner] Warm TTS generation complete: %.2fs audio in %dms (RTF=%.3f)",
+					result.DurationSec, result.LatencyMs, float64(result.LatencyMs)/(result.DurationSec*1000.0))
+				return result, nil
+			}
+			log.Printf("[SherpaRunner] Warm in-process TTS failed (%v), falling back to CLI process...", err)
+		}
+	}
+
+	// 2. Fall back to CLI process execution
+	if !binExists || !modelExists {
+		return r.simulator.Synthesize(req)
+	}
+
+	startTime := time.Now()
+	tempWav := filepath.Join(os.TempDir(), fmt.Sprintf("voxlab_tts_%d.wav", time.Now().UnixNano()))
+	defer os.Remove(tempWav)
+
+	voicesPath := filepath.Join(modelDir, "voices.bin")
+	tokensPath := filepath.Join(modelDir, "tokens.txt")
+	dataDirPath := filepath.Join(modelDir, "espeak-ng-data")
+
+	numThreads := r.cfg.Engine.NumThreads
+	if numThreads <= 0 {
+		numThreads = 4
+	}
+	provider := r.cfg.Engine.Provider
+	if provider == "" {
+		provider = "cpu"
+	}
+
+	args := []string{
+		fmt.Sprintf("--kokoro-model=%s", modelFile),
+		fmt.Sprintf("--kokoro-voices=%s", voicesPath),
+		fmt.Sprintf("--kokoro-tokens=%s", tokensPath),
+		fmt.Sprintf("--kokoro-data-dir=%s", dataDirPath),
+		fmt.Sprintf("--output-filename=%s", tempWav),
+		fmt.Sprintf("--num-threads=%d", numThreads),
+		fmt.Sprintf("--provider=%s", provider),
+	}
+
+	var lexicons []string
+	for _, lexName := range []string{"lexicon-us-en.txt", "lexicon-gb-en.txt", "lexicon-zh.txt"} {
+		lexPath := filepath.Join(modelDir, lexName)
+		if isRegularFile(lexPath) {
+			lexicons = append(lexicons, lexPath)
+		}
+	}
+	if len(lexicons) > 0 {
+		args = append(args, fmt.Sprintf("--kokoro-lexicon=%s", strings.Join(lexicons, ",")))
+	}
+
+	var ruleFsts []string
+	for _, fstName := range []string{"date-zh.fst", "number-zh.fst", "phone-zh.fst"} {
+		fstPath := filepath.Join(modelDir, fstName)
+		if isRegularFile(fstPath) {
+			ruleFsts = append(ruleFsts, fstPath)
+		}
+	}
+	if len(ruleFsts) > 0 {
+		args = append(args, fmt.Sprintf("--tts-rule-fsts=%s", strings.Join(ruleFsts, ",")))
+	}
+
 	args = append(args, fmt.Sprintf("--speed=%.2f", speed))
-
-	base := filepath.Base(modelDir)
-	version := detectKokoroVersion(base)
-
-	// Map requested speaker voice to Kokoro speaker ID
-	sid := mapVoiceToSID(req.Voice, version)
-	cleanText := normalizeTTSText(req.Text)
 	args = append(args, fmt.Sprintf("--sid=%d", sid))
 	args = append(args, cleanText)
 
-	log.Printf("[SherpaRunner] Synthesizing speech: voice='%s' -> sid=%d, speed=%.2f", req.Voice, sid, speed)
+	log.Printf("[SherpaRunner] Synthesizing speech (CLI process, %d threads, %s provider): voice='%s' -> sid=%d, speed=%.2f",
+		numThreads, provider, req.Voice, sid, speed)
 
 	cmd := exec.Command(ttsBin, args...)
 	var stderr bytes.Buffer
@@ -545,24 +651,35 @@ func (r *SherpaRunner) Synthesize(req TTSRequest) (*TTSResult, error) {
 	}, nil
 }
 
+// Close closes any active warm in-process engines and frees allocated native resources.
+func (r *SherpaRunner) Close() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.warmTTS != nil {
+		r.warmTTS.Close()
+		r.warmTTS = nil
+	}
+	return nil
+}
+
 // TTSModelInfo discovers and returns the current active Kokoro model name and neural status.
 func (r *SherpaRunner) TTSModelInfo() (string, bool) {
 	modelDir, modelExists := findKokoroModelDir(r.cfg.Engine.KokoroModelDir)
 	_, binExists := findSherpaBin(r.cfg.Engine.SherpaTtsBin)
 
-	if !binExists || !modelExists {
+	if !binExists && !modelExists {
 		return "Simulator (Fallback: Model Not Found)", false
 	}
 
 	base := filepath.Base(modelDir)
 	modelFile := r.cfg.Engine.KokoroModelFile
 	if modelFile == "" {
-		if _, err := os.Stat(filepath.Join(modelDir, "model.onnx")); err == nil {
+		if isRegularFile(filepath.Join(modelDir, "model.onnx")) {
 			modelFile = "model.onnx"
-		} else if _, err := os.Stat(filepath.Join(modelDir, "model.int8.onnx")); err == nil {
-			modelFile = "model.int8.onnx"
-		} else if _, err := os.Stat(filepath.Join(modelDir, "model.fp16.onnx")); err == nil {
+		} else if isRegularFile(filepath.Join(modelDir, "model.fp16.onnx")) {
 			modelFile = "model.fp16.onnx"
+		} else if isRegularFile(filepath.Join(modelDir, "model.int8.onnx")) {
+			modelFile = "model.int8.onnx"
 		}
 	}
 
@@ -573,7 +690,15 @@ func (r *SherpaRunner) TTSModelInfo() (string, bool) {
 		variant = "INT8"
 	}
 
-	return fmt.Sprintf("%s (%s)", base, variant), true
+	status := fmt.Sprintf("%s (%s)", base, variant)
+	r.mu.Lock()
+	isWarm := r.warmTTS != nil && r.warmTTS.IsWarm()
+	r.mu.Unlock()
+	if isWarm {
+		status += " [Warm RAM]"
+	}
+
+	return status, true
 }
 
 // InstalledTTSModels returns all installed Kokoro models found in the models directory.
@@ -638,6 +763,11 @@ func (r *SherpaRunner) SetTTSModel(modelName string) error {
 		} else {
 			r.cfg.Engine.KokoroModelFile = ""
 		}
+	}
+
+	if r.warmTTS != nil {
+		r.warmTTS.Close()
+		r.warmTTS = nil
 	}
 
 	log.Printf("[SherpaRunner] Switched active Kokoro model to: %s (file: %s)", targetDir, r.cfg.Engine.KokoroModelFile)

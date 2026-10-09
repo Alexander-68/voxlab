@@ -22,6 +22,8 @@ func main() {
 	engineFlag := flag.String("engine", "simulator", "Speech engine: 'simulator' or 'sherpa'")
 	modelsFlag := flag.String("models", "models", "Directory containing Sherpa-ONNX model files")
 	uiFlag := flag.String("ui", "web", "Directory containing static web UI assets")
+	threadsFlag := flag.Int("threads", 4, "Number of threads for neural network inference")
+	providerFlag := flag.String("provider", "cpu", "Execution provider: 'cpu', 'directml', 'cuda'")
 	flag.Parse()
 
 	log.Printf("=====================================================")
@@ -66,6 +68,14 @@ func main() {
 	if *uiFlag != "web" {
 		cfg.StaticDir = *uiFlag
 	}
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "threads" {
+			cfg.Engine.NumThreads = *threadsFlag
+		}
+		if f.Name == "provider" {
+			cfg.Engine.Provider = *providerFlag
+		}
+	})
 
 	srv, err := server.NewServer(cfg)
 	if err != nil {

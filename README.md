@@ -91,8 +91,10 @@
 
 5. **Voice Synthesis (Kokoro TTS)**:
    - High-quality offline multi-speaker neural speech synthesis.
-   - **Multi-Model Dynamic Selection**: Switch seamlessly between Kokoro v1.1 (103 voices), v1.0 (54 voices), and v0.19 (11 voices) at runtime.
-   - **Flexible Quantization & Precision**: Supports **FP32** (full precision), **INT8** (quantized compact), and **FP16** (half-precision `model.fp16.onnx`, ~163MB).
+   - **Persistent In-Memory Warm Engine**: Eliminates process startup cold-start overhead (~1.8s) by keeping models cached in RAM via dynamic C-API linking, delivering **sub-second latency (<1.0s)**.
+   - **Multi-Threading & Hardware Providers**: Runs inference on 4 threads by default (configurable via `-threads`), with selectable execution providers (`-provider=cpu`, `-provider=directml`, `-provider=cuda`).
+   - **Multi-Model Dynamic Selection**: Switch seamlessly between Kokoro v1.1 (103 voices), v1.0 (54 voices), and v0.19 (11 voices) at runtime without service restarts.
+   - **Flexible Quantization & Precision**: Supports **FP32** (full precision), **INT8** (quantized compact), and **FP16** (half-precision `model.fp16.onnx`, ~163MB, sub-second latency).
    - Speed adjustment ($0.7\times$ to $1.5\times$).
    - Output to browser speaker AND host speaker with automated half-duplex echo gate suppression.
 

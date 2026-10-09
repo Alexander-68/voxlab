@@ -46,8 +46,13 @@ models/
 | `kokoro-en-v0_19` | `kokoro-en-v0_19` | FP32 | `model.onnx` | 11 voices | ~345 MB |
 
 ### Precision Variants & Co-location
-- **INT8 Quantized Model (`model.int8.onnx`)**: The 8-bit quantized weights cut model footprint nearly 3x (~114 MB vs ~325 MB) and increase CPU inference throughput. Placing `model.int8.onnx` directly inside `kokoro-multi-lang-v1_1/` allows it to share identical lexicons, phonemizer data, and `voices.bin` without redundant disk usage. VoxLab surfaces it as `kokoro-multi-lang-v1_1 (INT8)`.
-- **FP16 Half-Precision Model (`model.fp16.onnx`)**: Cuts memory and disk footprint in half (~163 MB vs ~325 MB) while preserving vocal quality and speaker timbre. When present, VoxLab surfaces it as an extra selectable model with the `(FP16)` suffix (e.g. `kokoro-multi-lang-v1_0 (FP16)`).
+- **FP16 Half-Precision Model (`model.fp16.onnx`)**: Cuts memory and disk footprint in half (~163 MB vs ~325 MB) while preserving vocal quality and speaker timbre. When running with the warm in-process engine, speech is generated in **sub-second latency (~0.9s)**. Surfaced with `(FP16)` suffix (e.g. `kokoro-multi-lang-v1_0 (FP16)`).
+- **INT8 Quantized Model (`model.int8.onnx`)**: The 8-bit quantized weights reduce file size to ~114 MB. *Note for x86 CPUs*: While INT8 offers speedups on ARM devices, on x86 CPUs the lack of fused AdaIN INT8 kernels in ONNX Runtime MLAS means FP16 and FP32 run ~4–5x faster than INT8. VoxLab surfaces it as `kokoro-multi-lang-v1_1 (INT8)`.
+
+### In-Memory Warm Engine & Multi-Threading
+- **Warm Resident Engine**: VoxLab dynamically links with `sherpa-onnx-c-api.dll` and `onnxruntime.dll` to keep models resident in RAM, completely eliminating the ~1.8s cold-start process spawn overhead.
+- **Multi-Threading**: Runs inference on 4 threads by default (configurable via `-threads` flag and `config.json`), delivering a >2x inference speedup over single-threaded defaults.
+- **Hardware Providers**: Configurable provider flag (`-provider=cpu`, `-provider=directml`, `-provider=cuda`).
 
 ---
 

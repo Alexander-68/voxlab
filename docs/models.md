@@ -40,26 +40,43 @@ VoxLab supports co-locating multiple weight variants inside a single Kokoro dire
 
 ### INT8 Quantized Model (`model.int8.onnx`)
 - **~3x Smaller Weights**: ~114 MB compared to ~325 MB for FP32.
-- **Fast CPU Inference**: Optimized for INT8 matrix multiplication across x86-64 and ARM.
+- **x86 vs ARM Note**: While INT8 provides speedups on mobile ARM hardware with integer vector extensions, ONNX Runtime CPU execution provider (MLAS) on x86-64 CPUs experiences dynamic quantization overhead on Kokoro's AdaIN layers. On modern x86 CPUs, **FP16 and FP32 run ~4–5x faster than INT8**.
 - **Co-located Assets**: Lives inside `models/kokoro-multi-lang-v1_1/` sharing all 103 voice profiles and multilingual lexicons without duplicating ~60 MB of files.
 - **Automatic Discovery**: Discovered and surfaced with the `(INT8)` suffix (e.g. `kokoro-multi-lang-v1_1 (INT8)`).
 
 ### FP16 Half-Precision Model (`model.fp16.onnx`)
 - **50% Smaller Footprint**: ~163 MB compared to ~325 MB for FP32.
+- **Sub-Second Latency**: Generates speech at ~0.9s on warm in-memory engines (RTF ~0.37).
 - **Lower Memory Usage**: Halves RAM usage for model tensor loading.
 - **Preserved Speech Quality**: Retains full vocal timbre, prosody, and speaker characteristics across all 54 voices.
 - **Automatic Discovery**: Discovered and surfaced with the `(FP16)` suffix (e.g. `kokoro-multi-lang-v1_0 (FP16)`).
 
 ---
 
-## 3. Dynamic Model Switching Architecture
+## 3. Persistent In-Memory Engine & Hardware Optimization
+
+To achieve real-time speech generation, VoxLab uses a two-tier execution pipeline:
+
+### 1. In-Process Warm TTS Engine (`WarmTTS`)
+- **Zero Process Cold-Start**: Instead of launching a separate `.exe` process per utterance (which incurs ~1.8–2.0s reading weights and parsing protobuf graphs off disk), VoxLab binds directly to `sherpa-onnx-c-api.dll` and `onnxruntime.dll` via dynamic linking.
+- **Resident Model in RAM**: Model weights, style vectors (`voices.bin`), and dictionaries remain cached in RAM.
+- **Sub-Second Response**: Speech synthesis latency drops from ~4.3s to **~0.9–1.2s** (Time-to-Audio < 1.0s).
+- **Zero Disk I/O**: Synthesized floating-point samples are encoded to WAV directly in memory.
+
+### 2. Multi-Threading & Hardware Execution Providers
+- **Multi-Threading (`num_threads`)**: Configurable via `config.json` or CLI (`-threads=4`). Defaults to 4 threads (matching physical CPU cores), delivering a >2x speedup over single-threaded defaults.
+- **Execution Providers (`provider`)**: Configurable via `config.json` or CLI (`-provider=cpu`, `-provider=directml`, `-provider=cuda`).
+
+---
+
+## 4. Dynamic Model Switching Architecture
 
 VoxLab supports hot-swapping active models at runtime without service restarts:
 
 ```
 ┌────────────────────────────────────────────────────────┐
 │                        Web UI                          │
-│     Dropdown Option: "kokoro-multi-lang-v1_1 (INT8)"   │
+│     Dropdown Option: "kokoro-multi-lang-v1_0 (FP16)"   │
 └───────────────────────────┬────────────────────────────┘
                             │ WS: action="set_tts_model"
                             │ REST: POST /api/models
@@ -72,27 +89,23 @@ VoxLab supports hot-swapping active models at runtime without service restarts:
                             ▼
 ┌────────────────────────────────────────────────────────┐
 │                  SherpaRunner Engine                   │
-│  - Sets KokoroModelDir = "models/kokoro-multi-lang-v1_1"│
-│  - Sets KokoroModelFile = "model.int8.onnx"            │
-│  - Detects version ("v1_1") -> maps 103 speaker profiles│
-└───────────────────────────┬────────────────────────────┘
-                            │
-                            ▼
-┌────────────────────────────────────────────────────────┐
-│             sherpa-onnx-offline-tts.exe                │
-│  --kokoro-model=.../model.int8.onnx                    │
-│  --kokoro-voices=.../voices.bin                        │
-│  --kokoro-tokens=.../tokens.txt                        │
-│  --kokoro-data-dir=.../espeak-ng-data                  │
-│  --kokoro-lexicon=.../lexicon-us-en.txt                │
-│  --sid=<speaker_id>                                    │
-└────────────────────────────────────────────────────────┘
+│  - Sets KokoroModelDir = "models/kokoro-multi-lang-v1_0"│
+│  - Sets KokoroModelFile = "model.fp16.onnx"             │
+│  - Detects version ("v1_0") -> maps 54 speaker profiles│
+└──────────────┬──────────────────────────┬──────────────┘
+               │ (Primary)                │ (Fallback)
+               ▼                          ▼
+┌──────────────────────────────┐ ┌──────────────────────┐
+│ In-Process Warm Engine (DLL) │ │ CLI Process Runner   │
+│ - Zero disk I/O              │ │ - --num-threads=4    │
+│ - Sub-second latency (<1.0s) │ │ - --provider=cpu     │
+└──────────────────────────────┘ └──────────────────────┘
 ```
 
 ### API Endpoints
 1. **Query Available Voices & Models**:
    ```http
-   GET /api/voices?model=kokoro-multi-lang-v1_1 (INT8)
+   GET /api/voices?model=kokoro-multi-lang-v1_0 (FP16)
    ```
    Returns:
    ```json

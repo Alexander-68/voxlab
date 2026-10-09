@@ -47,6 +47,8 @@ type EngineConfig struct {
 	KokoroModelDir  string `json:"kokoro_model_dir"`  // e.g. "models/kokoro-multi-lang-v1_1"
 	KokoroModelFile string `json:"kokoro_model_file,omitempty"` // e.g. "model.fp16.onnx", "model.onnx"
 	ZipformerDir    string `json:"zipformer_dir"`     // e.g. "models/sherpa-onnx-streaming-zipformer-en-2023-06-26"
+	NumThreads      int    `json:"num_threads,omitempty"`     // Number of inference threads (default 4)
+	Provider        string `json:"provider,omitempty"`        // Execution provider: "cpu", "directml", "cuda" (default "cpu")
 }
 
 // TTSConfig defines text-to-speech parameters.
@@ -113,6 +115,8 @@ func DefaultConfig() *AppConfig {
 			SherpaAsrBin:   "sherpa-onnx-online-websocket-server",
 			KokoroModelDir: "models/kokoro-multi-lang-v1_1",
 			ZipformerDir:   "models/sherpa-onnx-streaming-zipformer-en-2023-06-26",
+			NumThreads:     4,
+			Provider:       "cpu",
 		},
 		TTS: TTSConfig{
 			DefaultVoice: "af",

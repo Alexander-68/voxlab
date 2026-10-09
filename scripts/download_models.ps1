@@ -52,16 +52,18 @@ $SherpaTtsExe = Join-Path $BinDir "sherpa-onnx-offline-tts.exe"
 $SherpaBinArchive = Join-Path $ModelsDir "sherpa-onnx-bin.tar.bz2"
 
 if (-not $SkipBinaries) {
-    if (-not (Test-Path $SherpaTtsExe)) {
-        Write-Host "[1/3] Sherpa-ONNX pre-compiled binaries (v1.13.8 x64)..." -ForegroundColor White
-        $SherpaBinUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-win-x64-static-MT-Release.tar.bz2"
-        Invoke-FastDownload -Url $SherpaBinUrl -OutFile $SherpaBinArchive -Description "Sherpa-ONNX Windows Tools"
-        Write-Host "Extracting binaries into $BinDir..." -ForegroundColor Yellow
+    $DllPresent = Test-Path (Join-Path $BinDir "sherpa-onnx-c-api.dll")
+    if (-not (Test-Path $SherpaTtsExe) -or -not $DllPresent) {
+        Write-Host "[1/3] Sherpa-ONNX pre-compiled binaries & C-API runtime DLLs (v1.13.8 x64)..." -ForegroundColor White
+        $SherpaBinUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-win-x64-shared-MT-Release.tar.bz2"
+        Invoke-FastDownload -Url $SherpaBinUrl -OutFile $SherpaBinArchive -Description "Sherpa-ONNX Windows Tools & Shared Runtime"
+        Write-Host "Extracting binaries and runtime DLLs into $BinDir..." -ForegroundColor Yellow
         tar -xjf $SherpaBinArchive -C $BinDir --strip-components=2 "*/bin/*"
+        tar -xjf $SherpaBinArchive -C $BinDir --strip-components=2 "*/lib/*.dll"
         Remove-Item $SherpaBinArchive -Force -ErrorAction SilentlyContinue
-        Write-Host "[OK] Sherpa-ONNX binaries installed in bin/" -ForegroundColor Green
+        Write-Host "[OK] Sherpa-ONNX binaries and C-API DLLs installed in bin/" -ForegroundColor Green
     } else {
-        Write-Host "[1/3] Sherpa-ONNX binaries already installed in bin/." -ForegroundColor Yellow
+        Write-Host "[1/3] Sherpa-ONNX binaries and runtime DLLs already installed in bin/." -ForegroundColor Yellow
     }
 }
 
