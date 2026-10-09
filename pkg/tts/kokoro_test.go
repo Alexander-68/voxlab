@@ -73,12 +73,32 @@ func TestTTSManagerModelAndVoices(t *testing.T) {
 		t.Errorf("expected 103 voices for kokoro-multi-lang-v1_1, got %d", len(v11Voices))
 	}
 
+	v10Voices := mgr.VoicesForModel("kokoro-multi-lang-v1_0")
+	if len(v10Voices) != 54 {
+		t.Errorf("expected 54 voices for kokoro-multi-lang-v1_0, got %d", len(v10Voices))
+	}
+
 	v019Voices := mgr.VoicesForModel("kokoro-en-v0_19")
 	if len(v019Voices) != 11 {
 		t.Errorf("expected 11 voices for kokoro-en-v0_19, got %d", len(v019Voices))
 	}
 
-	// Test SetModel
+	// Test SetModel to v1.0
+	if err := mgr.SetModel("kokoro-multi-lang-v1_0"); err != nil {
+		t.Errorf("SetModel failed: %v", err)
+	}
+
+	activeV10, _ := mgr.ActiveModel()
+	if activeV10 != "kokoro-multi-lang-v1_0" {
+		t.Errorf("expected active model kokoro-multi-lang-v1_0, got %s", activeV10)
+	}
+
+	curVoicesV10 := mgr.Voices()
+	if len(curVoicesV10) != 54 {
+		t.Errorf("expected 54 voices after switching to v1_0, got %d", len(curVoicesV10))
+	}
+
+	// Test SetModel to v0.19
 	if err := mgr.SetModel("kokoro-en-v0_19"); err != nil {
 		t.Errorf("SetModel failed: %v", err)
 	}

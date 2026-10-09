@@ -608,6 +608,45 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize source UI controls
   updateSourceControls(audioSourceSelect.value);
 
+  const LANG_NAMES = {
+    'en-us': 'American English (US)',
+    'en-gb': 'British English (GB)',
+    'es': 'Spanish (Español)',
+    'fr': 'French (Français)',
+    'hi': 'Hindi (हिन्दी)',
+    'it': 'Italian (Italiano)',
+    'ja': 'Japanese (日本語)',
+    'pt-br': 'Portuguese (Brasil)',
+    'zh': 'Mandarin Chinese (中文)',
+  };
+
+  function getLanguageGroup(v) {
+    if (v.language && LANG_NAMES[v.language.toLowerCase()]) {
+      return LANG_NAMES[v.language.toLowerCase()];
+    }
+    const prefix = v.id.slice(0, 2).toLowerCase();
+    switch (prefix) {
+      case 'af':
+      case 'am': return 'American English (US)';
+      case 'bf':
+      case 'bm': return 'British English (GB)';
+      case 'ef':
+      case 'em': return 'Spanish (Español)';
+      case 'ff': return 'French (Français)';
+      case 'hf':
+      case 'hm': return 'Hindi (हिन्दी)';
+      case 'if':
+      case 'im': return 'Italian (Italiano)';
+      case 'jf':
+      case 'jm': return 'Japanese (日本語)';
+      case 'pf':
+      case 'pm': return 'Portuguese (Brasil)';
+      case 'zf':
+      case 'zm': return 'Mandarin Chinese (中文)';
+      default: return 'Other Voices';
+    }
+  }
+
   function populateModelsDropdown(models, activeModel) {
     if (!ttsModelSelect || !models || !models.length) return;
     const curVal = ttsModelSelect.value;
@@ -617,6 +656,7 @@ document.addEventListener('DOMContentLoaded', () => {
       opt.value = m;
       let label = m;
       if (m.includes('v1_1')) label += ' (103 voices, Multi-lang)';
+      else if (m.includes('v1_0')) label += ' (54 voices, Multi-lang)';
       else if (m.includes('v0_19')) label += ' (11 voices, English)';
       opt.textContent = label;
       ttsModelSelect.appendChild(opt);
@@ -642,15 +682,48 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!voices || !voices.length) return;
     const curVal = ttsVoiceSelect.value;
     ttsVoiceSelect.innerHTML = '';
+
+    // Group voices by language / region
+    const groups = new Map();
     voices.forEach((v) => {
-      const opt = document.createElement('option');
-      opt.value = v.id;
-      const dot = v.gender === 'male' ? '🔵' : '🟣';
-      opt.textContent = `${dot} ${v.id} - ${v.name}`;
-      ttsVoiceSelect.appendChild(opt);
+      const groupName = getLanguageGroup(v);
+      if (!groups.has(groupName)) {
+        groups.set(groupName, []);
+      }
+      groups.get(groupName).push(v);
     });
+
+    if (groups.size > 1) {
+      for (const [groupName, groupVoices] of groups.entries()) {
+        const optGroup = document.createElement('optgroup');
+        optGroup.label = `${groupName} (${groupVoices.length})`;
+        groupVoices.forEach((v) => {
+          const opt = document.createElement('option');
+          opt.value = v.id;
+          const dot = v.gender === 'male' ? '🔵' : '🟣';
+          opt.textContent = `${dot} ${v.id} - ${v.name}`;
+          optGroup.appendChild(opt);
+        });
+        ttsVoiceSelect.appendChild(optGroup);
+      }
+    } else {
+      voices.forEach((v) => {
+        const opt = document.createElement('option');
+        opt.value = v.id;
+        const dot = v.gender === 'male' ? '🔵' : '🟣';
+        opt.textContent = `${dot} ${v.id} - ${v.name}`;
+        ttsVoiceSelect.appendChild(opt);
+      });
+    }
+
     if (curVal && Array.from(ttsVoiceSelect.options).some(o => o.value === curVal)) {
       ttsVoiceSelect.value = curVal;
+    } else {
+      // Find default flagship voice (e.g. af_heart or af_maple)
+      const defaultOpt = Array.from(ttsVoiceSelect.options).find(o => o.textContent.includes('Default'));
+      if (defaultOpt) {
+        ttsVoiceSelect.value = defaultOpt.value;
+      }
     }
   }
 

@@ -32,7 +32,7 @@ func TestMapVoiceToSID(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		sid := mapVoiceToSID(tc.voice, true)
+		sid := mapVoiceToSID(tc.voice, "v0_19")
 		if sid != tc.expectedSID {
 			t.Errorf("for voice %q expected sid %d, got %d", tc.voice, tc.expectedSID, sid)
 		}
@@ -40,6 +40,44 @@ func TestMapVoiceToSID(t *testing.T) {
 		maleSIDs := map[int]bool{5: true, 6: true, 9: true, 10: true}
 		if tc.isMale && !maleSIDs[sid] {
 			t.Errorf("for male voice %q expected male SID (5,6,9,10), got female SID %d", tc.voice, sid)
+		}
+	}
+
+	v10Tests := []struct {
+		voice       string
+		expectedSID int
+		isMale      bool
+	}{
+		{"af_alloy", 0, false},
+		{"af_aoede", 1, false},
+		{"af_bella", 2, false},
+		{"af_heart", 3, false},
+		{"heart", 3, false},
+		{"af", 3, false},
+		{"am_adam", 11, true},
+		{"bf_emma", 21, false},
+		{"bm_daniel", 24, true},
+		{"ef_dora", 28, false},
+		{"em_alex", 29, true},
+		{"ff_siwis", 30, false},
+		{"hf_alpha", 31, false},
+		{"hm_omega", 33, true},
+		{"if_sara", 35, false},
+		{"im_nicola", 36, true},
+		{"jf_alpha", 37, false},
+		{"jm_kumo", 41, true},
+		{"pf_dora", 42, false},
+		{"pm_santa", 44, true},
+		{"zf_xiaobei", 45, false},
+		{"zm_yunjian", 49, true},
+		{"em_santa", 53, true},
+		{"santa", 53, true},
+		{"53", 53, true},
+	}
+	for _, tc := range v10Tests {
+		sid := mapVoiceToSID(tc.voice, "v1_0")
+		if sid != tc.expectedSID {
+			t.Errorf("for v1.0 voice %q expected sid %d, got %d", tc.voice, tc.expectedSID, sid)
 		}
 	}
 
@@ -56,7 +94,7 @@ func TestMapVoiceToSID(t *testing.T) {
 		{"zm_100", 102, true},
 	}
 	for _, tc := range v11Tests {
-		sid := mapVoiceToSID(tc.voice, false)
+		sid := mapVoiceToSID(tc.voice, "v1_1")
 		if sid != tc.expectedSID {
 			t.Errorf("for v1.1 voice %q expected sid %d, got %d", tc.voice, tc.expectedSID, sid)
 		}
@@ -102,5 +140,38 @@ func TestSynthesizeChinese(t *testing.T) {
 	}
 	if res.DurationSec < 0.8 {
 		t.Errorf("expected synthesized audio duration > 0.8s for '你好，世界。', got %.2fs", res.DurationSec)
+	}
+}
+
+func TestSynthesizeKokoroV10(t *testing.T) {
+	cfg := &config.AppConfig{}
+	cfg.Engine.KokoroModelDir = "models/kokoro-multi-lang-v1_0"
+	cfg.Engine.SherpaTtsBin = "sherpa-onnx-offline-tts"
+	runner := NewSherpaRunner(cfg)
+
+	// Test heart voice (sid 3)
+	res, err := runner.Synthesize(TTSRequest{
+		Text:  "Testing Kokoro v1.0 voice model.",
+		Voice: "af_heart",
+		Speed: 1.0,
+	})
+	if err != nil {
+		t.Fatalf("Synthesize failed with af_heart: %v", err)
+	}
+	if res.DurationSec < 0.8 {
+		t.Errorf("expected synthesized audio duration > 0.8s, got %.2fs", res.DurationSec)
+	}
+
+	// Test Spanish voice em_santa (sid 53)
+	resEs, err := runner.Synthesize(TTSRequest{
+		Text:  "Hola mundo, probando la voz en español.",
+		Voice: "em_santa",
+		Speed: 1.0,
+	})
+	if err != nil {
+		t.Fatalf("Synthesize failed with em_santa: %v", err)
+	}
+	if resEs.DurationSec < 0.8 {
+		t.Errorf("expected synthesized audio duration > 0.8s, got %.2fs", resEs.DurationSec)
 	}
 }

@@ -364,6 +364,23 @@ func TestServerModelManagement(t *testing.T) {
 		t.Errorf("expected 11 voices for v0_19 query, got %d", len(respV019.Voices))
 	}
 
+	// 1b. GET /api/voices for kokoro-multi-lang-v1_0
+	reqV10 := httptest.NewRequest(http.MethodGet, "/api/voices?model=kokoro-multi-lang-v1_0", nil)
+	wV10 := httptest.NewRecorder()
+	srv.handleVoices(wV10, reqV10)
+	if wV10.Code != http.StatusOK {
+		t.Errorf("expected 200 OK for /api/voices?model=kokoro-multi-lang-v1_0, got %d", wV10.Code)
+	}
+	var respV10 struct {
+		Voices []tts.VoiceProfile `json:"voices"`
+	}
+	if err := json.NewDecoder(wV10.Body).Decode(&respV10); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if len(respV10.Voices) != 54 {
+		t.Errorf("expected 54 voices for v1_0 query, got %d", len(respV10.Voices))
+	}
+
 	// 2. POST /api/models to switch model
 	body, _ := json.Marshal(map[string]string{"model": "kokoro-en-v0_19"})
 	reqPostModel := httptest.NewRequest(http.MethodPost, "/api/models", bytes.NewReader(body))

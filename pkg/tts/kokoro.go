@@ -79,6 +79,9 @@ func (m *TTSManager) VoicesForModel(modelName string) []VoiceProfile {
 	if strings.Contains(low, "v0_19") || strings.Contains(low, "v0.19") {
 		return engine.AvailableKokoroV019Voices
 	}
+	if strings.Contains(low, "v1_0") || strings.Contains(low, "v1.0") {
+		return engine.AvailableKokoroV10Voices
+	}
 	return engine.AvailableKokoroV11Voices
 }
 

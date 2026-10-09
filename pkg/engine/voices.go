@@ -6,6 +6,7 @@ type VoiceProfile struct {
 	Name        string `json:"name"`
 	Gender      string `json:"gender"`
 	Description string `json:"description"`
+	Language    string `json:"language,omitempty"`
 }
 
 // AvailableKokoroV11Voices contains the full 103 speaker profiles for kokoro-multi-lang-v1_1.
@@ -113,6 +114,85 @@ var AvailableKokoroV11Voices = []VoiceProfile{
 	{ID: "zm_097", Name: "zm_097 (Bilingual Male)", Gender: "male", Description: "Bilingual male speaker zm_097"},
 	{ID: "zm_098", Name: "zm_098 (Bilingual Male)", Gender: "male", Description: "Bilingual male speaker zm_098"},
 	{ID: "zm_100", Name: "zm_100 (Bilingual Male)", Gender: "male", Description: "Bilingual male speaker zm_100"},
+}
+
+// AvailableKokoroV10Voices contains the 54 official speaker profiles for kokoro-multi-lang-v1_0.
+var AvailableKokoroV10Voices = []VoiceProfile{
+	// American English Female (af_)
+	{ID: "af_alloy", Name: "Alloy (American Female)", Gender: "female", Description: "Clear, adaptable American English female", Language: "en-us"},
+	{ID: "af_aoede", Name: "Aoede (American Female)", Gender: "female", Description: "Expressive American English female", Language: "en-us"},
+	{ID: "af_bella", Name: "Bella (American Female)", Gender: "female", Description: "Friendly and bright American English female", Language: "en-us"},
+	{ID: "af_heart", Name: "Heart (American Female, Default)", Gender: "female", Description: "Warm, natural flagship American English female", Language: "en-us"},
+	{ID: "af_jessica", Name: "Jessica (American Female)", Gender: "female", Description: "Conversational American English female", Language: "en-us"},
+	{ID: "af_kore", Name: "Kore (American Female)", Gender: "female", Description: "Calm, narrative American English female", Language: "en-us"},
+	{ID: "af_nicole", Name: "Nicole (American Female)", Gender: "female", Description: "Professional, articulate American English female", Language: "en-us"},
+	{ID: "af_nova", Name: "Nova (American Female)", Gender: "female", Description: "Warm, resonant American English female", Language: "en-us"},
+	{ID: "af_river", Name: "River (American Female)", Gender: "female", Description: "Relaxed American English female", Language: "en-us"},
+	{ID: "af_sarah", Name: "Sarah (American Female)", Gender: "female", Description: "Casual, energetic American English female", Language: "en-us"},
+	{ID: "af_sky", Name: "Sky (American Female)", Gender: "female", Description: "Soft, melodic conversational American voice", Language: "en-us"},
+
+	// American English Male (am_)
+	{ID: "am_adam", Name: "Adam (American Male)", Gender: "male", Description: "Deep, crisp American English male", Language: "en-us"},
+	{ID: "am_echo", Name: "Echo (American Male)", Gender: "male", Description: "Clear, neutral American English male", Language: "en-us"},
+	{ID: "am_eric", Name: "Eric (American Male)", Gender: "male", Description: "Warm, friendly American English male", Language: "en-us"},
+	{ID: "am_fenrir", Name: "Fenrir (American Male)", Gender: "male", Description: "Strong, commanding American English male", Language: "en-us"},
+	{ID: "am_liam", Name: "Liam (American Male)", Gender: "male", Description: "Conversational American English male", Language: "en-us"},
+	{ID: "am_michael", Name: "Michael (American Male)", Gender: "male", Description: "Neutral and professional American male", Language: "en-us"},
+	{ID: "am_onyx", Name: "Onyx (American Male)", Gender: "male", Description: "Deep, resonant American English male", Language: "en-us"},
+	{ID: "am_puck", Name: "Puck (American Male)", Gender: "male", Description: "Playful, light American English male", Language: "en-us"},
+	{ID: "am_santa", Name: "Santa (American Male)", Gender: "male", Description: "Jovial American English male", Language: "en-us"},
+
+	// British English Female (bf_)
+	{ID: "bf_alice", Name: "Alice (British Female)", Gender: "female", Description: "Clear, crisp British English female", Language: "en-gb"},
+	{ID: "bf_emma", Name: "Emma (British Female)", Gender: "female", Description: "Polite, articulate British English female", Language: "en-gb"},
+	{ID: "bf_isabella", Name: "Isabella (British Female)", Gender: "female", Description: "Warm British conversational female", Language: "en-gb"},
+	{ID: "bf_lily", Name: "Lily (British Female)", Gender: "female", Description: "Soft, expressive British English female", Language: "en-gb"},
+
+	// British English Male (bm_)
+	{ID: "bm_daniel", Name: "Daniel (British Male)", Gender: "male", Description: "Classic, formal British English male", Language: "en-gb"},
+	{ID: "bm_fable", Name: "Fable (British Male)", Gender: "male", Description: "Narrative, dramatic British English male", Language: "en-gb"},
+	{ID: "bm_george", Name: "George (British Male)", Gender: "male", Description: "Refined, classic British English male", Language: "en-gb"},
+	{ID: "bm_lewis", Name: "Lewis (British Male)", Gender: "male", Description: "Deep, resonant British narrator male", Language: "en-gb"},
+
+	// Spanish (ef_ / em_)
+	{ID: "ef_dora", Name: "Dora (Spanish Female)", Gender: "female", Description: "Natural, expressive Spanish female", Language: "es"},
+	{ID: "em_alex", Name: "Alex (Spanish Male)", Gender: "male", Description: "Conversational Spanish male", Language: "es"},
+	{ID: "em_santa", Name: "Santa (Spanish Male)", Gender: "male", Description: "Warm, festive Spanish male", Language: "es"},
+
+	// French (ff_)
+	{ID: "ff_siwis", Name: "Siwis (French Female)", Gender: "female", Description: "Natural, melodic French female", Language: "fr"},
+
+	// Hindi (hf_ / hm_)
+	{ID: "hf_alpha", Name: "Alpha (Hindi Female)", Gender: "female", Description: "Clear Hindi female speaker Alpha", Language: "hi"},
+	{ID: "hf_beta", Name: "Beta (Hindi Female)", Gender: "female", Description: "Natural Hindi female speaker Beta", Language: "hi"},
+	{ID: "hm_omega", Name: "Omega (Hindi Male)", Gender: "male", Description: "Resonant Hindi male speaker Omega", Language: "hi"},
+	{ID: "hm_psi", Name: "Psi (Hindi Male)", Gender: "male", Description: "Conversational Hindi male speaker Psi", Language: "hi"},
+
+	// Italian (if_ / im_)
+	{ID: "if_sara", Name: "Sara (Italian Female)", Gender: "female", Description: "Warm, expressive Italian female", Language: "it"},
+	{ID: "im_nicola", Name: "Nicola (Italian Male)", Gender: "male", Description: "Clear, natural Italian male", Language: "it"},
+
+	// Japanese (jf_ / jm_)
+	{ID: "jf_alpha", Name: "Alpha (Japanese Female)", Gender: "female", Description: "Clear Japanese female speaker Alpha", Language: "ja"},
+	{ID: "jf_gongitsune", Name: "Gongitsune (Japanese Female)", Gender: "female", Description: "Storytelling Japanese female narrator", Language: "ja"},
+	{ID: "jf_nezumi", Name: "Nezumi (Japanese Female)", Gender: "female", Description: "Lively Japanese female speaker", Language: "ja"},
+	{ID: "jf_tebukuro", Name: "Tebukuro (Japanese Female)", Gender: "female", Description: "Gentle Japanese female speaker", Language: "ja"},
+	{ID: "jm_kumo", Name: "Kumo (Japanese Male)", Gender: "male", Description: "Natural Japanese male narrator", Language: "ja"},
+
+	// Brazilian Portuguese (pf_ / pm_)
+	{ID: "pf_dora", Name: "Dora (Brazilian Portuguese Female)", Gender: "female", Description: "Warm Brazilian Portuguese female", Language: "pt-br"},
+	{ID: "pm_alex", Name: "Alex (Brazilian Portuguese Male)", Gender: "male", Description: "Natural Brazilian Portuguese male", Language: "pt-br"},
+	{ID: "pm_santa", Name: "Santa (Brazilian Portuguese Male)", Gender: "male", Description: "Festive Brazilian Portuguese male", Language: "pt-br"},
+
+	// Mandarin Chinese (zf_ / zm_)
+	{ID: "zf_xiaobei", Name: "Xiaobei (Mandarin Female)", Gender: "female", Description: "Warm, articulate Mandarin female", Language: "zh"},
+	{ID: "zf_xiaoni", Name: "Xiaoni (Mandarin Female)", Gender: "female", Description: "Lively Mandarin female speaker", Language: "zh"},
+	{ID: "zf_xiaoxiao", Name: "Xiaoxiao (Mandarin Female)", Gender: "female", Description: "Conversational Mandarin female", Language: "zh"},
+	{ID: "zf_xiaoyi", Name: "Xiaoyi (Mandarin Female)", Gender: "female", Description: "Gentle Mandarin female speaker", Language: "zh"},
+	{ID: "zm_yunjian", Name: "Yunjian (Mandarin Male)", Gender: "male", Description: "Deep, resonant Mandarin male narrator", Language: "zh"},
+	{ID: "zm_yunxi", Name: "Yunxi (Mandarin Male)", Gender: "male", Description: "Clear, youthful Mandarin male", Language: "zh"},
+	{ID: "zm_yunxia", Name: "Yunxia (Mandarin Male)", Gender: "male", Description: "Natural, friendly Mandarin male", Language: "zh"},
+	{ID: "zm_yunyang", Name: "Yunyang (Mandarin Male)", Gender: "male", Description: "Authoritative Mandarin male broadcast voice", Language: "zh"},
 }
 
 // AvailableKokoroV019Voices contains the 11 legacy English speaker profiles for kokoro-en-v0_19.
@@ -240,6 +320,109 @@ var KokoroV11VoiceToSID = map[string]int{
 	"maple": 0,
 	"sol": 1,
 	"vale": 2,
+}
+
+// KokoroV10VoiceToSID maps kokoro-multi-lang-v1_0 voice names to their respective speaker IDs (0-53).
+var KokoroV10VoiceToSID = map[string]int{
+	"af_alloy":      0,
+	"af_aoede":      1,
+	"af_bella":      2,
+	"af_heart":      3,
+	"af_jessica":    4,
+	"af_kore":       5,
+	"af_nicole":     6,
+	"af_nova":       7,
+	"af_river":      8,
+	"af_sarah":      9,
+	"af_sky":        10,
+	"am_adam":       11,
+	"am_echo":       12,
+	"am_eric":       13,
+	"am_fenrir":     14,
+	"am_liam":       15,
+	"am_michael":    16,
+	"am_onyx":       17,
+	"am_puck":       18,
+	"am_santa":      19,
+	"bf_alice":      20,
+	"bf_emma":       21,
+	"bf_isabella":   22,
+	"bf_lily":       23,
+	"bm_daniel":     24,
+	"bm_fable":      25,
+	"bm_george":     26,
+	"bm_lewis":      27,
+	"ef_dora":       28,
+	"em_alex":       29,
+	"ff_siwis":      30,
+	"hf_alpha":      31,
+	"hf_beta":       32,
+	"hm_omega":      33,
+	"hm_psi":        34,
+	"if_sara":       35,
+	"im_nicola":      36,
+	"jf_alpha":      37,
+	"jf_gongitsune": 38,
+	"jf_nezumi":     39,
+	"jf_tebukuro":   40,
+	"jm_kumo":       41,
+	"pf_dora":       42,
+	"pm_alex":       43,
+	"pm_santa":      44,
+	"zf_xiaobei":    45,
+	"zf_xiaoni":     46,
+	"zf_xiaoxiao":   47,
+	"zf_xiaoyi":     48,
+	"zm_yunjian":    49,
+	"zm_yunxi":      50,
+	"zm_yunxia":     51,
+	"zm_yunyang":    52,
+	"em_santa":      53,
+
+	// Short aliases & fallbacks
+	"af":        3,
+	"heart":     3,
+	"alloy":     0,
+	"aoede":     1,
+	"bella":     2,
+	"jessica":   4,
+	"kore":      5,
+	"nicole":    6,
+	"nova":      7,
+	"river":     8,
+	"sarah":     9,
+	"sky":       10,
+	"adam":      11,
+	"echo":      12,
+	"eric":      13,
+	"fenrir":    14,
+	"liam":      15,
+	"michael":   16,
+	"onyx":      17,
+	"puck":      18,
+	"alice":     20,
+	"emma":      21,
+	"isabella":  22,
+	"lily":      23,
+	"daniel":    24,
+	"fable":     25,
+	"george":    26,
+	"lewis":     27,
+	"dora":      28,
+	"alex":      29,
+	"siwis":     30,
+	"sara":      35,
+	"nicola":    36,
+	"kumo":      41,
+	"xiaobei":   45,
+	"xiaoni":    46,
+	"xiaoxiao":  47,
+	"xiaoyi":    48,
+	"yunjian":   49,
+	"yunxi":     50,
+	"yunxia":    51,
+	"yunyang":   52,
+	"santa":     53,
 }
 
 // KokoroV019VoiceToSID maps kokoro-en-v0_19 voice names to their respective speaker IDs (0-10).
