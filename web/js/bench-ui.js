@@ -128,10 +128,35 @@ document.addEventListener('DOMContentLoaded', () => {
       ttsPlayerModel.textContent = model;
     }
     if (ttsModelSelect) {
+      let matched = false;
+      const lowModel = model.toLowerCase();
+      // 1. Exact match
       for (const opt of ttsModelSelect.options) {
-        if (opt.value && model.toLowerCase().includes(opt.value.toLowerCase())) {
+        if (opt.value && opt.value.toLowerCase() === lowModel) {
           ttsModelSelect.value = opt.value;
+          matched = true;
           break;
+        }
+      }
+      // 2. Specific FP16 match
+      if (!matched && lowModel.includes('fp16')) {
+        for (const opt of ttsModelSelect.options) {
+          if (opt.value && opt.value.toLowerCase().includes('fp16')) {
+            ttsModelSelect.value = opt.value;
+            matched = true;
+            break;
+          }
+        }
+      }
+      // 3. Fallback contains match (skipping FP16 options if active model is not FP16)
+      if (!matched) {
+        for (const opt of ttsModelSelect.options) {
+          const isFp16Opt = opt.value && opt.value.toLowerCase().includes('fp16');
+          if (opt.value && !isFp16Opt && lowModel.includes(opt.value.toLowerCase())) {
+            ttsModelSelect.value = opt.value;
+            matched = true;
+            break;
+          }
         }
       }
     }
@@ -663,10 +688,35 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     if (activeModel) {
+      let matched = false;
+      const lowActive = activeModel.toLowerCase();
+      // 1. Exact match
       for (const opt of ttsModelSelect.options) {
-        if (activeModel.toLowerCase().includes(opt.value.toLowerCase())) {
+        if (opt.value && opt.value.toLowerCase() === lowActive) {
           ttsModelSelect.value = opt.value;
+          matched = true;
           break;
+        }
+      }
+      // 2. Specific FP16 match
+      if (!matched && lowActive.includes('fp16')) {
+        for (const opt of ttsModelSelect.options) {
+          if (opt.value && opt.value.toLowerCase().includes('fp16')) {
+            ttsModelSelect.value = opt.value;
+            matched = true;
+            break;
+          }
+        }
+      }
+      // 3. Fallback contains match (skipping FP16 options if active model is not FP16)
+      if (!matched) {
+        for (const opt of ttsModelSelect.options) {
+          const isFp16Opt = opt.value && opt.value.toLowerCase().includes('fp16');
+          if (opt.value && !isFp16Opt && lowActive.includes(opt.value.toLowerCase())) {
+            ttsModelSelect.value = opt.value;
+            matched = true;
+            break;
+          }
         }
       }
     } else if (curVal && Array.from(ttsModelSelect.options).some(o => o.value === curVal)) {

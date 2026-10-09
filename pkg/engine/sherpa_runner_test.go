@@ -175,3 +175,49 @@ func TestSynthesizeKokoroV10(t *testing.T) {
 		t.Errorf("expected synthesized audio duration > 0.8s, got %.2fs", resEs.DurationSec)
 	}
 }
+
+func TestKokoroFP16Model(t *testing.T) {
+	// 1. Test model list contains FP16 entry
+	installed := FindInstalledKokoroModels("models")
+	hasFP16 := false
+	for _, m := range installed {
+		if m == "kokoro-multi-lang-v1_0 (FP16)" {
+			hasFP16 = true
+			break
+		}
+	}
+	if !hasFP16 {
+		t.Errorf("expected 'kokoro-multi-lang-v1_0 (FP16)' in installed models, got: %v", installed)
+	}
+
+	// 2. Test SetTTSModel with FP16
+	cfg := &config.AppConfig{}
+	cfg.Engine.KokoroModelDir = "models/kokoro-multi-lang-v1_1"
+	cfg.Engine.SherpaTtsBin = "sherpa-onnx-offline-tts"
+	runner := NewSherpaRunner(cfg)
+
+	if err := runner.SetTTSModel("kokoro-multi-lang-v1_0 (FP16)"); err != nil {
+		t.Fatalf("failed to set model to FP16: %v", err)
+	}
+
+	modelInfo, isNeural := runner.TTSModelInfo()
+	if !strings.Contains(modelInfo, "FP16") {
+		t.Errorf("expected model info to contain FP16, got: %s", modelInfo)
+	}
+	if !isNeural {
+		t.Errorf("expected neural to be true for FP16 model")
+	}
+
+	// 3. Test Synthesize with FP16
+	res, err := runner.Synthesize(TTSRequest{
+		Text:  "Testing Kokoro v1.0 FP16 half-precision model.",
+		Voice: "af_heart",
+		Speed: 1.0,
+	})
+	if err != nil {
+		t.Fatalf("Synthesize failed with FP16 model: %v", err)
+	}
+	if res.DurationSec < 0.8 {
+		t.Errorf("expected duration > 0.8s, got %.2fs", res.DurationSec)
+	}
+}

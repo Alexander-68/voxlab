@@ -31,6 +31,9 @@ type SherpaRunner struct {
 
 // NewSherpaRunner creates a new SherpaRunner instance.
 func NewSherpaRunner(cfg *config.AppConfig) *SherpaRunner {
+	if strings.Contains(strings.ToLower(cfg.Engine.KokoroModelDir), "fp16") && cfg.Engine.KokoroModelFile == "" {
+		cfg.Engine.KokoroModelFile = "model.fp16.onnx"
+	}
 	if dir, ok := findKokoroModelDir(cfg.Engine.KokoroModelDir); ok {
 		cfg.Engine.KokoroModelDir = dir
 	}
@@ -235,10 +238,13 @@ func isValidKokoroDir(dir string) bool {
 	if _, err := os.Stat(filepath.Join(dir, "model.int8.onnx")); err == nil {
 		return true
 	}
+	if _, err := os.Stat(filepath.Join(dir, "model.fp16.onnx")); err == nil {
+		return true
+	}
 	return false
 }
 
-// FindInstalledKokoroModels scans the models directory and returns all valid Kokoro model folder names.
+// FindInstalledKokoroModels scans the models directory and returns all valid Kokoro model names and variants.
 func FindInstalledKokoroModels(modelsRoot string) []string {
 	if modelsRoot == "" {
 		modelsRoot = "models"
@@ -270,11 +276,53 @@ func FindInstalledKokoroModels(modelsRoot string) []string {
 		}
 		dirPath := filepath.Join(root, e.Name())
 		if isValidKokoroDir(dirPath) && strings.Contains(strings.ToLower(e.Name()), "kokoro") {
-			out = append(out, e.Name())
+			hasBase := false
+			if _, err := os.Stat(filepath.Join(dirPath, "model.onnx")); err == nil {
+				out = append(out, e.Name())
+				hasBase = true
+			}
+			if _, err := os.Stat(filepath.Join(dirPath, "model.fp16.onnx")); err == nil {
+				if strings.Contains(strings.ToLower(e.Name()), "fp16") {
+					if !hasBase {
+						out = append(out, e.Name())
+						hasBase = true
+					}
+				} else {
+					out = append(out, e.Name()+" (FP16)")
+				}
+			}
+			if _, err := os.Stat(filepath.Join(dirPath, "model.int8.onnx")); err == nil {
+				if !hasBase {
+					out = append(out, e.Name())
+				}
+			}
 		}
 	}
-	// Sort so v1_1 models appear before older ones
+
+	// Sort models logically: v1_1 first, then v1_0 (base then FP16), then legacy v0_19
+	modelRank := func(m string) int {
+		low := strings.ToLower(m)
+		switch {
+		case strings.Contains(low, "v1_1") && !strings.Contains(low, "int8"):
+			return 50
+		case strings.Contains(low, "v1_1") && strings.Contains(low, "int8"):
+			return 40
+		case strings.Contains(low, "v1_0") && !strings.Contains(low, "fp16"):
+			return 30
+		case strings.Contains(low, "v1_0") && strings.Contains(low, "fp16"):
+			return 25
+		case strings.Contains(low, "v0_19"):
+			return 10
+		default:
+			return 0
+		}
+	}
+
 	sort.Slice(out, func(i, j int) bool {
+		rI, rJ := modelRank(out[i]), modelRank(out[j])
+		if rI != rJ {
+			return rI > rJ
+		}
 		return out[i] > out[j]
 	})
 	return out
@@ -284,12 +332,22 @@ func FindInstalledKokoroModels(modelsRoot string) []string {
 // Priority: explicitly configured valid dir -> latest multi-lang v1.1 -> int8 v1.1 -> v1.0 -> legacy v0.19.
 func findKokoroModelDir(configured string) (string, bool) {
 	if configured != "" {
-		for _, prefix := range []string{"", "..", filepath.Join("..", "..")} {
-			p := filepath.Join(prefix, configured)
+		clean := strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(configured, "(FP16)", ""), "(fp16)", ""))
+		prefixes := []string{
+			"",
+			"..",
+			filepath.Join("..", ".."),
+			"models",
+			filepath.Join("..", "models"),
+			filepath.Join("..", "..", "models"),
+		}
+		for _, prefix := range prefixes {
+			p := filepath.Join(prefix, clean)
 			if isValidKokoroDir(p) {
 				return p, true
 			}
 		}
+		return configured, false
 	}
 
 	candidates := []string{
@@ -373,9 +431,21 @@ func (r *SherpaRunner) Synthesize(req TTSRequest) (*TTSResult, error) {
 	tempWav := filepath.Join(os.TempDir(), fmt.Sprintf("voxlab_tts_%d.wav", time.Now().UnixNano()))
 	defer os.Remove(tempWav)
 
-	modelFile := filepath.Join(modelDir, "model.onnx")
-	if _, err := os.Stat(modelFile); os.IsNotExist(err) {
-		modelFile = filepath.Join(modelDir, "model.int8.onnx")
+	var modelFile string
+	if r.cfg.Engine.KokoroModelFile != "" {
+		candidate := filepath.Join(modelDir, r.cfg.Engine.KokoroModelFile)
+		if isRegularFile(candidate) {
+			modelFile = candidate
+		}
+	}
+	if modelFile == "" {
+		modelFile = filepath.Join(modelDir, "model.onnx")
+		if _, err := os.Stat(modelFile); os.IsNotExist(err) {
+			modelFile = filepath.Join(modelDir, "model.int8.onnx")
+			if _, err := os.Stat(modelFile); os.IsNotExist(err) {
+				modelFile = filepath.Join(modelDir, "model.fp16.onnx")
+			}
+		}
 	}
 	voicesPath := filepath.Join(modelDir, "voices.bin")
 	tokensPath := filepath.Join(modelDir, "tokens.txt")
@@ -475,9 +545,21 @@ func (r *SherpaRunner) TTSModelInfo() (string, bool) {
 	}
 
 	base := filepath.Base(modelDir)
-	modelFile := filepath.Join(modelDir, "model.onnx")
+	modelFile := r.cfg.Engine.KokoroModelFile
+	if modelFile == "" {
+		if _, err := os.Stat(filepath.Join(modelDir, "model.onnx")); err == nil {
+			modelFile = "model.onnx"
+		} else if _, err := os.Stat(filepath.Join(modelDir, "model.int8.onnx")); err == nil {
+			modelFile = "model.int8.onnx"
+		} else if _, err := os.Stat(filepath.Join(modelDir, "model.fp16.onnx")); err == nil {
+			modelFile = "model.fp16.onnx"
+		}
+	}
+
 	variant := "FP32"
-	if _, err := os.Stat(modelFile); os.IsNotExist(err) {
+	if strings.Contains(strings.ToLower(modelFile), "fp16") {
+		variant = "FP16"
+	} else if strings.Contains(strings.ToLower(modelFile), "int8") || strings.Contains(strings.ToLower(base), "int8") {
 		variant = "INT8"
 	}
 
@@ -493,7 +575,7 @@ func (r *SherpaRunner) InstalledTTSModels() []string {
 	return FindInstalledKokoroModels(modelsRoot)
 }
 
-// SetTTSModel switches the active Kokoro model directory to the requested model.
+// SetTTSModel switches the active Kokoro model directory and variant to the requested model.
 func (r *SherpaRunner) SetTTSModel(modelName string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -503,17 +585,42 @@ func (r *SherpaRunner) SetTTSModel(modelName string) error {
 		modelsRoot = "models"
 	}
 
-	targetDir := filepath.Join(modelsRoot, modelName)
+	clean := strings.TrimSpace(modelName)
+	isFP16 := strings.Contains(strings.ToLower(clean), "fp16")
+	baseName := strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(clean, "(FP16)", ""), "(fp16)", ""))
+
+	targetDir := filepath.Join(modelsRoot, baseName)
 	if !isValidKokoroDir(targetDir) {
-		if isValidKokoroDir(modelName) {
-			targetDir = modelName
+		if dir, ok := findKokoroModelDir(baseName); ok {
+			targetDir = dir
+		} else if isValidKokoroDir(baseName) {
+			targetDir = baseName
 		} else {
 			return fmt.Errorf("model directory not found or invalid: %s", targetDir)
 		}
 	}
 
 	r.cfg.Engine.KokoroModelDir = targetDir
-	log.Printf("[SherpaRunner] Switched active Kokoro model to: %s", targetDir)
+	if isFP16 {
+		fp16Path := filepath.Join(targetDir, "model.fp16.onnx")
+		if _, err := os.Stat(fp16Path); err == nil {
+			r.cfg.Engine.KokoroModelFile = "model.fp16.onnx"
+		} else {
+			return fmt.Errorf("fp16 model not found in directory: %s", fp16Path)
+		}
+	} else {
+		if _, err := os.Stat(filepath.Join(targetDir, "model.onnx")); err == nil {
+			r.cfg.Engine.KokoroModelFile = "model.onnx"
+		} else if _, err := os.Stat(filepath.Join(targetDir, "model.int8.onnx")); err == nil {
+			r.cfg.Engine.KokoroModelFile = "model.int8.onnx"
+		} else if _, err := os.Stat(filepath.Join(targetDir, "model.fp16.onnx")); err == nil {
+			r.cfg.Engine.KokoroModelFile = "model.fp16.onnx"
+		} else {
+			r.cfg.Engine.KokoroModelFile = ""
+		}
+	}
+
+	log.Printf("[SherpaRunner] Switched active Kokoro model to: %s (file: %s)", targetDir, r.cfg.Engine.KokoroModelFile)
 	return nil
 }
 

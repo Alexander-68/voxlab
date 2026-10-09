@@ -434,6 +434,35 @@ func TestServerModelManagement(t *testing.T) {
 	if !foundModelChanged {
 		t.Errorf("expected tts.model_changed event over WebSocket")
 	}
+
+	// 4. Test GET /api/voices and POST /api/models with FP16
+	reqFP16 := httptest.NewRequest(http.MethodGet, "/api/voices?model=kokoro-multi-lang-v1_0%20(FP16)", nil)
+	wFP16 := httptest.NewRecorder()
+	srv.handleVoices(wFP16, reqFP16)
+	if wFP16.Code != http.StatusOK {
+		t.Errorf("expected 200 OK for FP16 voices query, got %d", wFP16.Code)
+	}
+	var respFP16 struct {
+		Voices []tts.VoiceProfile `json:"voices"`
+	}
+	if err := json.NewDecoder(wFP16.Body).Decode(&respFP16); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if len(respFP16.Voices) != 54 {
+		t.Errorf("expected 54 voices for FP16 query, got %d", len(respFP16.Voices))
+	}
+
+	bodyFP16, _ := json.Marshal(map[string]string{"model": "kokoro-multi-lang-v1_0 (FP16)"})
+	reqPostFP16 := httptest.NewRequest(http.MethodPost, "/api/models", bytes.NewReader(bodyFP16))
+	wPostFP16 := httptest.NewRecorder()
+	srv.handleModels(wPostFP16, reqPostFP16)
+	if wPostFP16.Code != http.StatusOK {
+		t.Errorf("expected 200 OK for POST /api/models with FP16, got %d", wPostFP16.Code)
+	}
+	activeFP16, _ := srv.ttsMgr.ActiveModel()
+	if !strings.Contains(activeFP16, "FP16") {
+		t.Errorf("expected active model to contain FP16, got %s", activeFP16)
+	}
 }
 
 

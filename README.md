@@ -91,13 +91,48 @@
 
 5. **Voice Synthesis (Kokoro TTS)**:
    - High-quality offline multi-speaker neural speech synthesis.
-   - Voices: `af_heart`, `af_alloy`, `af_aoede`, `af_bella`, `am_adam`, `am_fenrir`, `am_michael`, `am_puck`.
+   - **Multi-Model Dynamic Selection**: Switch seamlessly between Kokoro v1.1 (103 voices), v1.0 (54 voices), and v0.19 (11 voices) at runtime.
+   - **Flexible Quantization & Precision**: Supports **FP32** (full precision), **INT8** (quantized compact), and **FP16** (half-precision `model.fp16.onnx`, ~163MB).
    - Speed adjustment ($0.7\times$ to $1.5\times$).
-   - Output to browser speaker AND host speaker.
+   - Output to browser speaker AND host speaker with automated half-duplex echo gate suppression.
 
 6. **Dual Engine Mode**:
    - **Simulator Mode (Default)**: Zero-dependency Go engine with realistic latencies, simulated ASR partials, and synthetic audio for instant development and testing.
    - **Sherpa-ONNX Mode**: Executes native Sherpa-ONNX binaries against pre-trained ONNX neural network weights.
+
+---
+
+## Installed Models & Precision Variants
+
+VoxLab auto-discovers all installed Kokoro models located in `models/`:
+
+| Model Identifier | Precision | Weights File | Voices | Footprint |
+| :--- | :--- | :--- | :--- | :--- |
+| `kokoro-multi-lang-v1_1` | FP32 | `model.onnx` | 103 voices | ~325 MB |
+| `kokoro-int8-multi-lang-v1_1` | INT8 | `model.int8.onnx` | 103 voices | ~114 MB |
+| `kokoro-multi-lang-v1_0` | FP32 | `model.onnx` | 54 voices | ~325 MB |
+| `kokoro-multi-lang-v1_0 (FP16)` | **FP16** | `model.fp16.onnx` | 54 voices | ~163 MB |
+| `kokoro-en-v0_19` | FP32 | `model.onnx` | 11 voices | ~345 MB |
+
+Whenever a model directory contains `model.fp16.onnx`, VoxLab automatically exposes an additional model selection with the `(FP16)` suffix in the Web UI, REST API (`/api/voices`, `/api/models`), and WebSocket actions.
+
+See [`models/README.md`](file:///C:/Alex/voxlab/models/README.md) for full architecture and directory details.
+
+---
+
+## ONNX Metadata Helper Script
+
+Sherpa-ONNX requires specific metadata properties (`sample_rate`, `model_type`, `version`, `has_espeak`, speaker maps) embedded within the ONNX file. Raw checkpoints downloaded from HuggingFace (e.g. `hexgrad/Kokoro-82M`) often lack these properties.
+
+VoxLab provides a helper script [`scripts/patch_kokoro_fp16_metadata.py`](file:///C:/Alex/voxlab/scripts/patch_kokoro_fp16_metadata.py) to inspect and inject the missing properties:
+
+```bash
+# Check existing metadata
+python scripts/patch_kokoro_fp16_metadata.py --check models/kokoro-multi-lang-v1_0/model.fp16.onnx
+
+# Copy Sherpa-ONNX metadata from model.onnx to model.fp16.onnx
+python scripts/patch_kokoro_fp16_metadata.py models/kokoro-multi-lang-v1_0/model.fp16.onnx models/kokoro-multi-lang-v1_0/model.onnx
+```
 
 ---
 

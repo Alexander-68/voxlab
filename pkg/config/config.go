@@ -44,8 +44,9 @@ type EngineConfig struct {
 	SherpaTtsBin   string `json:"sherpa_tts_bin"`   // e.g. "sherpa-onnx-offline-tts"
 	SherpaKwsBin   string `json:"sherpa_kws_bin"`   // e.g. "sherpa-onnx-keyword-spotter"
 	SherpaAsrBin   string `json:"sherpa_asr_bin"`   // e.g. "sherpa-onnx-online-websocket-server"
-	KokoroModelDir string `json:"kokoro_model_dir"` // e.g. "models/kokoro-multi-lang-v1_1"
-	ZipformerDir   string `json:"zipformer_dir"`    // e.g. "models/sherpa-onnx-streaming-zipformer-en-2023-06-26"
+	KokoroModelDir  string `json:"kokoro_model_dir"`  // e.g. "models/kokoro-multi-lang-v1_1"
+	KokoroModelFile string `json:"kokoro_model_file,omitempty"` // e.g. "model.fp16.onnx", "model.onnx"
+	ZipformerDir    string `json:"zipformer_dir"`     // e.g. "models/sherpa-onnx-streaming-zipformer-en-2023-06-26"
 }
 
 // TTSConfig defines text-to-speech parameters.

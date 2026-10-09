@@ -68,6 +68,7 @@ if (-not $SkipBinaries) {
 # 2. Kokoro TTS Model Selection
 if (-not $SkipKokoro) {
     $HasV019 = Test-Path (Join-Path $ModelsDir "kokoro-en-v0_19\model.onnx")
+    $HasV10  = (Test-Path (Join-Path $ModelsDir "kokoro-multi-lang-v1_0\model.onnx")) -or (Test-Path (Join-Path $ModelsDir "kokoro-multi-lang-v1_0\model.fp16.onnx"))
     $HasV11  = (Test-Path (Join-Path $ModelsDir "kokoro-multi-lang-v1_1\model.onnx")) -or (Test-Path (Join-Path $ModelsDir "kokoro-int8-multi-lang-v1_1\model.int8.onnx"))
 
     if ($KokoroVersion -eq "auto") {
