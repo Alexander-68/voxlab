@@ -212,7 +212,11 @@
 
             <!-- Quick Command Injection -->
             <div class="quick-inject mt-3">
-              <label>Quick Command Injections (Zero-Mic Bench Test):</label>
+              <label for="custom-cmd-input">Quick Command Injections (Zero-Mic Bench Test):</label>
+              <div class="custom-inject-form">
+                <input type="text" id="custom-cmd-input" class="form-control" placeholder="Type any voice command (e.g. open settings)..." autocomplete="off">
+                <button id="btn-custom-inject" class="btn btn-sm btn-accent" title="Inject command">Inject</button>
+              </div>
               <div class="quick-buttons">
                 <button class="btn btn-sm btn-outline btn-inject" data-text="open settings">"open settings"</button>
                 <button class="btn btn-sm btn-outline btn-inject" data-text="start recording">"start recording"</button>

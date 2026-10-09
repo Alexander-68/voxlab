@@ -118,7 +118,7 @@ VoxLab auto-discovers all installed Kokoro models located in `models/`:
 
 Model weight variants (`model.int8.onnx`, `model.fp16.onnx`) can be co-located within the same model folder, sharing lexicons and voice embeddings. VoxLab automatically exposes them with their respective suffix (`(INT8)`, `(FP16)`) in the Web UI, REST API (`/api/voices`, `/api/models`), and WebSocket actions.
 
-See [`models/README.md`](file:///C:/Alex/voxlab/models/README.md) for full architecture and directory details.
+See [`models-tts.md`](file:///C:/Alex/voxlab/models-tts.md) for full architecture and directory details.
 
 ---
 

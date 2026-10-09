@@ -6,8 +6,7 @@ bin/
 *.dylib
 
 # Models directory archives and downloaded models
-models/*
-!models/README.md
+models/
 
 
 # OS artifacts

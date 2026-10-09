@@ -544,6 +544,23 @@ input[type="range"] {
   color: var(--text-muted);
 }
 
+.custom-inject-form {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+  margin-bottom: 8px;
+}
+
+.custom-inject-form .form-control {
+  flex: 1;
+}
+
+.custom-inject-form .btn {
+  white-space: nowrap;
+  padding: 7px 14px;
+}
+
 .text-danger { color: #f87171 !important; border-color: rgba(239, 68, 68, 0.4) !important; }
 
 /* Dictation */
@@ -652,6 +669,7 @@ input[type="range"] {
 
 /* Utilities */
 .hidden { display: none !important; }
+.mt-1 { margin-top: 4px; }
 .mt-2 { margin-top: 8px; }
 .mt-3 { margin-top: 12px; }
 .mb-2 { margin-bottom: 8px; }

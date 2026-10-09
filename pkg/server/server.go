@@ -591,6 +591,13 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 						},
 					})
 				} else {
+					s.BroadcastJSON(map[string]interface{}{
+						"event": "transcript.final",
+						"data": map[string]interface{}{
+							"mode":       "command",
+							"transcript": text,
+						},
+					})
 					s.handleFinalCommandTranscript(text)
 				}
 

@@ -50,6 +50,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const slotsTags = document.getElementById('slots-tags');
   const rejectionBox = document.getElementById('rejection-box');
   const rejectionReason = document.getElementById('rejection-reason');
+  const customCmdInput = document.getElementById('custom-cmd-input');
+  const btnCustomInject = document.getElementById('btn-custom-inject');
 
   // Dictation Tab
   const btnStartDictation = document.getElementById('btn-start-dictation');
@@ -578,10 +580,34 @@ document.addEventListener('DOMContentLoaded', () => {
     client.speak(text, ttsVoiceSelect.value, parseFloat(ttsSpeedSlider.value));
   });
 
+  // Custom Command Injections
+  function handleCustomInject() {
+    if (!customCmdInput) return;
+    const text = customCmdInput.value.trim();
+    if (!text) return;
+    client.injectText(text, 'command');
+  }
+
+  if (btnCustomInject) {
+    btnCustomInject.addEventListener('click', handleCustomInject);
+  }
+
+  if (customCmdInput) {
+    customCmdInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleCustomInject();
+      }
+    });
+  }
+
   // Quick Injections
   document.querySelectorAll('.btn-inject').forEach((btn) => {
     btn.addEventListener('click', () => {
       const text = btn.getAttribute('data-text');
+      if (customCmdInput) {
+        customCmdInput.value = text;
+      }
       client.injectText(text, 'command');
     });
   });

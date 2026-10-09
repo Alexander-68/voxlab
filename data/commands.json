@@ -19,9 +19,13 @@
       "examples": [
         "start recording",
         "begin recording",
+	"start video recording",
+	"begin video recording",
+	"record video",
+	"video record start",
+	"start record video",
         "record now",
-        "start capture",
-        "begin capture"
+	"record video now"
       ],
       "action_aliases": ["start", "begin", "record"],
       "preconditions": ["recording_state == idle"],
@@ -31,9 +35,13 @@
       "id": "STOP_RECORDING",
       "examples": [
         "stop recording",
+	"stop video recording",
         "finish this recording",
+	"finish video recording",
+	"finish recording",
         "end recording",
-        "stop capture",
+	"end video recording",
+	"halt video recording",
         "halt recording"
       ],
       "action_aliases": ["stop", "finish", "end"],

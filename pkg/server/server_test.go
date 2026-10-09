@@ -128,13 +128,21 @@ func TestServerWebSocketHandshakeAndAction(t *testing.T) {
 		t.Fatalf("failed to send action: %v", err)
 	}
 
-	// Wait for intent_matched event
+	// Wait for transcript.final and intent_matched events
 	foundIntentMatched := false
+	foundTranscriptFinal := false
 	for i := 0; i < 5; i++ {
 		var reply map[string]interface{}
 		_ = conn.SetReadDeadline(time.Now().Add(1 * time.Second))
 		if err := conn.ReadJSON(&reply); err != nil {
 			break
+		}
+		if reply["event"] == "transcript.final" {
+			foundTranscriptFinal = true
+			data, _ := reply["data"].(map[string]interface{})
+			if data["transcript"] != "open settings" {
+				t.Errorf("expected transcript 'open settings', got %v", data["transcript"])
+			}
 		}
 		if reply["event"] == "intent_matched" {
 			foundIntentMatched = true
@@ -142,10 +150,15 @@ func TestServerWebSocketHandshakeAndAction(t *testing.T) {
 			if data["intent_id"] != "NAV_SETTINGS" {
 				t.Errorf("expected intent_id NAV_SETTINGS, got %v", data["intent_id"])
 			}
+		}
+		if foundIntentMatched && foundTranscriptFinal {
 			break
 		}
 	}
 
+	if !foundTranscriptFinal {
+		t.Errorf("did not receive expected transcript.final event over WebSocket")
+	}
 	if !foundIntentMatched {
 		t.Errorf("did not receive expected intent_matched event over WebSocket")
 	}
