@@ -146,7 +146,10 @@
       <!-- Panel 2: Dual Speech Processing Lab -->
       <section class="panel panel-center">
         <div class="panel-header">
-          <h2>2. Speech Recognition Lab</h2>
+          <div class="panel-title-row">
+            <h2>2. Speech Recognition Lab</h2>
+            <button id="btn-ptt-command" class="btn btn-sm btn-accent" title="Listen for voice command">🎙️ Push to talk</button>
+          </div>
           <!-- Tab Switcher -->
           <div class="tabs-nav">
             <button id="tab-btn-commands" class="tab-btn active">Voice Commands</button>
@@ -157,20 +160,33 @@
         <div class="panel-body">
           <!-- Commands Tab Content -->
           <div id="tab-content-commands" class="tab-content active">
-            <div class="turn-controls">
-              <button id="btn-ptt-command" class="btn btn-accent">🎙️ Push-to-Talk Command</button>
-              <button id="btn-sim-command" class="btn btn-secondary">Simulate Utterance</button>
+            <!-- Quick Command Injection (Zero-Mic Bench Test) -->
+            <div class="quick-inject mb-3">
+              <label for="custom-cmd-input">Quick Command Injections (Zero-Mic Bench Test):</label>
+              <div class="custom-inject-form">
+                <input type="text" id="custom-cmd-input" class="form-control" placeholder="Type any voice command (e.g. open settings)..." autocomplete="off">
+                <button id="btn-custom-inject" class="btn btn-sm btn-accent" title="Inject command">Inject</button>
+              </div>
+              <div class="quick-buttons">
+                <button class="btn btn-sm btn-outline btn-inject" data-text="open settings">"open settings"</button>
+                <button class="btn btn-sm btn-outline btn-inject" data-text="start recording">"start recording"</button>
+                <button class="btn btn-sm btn-outline btn-inject" data-text="stop recording">"stop recording"</button>
+                <button class="btn btn-sm btn-outline btn-inject" data-text="dim screen">"dim screen"</button>
+                <button class="btn btn-sm btn-outline btn-inject" data-text="show endoscope on the main monitor">"show endoscope on main monitor"</button>
+                <button class="btn btn-sm btn-outline btn-inject text-danger" data-text="what time is lunch">"what time is lunch" (Distractor)</button>
+                <button class="btn btn-sm btn-outline btn-inject text-danger" data-text="do not stop recording">"do not stop recording" (Negation)</button>
+              </div>
             </div>
 
-            <!-- Streaming Transcript Card -->
+            <!-- Command Input Feed Card -->
             <div class="card transcript-card">
               <div class="card-header">
-                <span class="card-title">Streaming ASR (Sherpa-ONNX Zipformer)</span>
+                <span class="card-title">Command Input Feed</span>
                 <span id="asr-status-badge" class="badge badge-subtle">Ready</span>
               </div>
               <div class="card-body">
                 <div id="command-transcript-box" class="transcript-box">
-                  <span class="placeholder-text">Speak a command or say "Hey VoxLab" to begin...</span>
+                  <span class="placeholder-text">Speak a command, inject text, or say "Hey VoxLab" to begin...</span>
                 </div>
               </div>
             </div>
@@ -207,24 +223,6 @@
                   <strong>Room Chatter Rejected:</strong>
                   <span id="rejection-reason">Out-of-domain conversational speech ignored quietly.</span>
                 </div>
-              </div>
-            </div>
-
-            <!-- Quick Command Injection -->
-            <div class="quick-inject mt-3">
-              <label for="custom-cmd-input">Quick Command Injections (Zero-Mic Bench Test):</label>
-              <div class="custom-inject-form">
-                <input type="text" id="custom-cmd-input" class="form-control" placeholder="Type any voice command (e.g. open settings)..." autocomplete="off">
-                <button id="btn-custom-inject" class="btn btn-sm btn-accent" title="Inject command">Inject</button>
-              </div>
-              <div class="quick-buttons">
-                <button class="btn btn-sm btn-outline btn-inject" data-text="open settings">"open settings"</button>
-                <button class="btn btn-sm btn-outline btn-inject" data-text="start recording">"start recording"</button>
-                <button class="btn btn-sm btn-outline btn-inject" data-text="stop recording">"stop recording"</button>
-                <button class="btn btn-sm btn-outline btn-inject" data-text="dim screen">"dim screen"</button>
-                <button class="btn btn-sm btn-outline btn-inject" data-text="show endoscope on the main monitor">"show endoscope on main monitor"</button>
-                <button class="btn btn-sm btn-outline btn-inject text-danger" data-text="what time is lunch">"what time is lunch" (Distractor)</button>
-                <button class="btn btn-sm btn-outline btn-inject text-danger" data-text="do not stop recording">"do not stop recording" (Negation)</button>
               </div>
             </div>
           </div>

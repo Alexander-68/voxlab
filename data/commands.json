@@ -79,6 +79,8 @@
         "volume up",
         "increase volume",
         "make it louder",
+        "sound louder",
+        "louder sound",
         "turn up sound"
       ],
       "action_aliases": ["increase", "louder", "up"],

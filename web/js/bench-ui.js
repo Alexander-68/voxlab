@@ -40,7 +40,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Commands Tab
   const btnPttCommand = document.getElementById('btn-ptt-command');
-  const btnSimCommand = document.getElementById('btn-sim-command');
   const commandTranscriptBox = document.getElementById('command-transcript-box');
   const asrStatusBadge = document.getElementById('asr-status-badge');
   const matchedIntentId = document.getElementById('matched-intent-id');
@@ -533,14 +532,13 @@ document.addEventListener('DOMContentLoaded', () => {
       ttsAudioPlayer.currentTime = 0;
       client.sendPlaybackStatus(false);
     }
+    if (!tabBtnCommands.classList.contains('active')) {
+      tabBtnCommands.click();
+    }
     client.activateCommand();
-    commandTranscriptBox.innerHTML = '<span style="color:#60a5fa;">[Manual Push-to-Talk] Listening for command...</span>';
+    commandTranscriptBox.innerHTML = '<span style="color:#60a5fa;">[Push to talk] Listening for command...</span>';
     asrStatusBadge.textContent = 'Listening';
     asrStatusBadge.className = 'badge badge-listen';
-  });
-
-  btnSimCommand.addEventListener('click', () => {
-    client.injectText('open settings', 'command');
   });
 
   btnStartDictation.addEventListener('click', () => {
