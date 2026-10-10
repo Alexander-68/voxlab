@@ -357,9 +357,9 @@
 
           <!-- Quick Prompts -->
           <div class="quick-prompts">
-            <button class="btn btn-xs btn-outline btn-prompt" data-text="System preferences opened.">Settings</button>
-            <button class="btn btn-xs btn-outline btn-prompt" data-text="Recording started on channel one.">Recording</button>
-            <button class="btn btn-xs btn-outline btn-prompt" data-text="Display brightness set to dark mode.">Dark Mode</button>
+            <button class="btn btn-xs btn-outline btn-prompt" data-text="Settings updated successfully. Voice pipeline operational.">Multi-Sentence (2 Chunks)</button>
+            <button class="btn btn-xs btn-outline btn-prompt" data-text="System initialized. Channel one armed. Ready for voice input.">Long Flow (3 Chunks)</button>
+            <button class="btn btn-xs btn-outline btn-prompt" data-text="System preferences opened.">Single Sentence</button>
             <button class="btn btn-xs btn-outline btn-prompt" data-text="Hola, el sistema de voz está listo.">Español</button>
             <button class="btn btn-xs btn-outline btn-prompt" data-text="你好，语音系统已启动。">中文</button>
           </div>
@@ -388,6 +388,7 @@
             </div>
             <div class="tts-metrics-row">
               <span>Model: <strong id="tts-player-model">--</strong></span>
+              <span>Mode: <strong id="metric-tts-mode-badge" class="badge badge-subtle" style="font-size: 10px; padding: 1px 6px;">--</strong></span>
               <span>TTFA (1st Chunk): <strong id="metric-tts-ttfa" style="color: var(--cyan);">-- ms</strong></span>
               <span>Total Latency: <strong id="metric-tts-latency">-- ms</strong></span>
               <span>Duration: <strong id="metric-tts-dur">-- s</strong></span>

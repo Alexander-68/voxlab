@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"voxlab/pkg/audio"
 	"voxlab/pkg/config"
@@ -538,6 +540,9 @@ func (r *SherpaRunner) SynthesizeStream(req TTSRequest, onChunk func(chunk TTSCh
 	version := detectKokoroVersion(base)
 	sid := mapVoiceToSID(req.Voice, version)
 	cleanText := normalizeTTSText(req.Text)
+	if onChunk != nil {
+		cleanText = optimizeStreamingClauses(cleanText)
+	}
 
 	// Speech speed parameter (0.5x to 2.0x)
 	speed := req.Speed
@@ -1037,4 +1042,58 @@ func normalizeTTSText(text string) string {
 		"…", "...",
 	)
 	return strings.TrimSpace(r.Replace(text))
+}
+
+// optimizeStreamingClauses converts semicolons, colons, and multi-word comma clauses
+// into capitalized sentence-level boundaries (. ) so Sherpa-ONNX streaming callback
+// fires after the first clause instead of waiting for the full utterance.
+func optimizeStreamingClauses(text string) string {
+	text = strings.ReplaceAll(text, "; ", ". ")
+	text = strings.ReplaceAll(text, ";", ". ")
+	text = strings.ReplaceAll(text, ": ", ". ")
+
+	// If text contains commas, split into clauses if both sides contain >= 3 words
+	if strings.Contains(text, ",") {
+		parts := strings.Split(text, ",")
+		var b strings.Builder
+		for i, p := range parts {
+			trimmed := strings.TrimSpace(p)
+			if trimmed == "" {
+				continue
+			}
+			if i > 0 {
+				prevWords := len(strings.Fields(parts[i-1]))
+				currWords := len(strings.Fields(p))
+				if prevWords >= 3 && currWords >= 3 {
+					b.WriteString(". ")
+				} else {
+					b.WriteString(", ")
+				}
+			}
+			b.WriteString(trimmed)
+		}
+		text = b.String()
+	}
+
+	// Ensure that every sentence segment after a period has its first letter capitalized
+	// because Sherpa-ONNX's sentence segmenter only treats uppercase followers as sentence boundaries
+	// (ignoring lowercase to prevent splitting on abbreviations like e.g. or i.e.).
+	if strings.Contains(text, ". ") {
+		parts := strings.Split(text, ". ")
+		var b strings.Builder
+		for i, part := range parts {
+			trimmed := strings.TrimSpace(part)
+			if trimmed == "" {
+				continue
+			}
+			if i > 0 {
+				b.WriteString(". ")
+			}
+			r, sz := utf8.DecodeRuneInString(trimmed)
+			b.WriteString(string(unicode.ToUpper(r)) + trimmed[sz:])
+		}
+		text = b.String()
+	}
+
+	return text
 }

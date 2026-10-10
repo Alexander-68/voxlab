@@ -101,6 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const ttsStreamBanner = document.getElementById('tts-stream-banner');
   const ttsStreamStatus = document.getElementById('tts-stream-status');
   const metricTtsTtfa = document.getElementById('metric-tts-ttfa');
+  const metricTtsModeBadge = document.getElementById('metric-tts-mode-badge');
 
   // Instantiate Voice Client and Audio Capture
   const client = new VoiceClient();
@@ -831,6 +832,21 @@ document.addEventListener('DOMContentLoaded', () => {
       if (metricTtsTtfa) {
         metricTtsTtfa.textContent = '...';
       }
+      if (metricTtsModeBadge) {
+        metricTtsModeBadge.textContent = '⚡ STREAMING';
+        metricTtsModeBadge.className = 'badge badge-listen';
+      }
+    } else {
+      if (ttsStreamBanner) {
+        ttsStreamBanner.style.display = 'none';
+      }
+      if (metricTtsTtfa) {
+        metricTtsTtfa.textContent = 'Awaiting batch...';
+      }
+      if (metricTtsModeBadge) {
+        metricTtsModeBadge.textContent = '📦 OFFLINE BATCH';
+        metricTtsModeBadge.className = 'badge badge-subtle';
+      }
     }
   });
 
@@ -906,8 +922,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     metricTtsLatency.textContent = `${data.latency_ms} ms`;
     metricTtsDur.textContent = `${data.duration_sec.toFixed(2)} s`;
-    if (metricTtsTtfa && data.first_chunk_latency_ms) {
-      metricTtsTtfa.textContent = `${data.first_chunk_latency_ms} ms`;
+    if (metricTtsTtfa) {
+      if (isStreaming && data.first_chunk_latency_ms) {
+        metricTtsTtfa.textContent = `${data.first_chunk_latency_ms} ms`;
+      } else if (isStreaming) {
+        metricTtsTtfa.textContent = `${data.latency_ms} ms (1 chunk)`;
+      } else {
+        metricTtsTtfa.textContent = `${data.latency_ms} ms (Full batch)`;
+      }
     }
     if (ttsPlayerModel && data.model) {
       ttsPlayerModel.textContent = data.model;
@@ -916,6 +938,16 @@ document.addEventListener('DOMContentLoaded', () => {
     btnSynthesize.textContent = '🔊 Synthesize & Speak';
 
     streamTotalChunks = data.chunks_count || 1;
+
+    if (metricTtsModeBadge) {
+      if (isStreaming) {
+        metricTtsModeBadge.textContent = `⚡ STREAMING (${streamTotalChunks} ${streamTotalChunks === 1 ? 'chunk' : 'chunks'})`;
+        metricTtsModeBadge.className = 'badge badge-listen';
+      } else {
+        metricTtsModeBadge.textContent = '📦 OFFLINE BATCH (1 file)';
+        metricTtsModeBadge.className = 'badge badge-subtle';
+      }
+    }
 
     if (isStreaming) {
       if (data.wav_base64) {
@@ -1160,6 +1192,21 @@ document.addEventListener('DOMContentLoaded', () => {
   ttsSpeedSlider.addEventListener('input', (e) => {
     ttsSpeedVal.textContent = `${parseFloat(e.target.value).toFixed(1)}x`;
   });
+
+  if (chkTtsStreaming) {
+    if (metricTtsModeBadge) {
+      metricTtsModeBadge.textContent = chkTtsStreaming.checked ? '⚡ STREAMING' : '📦 OFFLINE BATCH';
+      metricTtsModeBadge.className = chkTtsStreaming.checked ? 'badge badge-listen' : 'badge badge-subtle';
+    }
+    chkTtsStreaming.addEventListener('change', (e) => {
+      const isStreaming = e.target.checked;
+      if (metricTtsModeBadge) {
+        metricTtsModeBadge.textContent = isStreaming ? '⚡ STREAMING' : '📦 OFFLINE BATCH';
+        metricTtsModeBadge.className = isStreaming ? 'badge badge-listen' : 'badge badge-subtle';
+      }
+      logEvent('tts.mode', `TTS Output Mode set to: ${isStreaming ? 'STREAMING (Ultra-Low TTFA)' : 'OFFLINE BATCH'}`);
+    });
+  }
 
   // Buttons
   btnCancel.addEventListener('click', () => {

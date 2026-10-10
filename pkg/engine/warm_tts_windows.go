@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -398,7 +399,13 @@ func newPlatformWarmTTS(
 	absDataDirPath, _ := filepath.Abs(dataDirPath)
 	var absLexPath string
 	if lexPath != "" {
-		absLexPath, _ = filepath.Abs(lexPath)
+		parts := strings.Split(lexPath, ",")
+		for i, p := range parts {
+			if a, err := filepath.Abs(strings.TrimSpace(p)); err == nil {
+				parts[i] = a
+			}
+		}
+		absLexPath = strings.Join(parts, ",")
 	}
 
 	var keep [][]byte
@@ -412,7 +419,13 @@ func newPlatformWarmTTS(
 	cfg.Model.Kokoro.Lexicon = toCString(absLexPath, &keep)
 	cfg.Model.Kokoro.LengthScale = 1.0
 	if ruleFsts != "" {
-		cfg.RuleFsts = toCString(ruleFsts, &keep)
+		parts := strings.Split(ruleFsts, ",")
+		for i, p := range parts {
+			if a, err := filepath.Abs(strings.TrimSpace(p)); err == nil {
+				parts[i] = a
+			}
+		}
+		cfg.RuleFsts = toCString(strings.Join(parts, ","), &keep)
 	}
 	cfg.MaxNumSentences = 1
 	cfg.SilenceScale = 0.2
