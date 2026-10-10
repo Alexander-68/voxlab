@@ -44,7 +44,7 @@ type EngineConfig struct {
 	SherpaTtsBin   string `json:"sherpa_tts_bin"`   // e.g. "sherpa-onnx-offline-tts"
 	SherpaKwsBin   string `json:"sherpa_kws_bin"`   // e.g. "sherpa-onnx-keyword-spotter"
 	SherpaAsrBin   string `json:"sherpa_asr_bin"`   // e.g. "sherpa-onnx-online-websocket-server"
-	KokoroModelDir  string `json:"kokoro_model_dir"`  // e.g. "models/kokoro-multi-lang-v1_1"
+	KokoroModelDir  string `json:"kokoro_model_dir"`  // e.g. "models/kokoro-multi-lang-v1_0"
 	KokoroModelFile string `json:"kokoro_model_file,omitempty"` // e.g. "model.fp16.onnx", "model.onnx"
 	ZipformerDir    string `json:"zipformer_dir"`     // e.g. "models/sherpa-onnx-streaming-zipformer-en-2023-06-26"
 	NumThreads      int    `json:"num_threads,omitempty"`     // Number of inference threads (default 4)
@@ -60,7 +60,7 @@ type TTSConfig struct {
 }
 
 // Version is the current application version formatted as 1.0.yymmdd.
-const Version = "1.0.261008"
+const Version = "1.0.261010"
 
 // AppConfig is the root configuration struct.
 type AppConfig struct {
@@ -113,7 +113,7 @@ func DefaultConfig() *AppConfig {
 			SherpaTtsBin:   "sherpa-onnx-offline-tts",
 			SherpaKwsBin:   "sherpa-onnx-keyword-spotter",
 			SherpaAsrBin:   "sherpa-onnx-online-websocket-server",
-			KokoroModelDir: "models/kokoro-multi-lang-v1_1",
+			KokoroModelDir: "models/kokoro-multi-lang-v1_0",
 			ZipformerDir:   "models/sherpa-onnx-streaming-zipformer-en-2023-06-26",
 			NumThreads:     4,
 			Provider:       "cpu",

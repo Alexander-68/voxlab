@@ -308,18 +308,18 @@ func FindInstalledKokoroModels(modelsRoot string) []string {
 		}
 	}
 
-	// Sort models logically: v1_1 first, then v1_0 (base then FP16), then legacy v0_19
+	// Sort models logically: v1_0 first (default), then v1_1, then legacy v0_19
 	modelRank := func(m string) int {
 		low := strings.ToLower(m)
 		switch {
-		case strings.Contains(low, "v1_1") && !strings.Contains(low, "int8"):
+		case strings.Contains(low, "v1_0") && !strings.Contains(low, "fp16") && !strings.Contains(low, "int8"):
 			return 50
-		case strings.Contains(low, "v1_1") && strings.Contains(low, "int8"):
-			return 40
-		case strings.Contains(low, "v1_0") && !strings.Contains(low, "fp16"):
-			return 30
 		case strings.Contains(low, "v1_0") && strings.Contains(low, "fp16"):
-			return 25
+			return 45
+		case strings.Contains(low, "v1_1") && !strings.Contains(low, "int8"):
+			return 40
+		case strings.Contains(low, "v1_1") && strings.Contains(low, "int8"):
+			return 30
 		case strings.Contains(low, "v0_19"):
 			return 10
 		default:
@@ -338,7 +338,7 @@ func FindInstalledKokoroModels(modelsRoot string) []string {
 }
 
 // findKokoroModelDir automatically discovers the Kokoro model directory.
-// Priority: explicitly configured valid dir -> latest multi-lang v1.1 -> int8 v1.1 -> v1.0 -> legacy v0.19.
+// Priority: explicitly configured valid dir -> default multi-lang v1.0 -> int8 v1.0 -> v1.1 -> legacy v0.19.
 func findKokoroModelDir(configured string) (string, bool) {
 	if configured != "" {
 		clean := strings.TrimSpace(configured)
@@ -362,18 +362,18 @@ func findKokoroModelDir(configured string) (string, bool) {
 	}
 
 	candidates := []string{
-		filepath.Join("models", "kokoro-multi-lang-v1_1"),
-		filepath.Join("..", "models", "kokoro-multi-lang-v1_1"),
-		filepath.Join("..", "..", "models", "kokoro-multi-lang-v1_1"),
-		filepath.Join("models", "kokoro-int8-multi-lang-v1_1"),
-		filepath.Join("..", "models", "kokoro-int8-multi-lang-v1_1"),
-		filepath.Join("..", "..", "models", "kokoro-int8-multi-lang-v1_1"),
 		filepath.Join("models", "kokoro-multi-lang-v1_0"),
 		filepath.Join("..", "models", "kokoro-multi-lang-v1_0"),
 		filepath.Join("..", "..", "models", "kokoro-multi-lang-v1_0"),
 		filepath.Join("models", "kokoro-int8-multi-lang-v1_0"),
 		filepath.Join("..", "models", "kokoro-int8-multi-lang-v1_0"),
 		filepath.Join("..", "..", "models", "kokoro-int8-multi-lang-v1_0"),
+		filepath.Join("models", "kokoro-multi-lang-v1_1"),
+		filepath.Join("..", "models", "kokoro-multi-lang-v1_1"),
+		filepath.Join("..", "..", "models", "kokoro-multi-lang-v1_1"),
+		filepath.Join("models", "kokoro-int8-multi-lang-v1_1"),
+		filepath.Join("..", "models", "kokoro-int8-multi-lang-v1_1"),
+		filepath.Join("..", "..", "models", "kokoro-int8-multi-lang-v1_1"),
 		filepath.Join("models", "kokoro-en-v0_19"),
 		filepath.Join("..", "models", "kokoro-en-v0_19"),
 		filepath.Join("..", "..", "models", "kokoro-en-v0_19"),

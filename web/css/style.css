@@ -319,6 +319,23 @@ body {
   font-weight: 600;
   color: #fff;
   margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.settings-box.section-disabled {
+  opacity: 0.38;
+  pointer-events: none;
+  filter: grayscale(0.7);
+  user-select: none;
+  transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
+.settings-box.section-disabled input,
+.settings-box.section-disabled select,
+.settings-box.section-disabled button {
+  cursor: not-allowed;
 }
 
 .slider-group {

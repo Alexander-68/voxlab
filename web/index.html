@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VoxLab 1.0.261008 - Voice Pipeline Test Bench</title>
+  <title>VoxLab 1.0.261010 - Voice Pipeline Test Bench</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -13,7 +13,7 @@
       <div class="header-branding">
         <div class="logo-mark">🎙️</div>
         <div>
-          <h1 class="app-title">VoxLab <span class="app-version">1.0.261008</span></h1>
+          <h1 class="app-title">VoxLab <span class="app-version">1.0.261010</span></h1>
           <p class="app-tagline">The voice pipeline test bench for web runtimes</p>
         </div>
       </div>
@@ -81,8 +81,8 @@
           </div>
 
           <!-- DSP Controls -->
-          <div class="settings-box mt-3">
-            <h3>Noise Cancelling & Filters</h3>
+          <div class="settings-box mt-3" id="dsp-settings-box">
+            <h3>Noise Cancelling & Filters <span id="dsp-bypassed-badge" class="badge badge-muted hidden" style="font-size: 10px;">Bypassed in Browser ASR</span></h3>
             <div class="slider-group">
               <div class="slider-header">
                 <label for="noise-gate-slider">Noise Floor Gate</label>
@@ -112,8 +112,8 @@
           </div>
 
           <!-- Wake-Word Activation -->
-          <div class="settings-box mt-3">
-            <h3>Wake-Word Detector (KWS)</h3>
+          <div class="settings-box mt-3" id="kws-settings-box">
+            <h3>Wake-Word Detector (KWS) <span id="kws-disabled-badge" class="badge badge-muted hidden" style="font-size: 10px;">Disabled in Dictation</span></h3>
             <div class="toggle-list">
               <label class="toggle-item">
                 <input type="checkbox" id="chk-kws-enable" checked>

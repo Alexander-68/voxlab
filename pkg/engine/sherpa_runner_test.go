@@ -102,11 +102,11 @@ func TestMapVoiceToSID(t *testing.T) {
 }
 
 func TestFindKokoroModelDir(t *testing.T) {
-	// When empty string is passed, it should discover and prefer kokoro-multi-lang-v1_1
+	// When empty string is passed, it should discover and prefer kokoro-multi-lang-v1_0
 	modelDir, found := findKokoroModelDir("")
 	if found {
-		if !strings.Contains(modelDir, "kokoro-multi-lang-v1_1") {
-			t.Errorf("expected kokoro-multi-lang-v1_1 to be preferred candidate, got: %s", modelDir)
+		if !strings.Contains(modelDir, "kokoro-multi-lang-v1_0") {
+			t.Errorf("expected kokoro-multi-lang-v1_0 to be preferred candidate, got: %s", modelDir)
 		}
 	}
 

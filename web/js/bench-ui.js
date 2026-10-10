@@ -25,12 +25,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const chkWebrtcNs = document.getElementById('chk-webrtc-ns');
   const webrtcNsLabel = document.getElementById('webrtc-ns-label');
   const chkMonitor = document.getElementById('chk-monitor');
+  const dspSettingsBox = document.getElementById('dsp-settings-box');
+  const dspBypassedBadge = document.getElementById('dsp-bypassed-badge');
 
   // KWS
   const chkKwsEnable = document.getElementById('chk-kws-enable');
   const kwsKeywordSelect = document.getElementById('kws-keyword');
   const kwsThreshSlider = document.getElementById('kws-thresh-slider');
   const kwsThreshVal = document.getElementById('kws-thresh-val');
+  const kwsSettingsBox = document.getElementById('kws-settings-box');
+  const kwsDisabledBadge = document.getElementById('kws-disabled-badge');
 
   // Tabs
   const tabBtnCommands = document.getElementById('tab-btn-commands');
@@ -289,6 +293,52 @@ document.addEventListener('DOMContentLoaded', () => {
       engineStatus.textContent = badgeText;
       engineStatus.className = badgeClass;
       engineStatus.title = `Active ASR Engine: ${label}`;
+    }
+
+    // In browser mode: visibly disable panel "Noise Cancelling & Filters" and fix "Audio Capture Source" to web_ui_mic
+    if (engine === 'browser') {
+      if (audioSourceSelect) {
+        audioSourceSelect.value = 'web_ui_mic';
+        audioSourceSelect.disabled = true;
+      }
+      if (sourceStatusText) {
+        sourceStatusText.textContent = 'Active: Browser Web Audio Mic (Fixed for Browser ASR)';
+      }
+      if (capture && capture.isRemoteMode) {
+        capture.setRemoteMode(false);
+        if (btnMicToggle) {
+          btnMicToggle.disabled = false;
+          btnMicToggle.textContent = capture.isRecording ? 'Stop Web Mic' : 'Start Web Mic';
+          btnMicToggle.className = capture.isRecording ? 'btn btn-danger btn-block' : 'btn btn-primary btn-block';
+        }
+        client.setSource('web_ui_mic');
+      }
+      if (dspSettingsBox) {
+        dspSettingsBox.classList.add('section-disabled');
+        dspSettingsBox.querySelectorAll('input, select, button').forEach((el) => { el.disabled = true; });
+      }
+      if (dspBypassedBadge) {
+        dspBypassedBadge.classList.remove('hidden');
+      }
+    } else {
+      if (audioSourceSelect) {
+        audioSourceSelect.disabled = false;
+      }
+      if (sourceStatusText && audioSourceSelect) {
+        const src = audioSourceSelect.value;
+        sourceStatusText.textContent = src === 'web_ui_mic' ? 'Active: Browser Web Audio Mic' :
+          (src === 'host_native_mic' ? 'Connecting to Host Microphone...' : 'Injecting voice_test.wav in real-time...');
+      }
+      if (dspSettingsBox) {
+        dspSettingsBox.classList.remove('section-disabled');
+        dspSettingsBox.querySelectorAll('input, select, button').forEach((el) => { el.disabled = false; });
+      }
+      if (dspBypassedBadge) {
+        dspBypassedBadge.classList.add('hidden');
+      }
+      if (audioSourceSelect) {
+        updateSourceControls(audioSourceSelect.value);
+      }
     }
   }
 
@@ -950,6 +1000,14 @@ document.addEventListener('DOMContentLoaded', () => {
     tabContentCommands.classList.add('active');
     tabContentDictation.classList.remove('active');
     if (btnPttCommand) btnPttCommand.style.display = '';
+    // Re-enable Wake-Word Detector (KWS) in commands mode
+    if (kwsSettingsBox) {
+      kwsSettingsBox.classList.remove('section-disabled');
+      kwsSettingsBox.querySelectorAll('input, select, button').forEach((el) => { el.disabled = false; });
+    }
+    if (kwsDisabledBadge) {
+      kwsDisabledBadge.classList.add('hidden');
+    }
   });
 
   tabBtnDictation.addEventListener('click', () => {
@@ -958,6 +1016,14 @@ document.addEventListener('DOMContentLoaded', () => {
     tabContentDictation.classList.add('active');
     tabContentCommands.classList.remove('active');
     if (btnPttCommand) btnPttCommand.style.display = 'none';
+    // Visibly disable Wake-Word Detector (KWS) in dictation mode
+    if (kwsSettingsBox) {
+      kwsSettingsBox.classList.add('section-disabled');
+      kwsSettingsBox.querySelectorAll('input, select, button').forEach((el) => { el.disabled = true; });
+    }
+    if (kwsDisabledBadge) {
+      kwsDisabledBadge.classList.remove('hidden');
+    }
   });
 
   btnClearLog.addEventListener('click', () => {
