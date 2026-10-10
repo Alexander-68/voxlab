@@ -82,6 +82,14 @@ func (p *DSPProcessor) GateThreshold() float64 {
 	return p.gateDBFS
 }
 
+// IsGateEnabled returns true if noise floor gating is active.
+// When gateDBFS <= -60.0 dBFS (the leftmost slider position), gating is completely disabled.
+func (p *DSPProcessor) IsGateEnabled() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.gateDBFS > -60.0
+}
+
 // SetAGCEnabled toggles automatic gain control.
 func (p *DSPProcessor) SetAGCEnabled(enabled bool) {
 	p.mu.Lock()
@@ -175,7 +183,8 @@ func (p *DSPProcessor) ProcessChunk(samples []float32) (processed []float32, rms
 	rms, dbfs = CalculateRMS(out)
 
 	// Step 3: Noise gate check
-	if dbfs < p.gateDBFS {
+	// When threshold is set to leftmost position (<= -60 dBFS), gating is completely OFF
+	if p.gateDBFS > -60.0 && dbfs < p.gateDBFS {
 		// Silence below noise floor
 		for i := range out {
 			out[i] = 0.0

@@ -182,6 +182,18 @@ class AudioCapture {
       this.analyserNode.getByteTimeDomainData(timeData);
       this.analyserNode.getByteFrequencyData(freqData);
 
+      // Real-time audio level measurement for continuous non-interrupted dBFS metering
+      let sumSquares = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        const s = (timeData[i] - 128) / 128.0;
+        sumSquares += s * s;
+      }
+      const rms = Math.sqrt(sumSquares / bufferLength);
+      const dbfs = rms <= 1e-5 ? -100 : Math.round(20 * Math.log10(rms));
+      if (this.onMeter) {
+        this.onMeter(rms, dbfs);
+      }
+
       const ctx = this.canvasCtx;
       const width = this.canvas.width;
       const height = this.canvas.height;

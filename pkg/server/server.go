@@ -43,6 +43,7 @@ type Server struct {
 	activeSource  string
 	sourceMu      sync.Mutex
 	audioInChan   chan []float32
+	asrChan       chan asrWorkItem
 
 	asrEngineMode string // "sherpa", "browser", "sim"
 	engineMu      sync.RWMutex
@@ -63,6 +64,12 @@ type Server struct {
 
 	meterMu       sync.Mutex
 	lastMeterTime time.Time
+}
+
+type asrWorkItem struct {
+	chunk       []float32
+	state       statemachine.State
+	isDictation bool
 }
 
 // NewServer initializes the VoxLab server with all pipelines.
@@ -118,6 +125,7 @@ func NewServer(cfg *config.AppConfig) (*Server, error) {
 		hostMicSource: hostMic,
 		activeSource:  "web_ui_mic",
 		audioInChan:   make(chan []float32, 200),
+		asrChan:       make(chan asrWorkItem, 200),
 		ctx:           ctx,
 		cancel:        cancel,
 		clients:       make(map[*websocket.Conn]*sync.Mutex),
@@ -151,8 +159,9 @@ func NewServer(cfg *config.AppConfig) (*Server, error) {
 
 // Start begins listening and serving HTTP & WebSocket requests.
 func (s *Server) Start() error {
-	// Start audio processing loop
+	// Start audio processing loop and decoupled ASR loop
 	go s.audioPipelineLoop(s.ctx)
+	go s.asrPipelineLoop(s.ctx)
 
 	// Connect default web mic source
 	_ = s.webMicSource.Start(s.ctx, s.audioInChan)
@@ -392,6 +401,7 @@ func (s *Server) processIncomingAudio(rawChunk []float32) {
 				"rms":           rms,
 				"dbfs":          dbfs,
 				"passed_gate":   passedGate,
+				"gate_disabled": !s.dsp.IsGateEnabled(),
 				"echo_muted":    s.dsp.IsEchoMuted(),
 				"source":        s.activeSource,
 				"wave":          wave,
@@ -443,8 +453,38 @@ func (s *Server) processIncomingAudio(rawChunk []float32) {
 		return
 	}
 
+	// Forward clean audio chunk to decoupled ASR pipeline worker
+	// so the real-time audioPipelineLoop and 30Hz dBFS audio.meter broadcasts are NEVER interrupted!
 	if state == statemachine.StateCommandListen {
-		asrRes, err := s.engine.ProcessASRChunk(cleanChunk, false)
+		select {
+		case s.asrChan <- asrWorkItem{chunk: cleanChunk, state: state, isDictation: false}:
+		default:
+		}
+	} else if state == statemachine.StateAnnotationListen {
+		select {
+		case s.asrChan <- asrWorkItem{chunk: cleanChunk, state: state, isDictation: true}:
+		default:
+		}
+	}
+}
+
+func (s *Server) asrPipelineLoop(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case item, ok := <-s.asrChan:
+			if !ok {
+				return
+			}
+			s.handleASRWorkItem(item)
+		}
+	}
+}
+
+func (s *Server) handleASRWorkItem(item asrWorkItem) {
+	if item.state == statemachine.StateCommandListen {
+		asrRes, err := s.engine.ProcessASRChunk(item.chunk, false)
 		if err != nil {
 			log.Printf("[Error] Command ASR error: %v", err)
 			return
@@ -471,8 +511,8 @@ func (s *Server) processIncomingAudio(rawChunk []float32) {
 				s.handleFinalCommandTranscript(asrRes.Transcript)
 			}
 		}
-	} else if state == statemachine.StateAnnotationListen {
-		asrRes, err := s.engine.ProcessASRChunk(cleanChunk, true)
+	} else if item.state == statemachine.StateAnnotationListen {
+		asrRes, err := s.engine.ProcessASRChunk(item.chunk, true)
 		if err != nil {
 			log.Printf("[Error] Dictation ASR error: %v", err)
 			return
@@ -678,7 +718,11 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			case "set_noise_gate":
 				if th, ok := req["threshold_dbfs"].(float64); ok {
 					s.dsp.SetGateThreshold(th)
-					log.Printf("[DSP] Noise gate threshold set to %.1f dBFS", th)
+					if s.dsp.IsGateEnabled() {
+						log.Printf("[DSP] Noise gate threshold set to %.1f dBFS", th)
+					} else {
+						log.Printf("[DSP] Noise gate set to completely OFF (bypassed)")
+					}
 				}
 
 			case "set_kws_threshold":

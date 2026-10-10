@@ -21,9 +21,9 @@ func TestFormatDictationPhrase(t *testing.T) {
 			expected: "",
 		},
 		{
-			name:     "No punctuation spoken - appends semicolon",
+			name:     "No punctuation spoken - clean phrase",
 			input:    "patient is doing well",
-			expected: "Patient is doing well;",
+			expected: "Patient is doing well",
 		},
 		{
 			name:     "Spoken period - no semicolon appended",
@@ -56,19 +56,19 @@ func TestFormatDictationPhrase(t *testing.T) {
 			expected: "Findings: clear lungs.",
 		},
 		{
-			name:     "Spoken semicolon keyword in middle - ends with auto semicolon",
+			name:     "Spoken semicolon keyword in middle",
 			input:    "patient stable semicolon clear lungs",
-			expected: "Patient stable; clear lungs;",
+			expected: "Patient stable; clear lungs",
 		},
 		{
-			name:     "Spoken semicolon keyword at end - no duplicate semicolon",
+			name:     "Spoken semicolon keyword at end",
 			input:    "patient stable semicolon",
 			expected: "Patient stable;",
 		},
 		{
-			name:     "Spoken comma inside phrase - ends with auto semicolon",
+			name:     "Spoken comma inside phrase",
 			input:    "headache comma nausea comma and fatigue",
-			expected: "Headache, nausea, and fatigue;",
+			expected: "Headache, nausea, and fatigue",
 		},
 		{
 			name:     "Spoken comma at end - no semicolon added",
@@ -78,7 +78,7 @@ func TestFormatDictationPhrase(t *testing.T) {
 		{
 			name:     "Spoken new line keyword",
 			input:    "first note new line second note",
-			expected: "First note\nSecond note;",
+			expected: "First note\nSecond note",
 		},
 		{
 			name:     "Spoken new paragraph keyword",
@@ -88,7 +88,7 @@ func TestFormatDictationPhrase(t *testing.T) {
 		{
 			name:     "Leading new line keyword",
 			input:    "new line follow up next week",
-			expected: "\nFollow up next week;",
+			expected: "\nFollow up next week",
 		},
 		{
 			name:     "Multiple sentences with spoken periods",
@@ -112,28 +112,28 @@ func TestAppendDictationPhrase(t *testing.T) {
 
 	// Turn 1: no punctuation spoken
 	draft = AppendDictationPhrase(draft, "patient presented with mild fever")
-	expected1 := "Patient presented with mild fever;"
+	expected1 := "Patient presented with mild fever"
 	if draft != expected1 {
 		t.Fatalf("Turn 1 failed: got %q, expected %q", draft, expected1)
 	}
 
 	// Turn 2: spoken comma and period
 	draft = AppendDictationPhrase(draft, "temperature 38 degrees comma pulse 85 period")
-	expected2 := "Patient presented with mild fever; Temperature 38 degrees, pulse 85."
+	expected2 := "Patient presented with mild fever temperature 38 degrees, pulse 85."
 	if draft != expected2 {
 		t.Fatalf("Turn 2 failed: got %q, expected %q", draft, expected2)
 	}
 
 	// Turn 3: spoken new line
 	draft = AppendDictationPhrase(draft, "new line lungs are clear")
-	expected3 := "Patient presented with mild fever; Temperature 38 degrees, pulse 85.\nLungs are clear;"
+	expected3 := "Patient presented with mild fever temperature 38 degrees, pulse 85.\nLungs are clear"
 	if draft != expected3 {
 		t.Fatalf("Turn 3 failed: got %q, expected %q", draft, expected3)
 	}
 
 	// Turn 4: question mark
 	draft = AppendDictationPhrase(draft, "any known drug allergies question mark")
-	expected4 := "Patient presented with mild fever; Temperature 38 degrees, pulse 85.\nLungs are clear; Any known drug allergies?"
+	expected4 := "Patient presented with mild fever temperature 38 degrees, pulse 85.\nLungs are clear any known drug allergies?"
 	if draft != expected4 {
 		t.Fatalf("Turn 4 failed: got %q, expected %q", draft, expected4)
 	}

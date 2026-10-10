@@ -27,9 +27,15 @@ var (
 	reAfterNewline   = regexp.MustCompile(`(\n+\s*)([a-z])`)
 )
 
+var reSentenceEnd = regexp.MustCompile(`[.?!:\n]$`)
+
 // FormatDictationPhrase formats a completed dictation phrase by converting spoken punctuation
-// words to symbols, appending a semicolon if no punctuation was spoken, and ensuring proper spacing and casing.
+// words to symbols and ensuring proper spacing and casing without forcing artificial semicolons.
 func FormatDictationPhrase(rawText string) string {
+	return formatDictationPhraseInternal(rawText, false)
+}
+
+func formatDictationPhraseInternal(rawText string, isContinuation bool) string {
 	text := strings.Trim(rawText, " \t\r\n")
 	if text == "" {
 		return ""
@@ -57,22 +63,19 @@ func FormatDictationPhrase(rawText string) string {
 		return ""
 	}
 
-	// 3. Append semicolon if no punctuation was spoken at the end of the phrase
-	if !reEndsWithPunct.MatchString(text) {
-		text += ";"
-	}
-
-	// 4. Capitalization
-	text = reLeadingChar.ReplaceAllStringFunc(text, func(s string) string {
-		r := []rune(s)
-		for i, c := range r {
-			if unicode.IsLetter(c) {
-				r[i] = unicode.ToUpper(c)
-				break
+	// 3. Capitalization
+	if !isContinuation {
+		text = reLeadingChar.ReplaceAllStringFunc(text, func(s string) string {
+			r := []rune(s)
+			for i, c := range r {
+				if unicode.IsLetter(c) {
+					r[i] = unicode.ToUpper(c)
+					break
+				}
 			}
-		}
-		return string(r)
-	})
+			return string(r)
+		})
+	}
 
 	text = reAfterSentence.ReplaceAllStringFunc(text, func(s string) string {
 		r := []rune(s)
@@ -101,11 +104,12 @@ func FormatDictationPhrase(rawText string) string {
 
 // AppendDictationPhrase appends a newly formatted phrase to the existing draft.
 func AppendDictationPhrase(currentText, newPhrase string) string {
-	formatted := FormatDictationPhrase(newPhrase)
-	if formatted == "" {
-		return currentText
-	}
 	current := strings.TrimRight(currentText, " \t\r\n")
+	isContinuation := len(current) > 0 && !reSentenceEnd.MatchString(current)
+	formatted := formatDictationPhraseInternal(newPhrase, isContinuation)
+	if formatted == "" {
+		return current
+	}
 	if current == "" {
 		return formatted
 	}

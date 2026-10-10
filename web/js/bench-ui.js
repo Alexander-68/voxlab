@@ -111,8 +111,17 @@ document.addEventListener('DOMContentLoaded', () => {
   capture.setCanvas(scopeCanvas);
   capture.clearVisualizer();
 
+  // Local continuous 60 FPS meter update when Web UI mic is active
+  capture.onMeter = (rms, localDbfs) => {
+    if (capture.isRecording && (!audioSourceSelect || audioSourceSelect.value === 'web_ui_mic')) {
+      meterDbfs.textContent = `${localDbfs} dBFS`;
+      const norm = Math.max(0, Math.min(100, ((localDbfs + 60) / 60) * 100));
+      vuBar.style.width = `${norm}%`;
+    }
+  };
+
   // --- Dictation Punctuation & Formatting Helpers ---
-  function formatDictationPhrase(rawText) {
+  function formatDictationPhrase(rawText, isContinuation = false) {
     if (!rawText) return '';
     let text = rawText.trim();
     if (!text) return '';
@@ -142,13 +151,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!text) return '';
 
-    // Append semicolon if no punctuation was spoken at the end of the phrase
-    if (!/[.;,!?:\n]$/.test(text)) {
-      text += ';';
+    // If NOT a continuation of an unfinished sentence, capitalize the first letter
+    if (!isContinuation) {
+      text = text.replace(/^(\s*)([a-z])/i, (_, p1, p2) => p1 + p2.toUpperCase());
     }
-
-    // Capitalize first letter of the phrase (accounting for leading newlines)
-    text = text.replace(/^(\s*)([a-z])/i, (_, p1, p2) => p1 + p2.toUpperCase());
     // Capitalize after sentence-ending punctuation (. ? !)
     text = text.replace(/([.?!]\s+)([a-z])/g, (_, p1, p2) => p1 + p2.toUpperCase());
     // Capitalize after newlines
@@ -158,10 +164,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function appendDictationPhrase(currentText, newPhrase) {
-    const formatted = formatDictationPhrase(newPhrase);
-    if (!formatted) return currentText || '';
-    if (!currentText || !currentText.trim()) return formatted;
-    const current = currentText.trimEnd();
+    if (!newPhrase) return currentText || '';
+    const current = (currentText || '').trimEnd();
+    const isContinuation = current.length > 0 && !/[.?!:\n]$/.test(current);
+    const formatted = formatDictationPhrase(newPhrase, isContinuation);
+    if (!formatted) return current;
+    if (!current) return formatted;
     if (formatted.startsWith('\n')) {
       return current + formatted;
     }
@@ -609,12 +617,15 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   client.on('audio.meter', (data) => {
-    const dbfs = Math.round(data.dbfs);
-    meterDbfs.textContent = `${dbfs} dBFS`;
+    // Only update meter from server if not driven locally by Web Audio mic
+    if (!capture.isRecording || data.source !== 'web_ui_mic') {
+      const dbfs = Math.round(data.dbfs);
+      meterDbfs.textContent = `${dbfs} dBFS`;
 
-    // Calculate meter width: -60 dBFS = 0%, 0 dBFS = 100%
-    const norm = Math.max(0, Math.min(100, ((dbfs + 60) / 60) * 100));
-    vuBar.style.width = `${norm}%`;
+      // Calculate meter width: -60 dBFS = 0%, 0 dBFS = 100%
+      const norm = Math.max(0, Math.min(100, ((dbfs + 60) / 60) * 100));
+      vuBar.style.width = `${norm}%`;
+    }
 
     if (agcVal && data.agc_gain !== undefined) {
       agcVal.textContent = `${data.agc_gain.toFixed(1)}x`;
@@ -628,6 +639,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (data.echo_muted) {
       gateIndicator.className = 'gate-tag gate-closed';
       gateIndicator.textContent = 'ECHO MUTED';
+    } else if (data.gate_disabled) {
+      gateIndicator.className = 'gate-tag gate-open';
+      gateIndicator.textContent = 'GATE OFF';
     } else if (data.passed_gate) {
       gateIndicator.className = 'gate-tag gate-open';
       gateIndicator.textContent = 'GATE OPEN';
@@ -1073,8 +1087,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // Sliders
   noiseGateSlider.addEventListener('input', (e) => {
     const val = parseFloat(e.target.value);
-    noiseGateVal.textContent = `${val} dBFS`;
-    client.setNoiseGate(val);
+    if (val <= -60) {
+      noiseGateVal.textContent = 'OFF';
+      client.setNoiseGate(-60);
+    } else {
+      noiseGateVal.textContent = `${val} dBFS`;
+      client.setNoiseGate(val);
+    }
   });
 
   kwsThreshSlider.addEventListener('input', (e) => {

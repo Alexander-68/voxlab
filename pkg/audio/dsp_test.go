@@ -88,6 +88,23 @@ func TestDSPNoiseGateAndEcho(t *testing.T) {
 	if passedDuringEcho {
 		t.Errorf("expected chunk to be muted during echo mute")
 	}
+
+	// Test threshold <= -60 dBFS completely turns gate OFF
+	dsp.SetEchoMuted(false)
+	dsp.SetGateThreshold(-60.0)
+	if dsp.IsGateEnabled() {
+		t.Errorf("expected gate to be disabled when threshold <= -60.0 dBFS")
+	}
+	outNoise, _, _, passedOff := dsp.ProcessChunk(lowChunk)
+	if !passedOff {
+		t.Errorf("expected low noise chunk to pass when gate is OFF")
+	}
+	for i, v := range outNoise {
+		if v == 0 {
+			t.Errorf("expected noise chunk samples to remain untouched when gate is OFF at %d", i)
+			break
+		}
+	}
 }
 
 func TestWAVEncodeDecode(t *testing.T) {

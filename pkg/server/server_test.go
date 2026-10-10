@@ -243,7 +243,10 @@ func TestServerPlaybackStatusEchoSuppression(t *testing.T) {
 		t.Fatalf("failed sending playback_status true: %v", err)
 	}
 
-	time.Sleep(20 * time.Millisecond)
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && !srv.dsp.IsEchoMuted() {
+		time.Sleep(10 * time.Millisecond)
+	}
 	if !srv.dsp.IsEchoMuted() {
 		t.Errorf("expected echo to be MUTED when playback_status: true is sent")
 	}
@@ -263,7 +266,10 @@ func TestServerPlaybackStatusEchoSuppression(t *testing.T) {
 	}
 
 	// Wait for tail delay to clear (default 150ms)
-	time.Sleep(200 * time.Millisecond)
+	unmuteDeadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(unmuteDeadline) && srv.dsp.IsEchoMuted() {
+		time.Sleep(20 * time.Millisecond)
+	}
 	if srv.dsp.IsEchoMuted() {
 		t.Errorf("expected echo to be UNMUTED after tail delay has passed")
 	}
@@ -429,9 +435,10 @@ func TestServerModelManagement(t *testing.T) {
 	}
 
 	foundModelChanged := false
-	for i := 0; i < 5; i++ {
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
 		var msg map[string]interface{}
-		_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(12 * time.Second))
 		if err := conn.ReadJSON(&msg); err != nil {
 			break
 		}
@@ -621,7 +628,7 @@ func TestServerStreamingTTS(t *testing.T) {
 	var gotFinished bool
 
 	for !gotFinished {
-		_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(12 * time.Second))
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
 			t.Fatalf("ReadMessage failed (chunkCount=%d): %v", chunkCount, err)

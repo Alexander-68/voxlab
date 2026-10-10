@@ -26,6 +26,7 @@ type SherpaRunner struct {
 	cfg           *config.AppConfig
 	simulator     *SimulatorEngine
 	warmTTS       WarmTTS
+	warmASR       WarmASR
 	mu            sync.Mutex
 	turnAudio     []float32
 	speechChunks  int
@@ -44,10 +45,24 @@ func NewSherpaRunner(cfg *config.AppConfig) *SherpaRunner {
 	if dir, ok := findKokoroModelDir(cfg.Engine.KokoroModelDir); ok {
 		cfg.Engine.KokoroModelDir = dir
 	}
-	return &SherpaRunner{
+	runner := &SherpaRunner{
 		cfg:       cfg,
 		simulator: NewSimulatorEngine(),
 	}
+
+	// Eagerly warm up ASR in background so first spoken utterance has zero cold start latency
+	go func() {
+		tok, enc, dec, joi, modelsExist := findZipformerModelDir(cfg.Engine.ZipformerDir)
+		if modelsExist {
+			if warm, err := NewWarmASR(tok, enc, dec, joi); err == nil {
+				runner.mu.Lock()
+				runner.warmASR = warm
+				runner.mu.Unlock()
+			}
+		}
+	}()
+
+	return runner
 }
 
 func (r *SherpaRunner) Name() string {
@@ -92,16 +107,42 @@ func (r *SherpaRunner) ProcessASRChunk(chunk []float32, isDictation bool) (*ASRR
 		}
 	}
 
-	// Endpointing: when speech occurred and trailing silence hits ~450ms (15 chunks @ 30ms)
-	// and we have at least 0.4s of audio
-	if r.speechChunks >= 8 && r.silenceChunks >= 15 && len(r.turnAudio) >= 16000*4/10 {
+	// Trailing silence pause endpointing:
+	// For dictation: allow natural pauses between thoughts (~1260ms = 42 chunks @ 30ms).
+	// For commands: allow ~840ms (28 chunks @ 30ms) to prevent premature cutoffs.
+	requiredSilenceChunks := 28
+	if isDictation {
+		requiredSilenceChunks = 42
+	}
+
+	if r.speechChunks >= 8 && r.silenceChunks >= requiredSilenceChunks && len(r.turnAudio) >= 16000*4/10 {
 		audioToTranscribe := make([]float32, len(r.turnAudio))
 		copy(audioToTranscribe, r.turnAudio)
 		r.turnAudio = nil
 		r.speechChunks = 0
 		r.silenceChunks = 0
 
-		res, err := r.transcribeWAV(binPath, tok, enc, dec, joi, audioToTranscribe)
+		var res *ASRResult
+		var err error
+
+		// 1. Try warm in-memory streaming ASR first (instant inference, zero cold starts)
+		if r.warmASR != nil && r.warmASR.IsWarm() {
+			res, err = r.warmASR.Transcribe(audioToTranscribe)
+		} else if tok != "" && enc != "" {
+			if warm, warmErr := NewWarmASR(tok, enc, dec, joi); warmErr == nil {
+				r.warmASR = warm
+				res, err = r.warmASR.Transcribe(audioToTranscribe)
+			}
+		}
+
+		// 2. Fall back to one-shot CLI execution if warm server unavailable
+		if res == nil || err != nil {
+			if err != nil {
+				log.Printf("[SherpaRunner] Warm ASR unavailable (%v), falling back to one-shot CLI", err)
+			}
+			res, err = r.transcribeWAV(binPath, tok, enc, dec, joi, audioToTranscribe)
+		}
+
 		if err != nil {
 			log.Printf("[SherpaRunner] ASR inference error: %v, falling back to simulator", err)
 			return r.simulator.ProcessASRChunk(chunk, isDictation)
@@ -204,6 +245,8 @@ func findZipformerModelDir(configured string) (tokens, encoder, decoder, joiner 
 	candidates := []string{
 		configured,
 		filepath.Join("models", "sherpa-onnx-streaming-zipformer-en-2023-06-26"),
+		filepath.Join("..", "models", "sherpa-onnx-streaming-zipformer-en-2023-06-26"),
+		filepath.Join("..", "..", "models", "sherpa-onnx-streaming-zipformer-en-2023-06-26"),
 	}
 	for _, c := range candidates {
 		if fi, err := os.Stat(c); err == nil && fi.IsDir() {
@@ -715,6 +758,10 @@ func (r *SherpaRunner) Close() error {
 	if r.warmTTS != nil {
 		r.warmTTS.Close()
 		r.warmTTS = nil
+	}
+	if r.warmASR != nil {
+		r.warmASR.Close()
+		r.warmASR = nil
 	}
 	return nil
 }
