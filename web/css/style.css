@@ -626,17 +626,32 @@ input[type="range"] {
   outline: none;
 }
 
-.tts-metrics-row {
+.tts-metrics-lines {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
   font-size: 11px;
-  color: var(--text-muted);
-  margin-top: 6px;
 }
 
-.tts-metrics-row strong {
-  color: var(--cyan);
+.tts-metric-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 0;
+}
+
+.tts-metric-label {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.tts-metric-line strong {
   font-family: var(--font-mono);
+  color: var(--text-main);
+  font-size: 11px;
 }
 
 /* Latency Grid */

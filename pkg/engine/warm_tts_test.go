@@ -67,3 +67,26 @@ func TestOptimizeStreamingClauses(t *testing.T) {
 		t.Errorf("expected semicolon split, got %q", out3)
 	}
 }
+
+func TestNormalizeTTSTextWithPauses(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"Hello... world", "Hello; world"},
+		{"System checking... complete.", "System checking; complete."},
+		{"Loading...", "Loading."},
+		{"Loading...   ", "Loading."},
+		{"Wait [pause] let me check", "Wait; let me check"},
+		{"Channel 1 -- armed", "Channel 1; armed"},
+		{"Channel 1 — armed", "Channel 1; armed"},
+	}
+
+	for _, c := range cases {
+		got := normalizeTTSText(c.in)
+		if got != c.want {
+			t.Errorf("normalizeTTSText(%q) = %q; want %q", c.in, got, c.want)
+		}
+	}
+}
+

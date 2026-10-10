@@ -428,7 +428,7 @@ func newPlatformWarmTTS(
 		cfg.RuleFsts = toCString(strings.Join(parts, ","), &keep)
 	}
 	cfg.MaxNumSentences = 1
-	cfg.SilenceScale = 0.2
+	cfg.SilenceScale = 0.5
 
 	t0 := time.Now()
 	ttsPtr, _, callErr := createFn.Call(uintptr(unsafe.Pointer(&cfg)))

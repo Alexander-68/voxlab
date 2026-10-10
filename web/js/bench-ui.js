@@ -877,9 +877,11 @@ document.addEventListener('DOMContentLoaded', () => {
       source.connect(ctx.destination);
 
       const now = ctx.currentTime;
+      // Natural inter-sentence breathing pause between separate streaming chunks
+      const interChunkPauseSec = 0.24;
       const startTime = Math.max(now + 0.015, streamNextStartTime);
       source.start(startTime);
-      streamNextStartTime = startTime + audioBuf.duration;
+      streamNextStartTime = startTime + audioBuf.duration + interChunkPauseSec;
 
       activeAudioSources.push(source);
 

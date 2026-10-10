@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -600,6 +601,7 @@ func (r *SherpaRunner) SynthesizeStream(req TTSRequest, onChunk func(chunk TTSCh
 		fmt.Sprintf("--output-filename=%s", tempWav),
 		fmt.Sprintf("--num-threads=%d", numThreads),
 		fmt.Sprintf("--provider=%s", provider),
+		"--tts-silence-scale=0.5",
 	}
 
 	var lexicons []string
@@ -1022,7 +1024,13 @@ func mapVoiceToSID(voice string, version string) int {
 	}
 }
 
-// normalizeTTSText converts full-width and non-ASCII punctuation to standard ASCII equivalents for TTS.
+var (
+	reTrailingDots = regexp.MustCompile(`\.{2,}\s*$`)
+	reMultiDot     = regexp.MustCompile(`\.{2,}`)
+)
+
+// normalizeTTSText converts full-width and non-ASCII punctuation to standard ASCII equivalents for TTS,
+// and maps ellipses and pause markers to symbols that Kokoro executes as natural pauses.
 func normalizeTTSText(text string) string {
 	r := strings.NewReplacer(
 		"，", ", ",
@@ -1038,10 +1046,37 @@ func normalizeTTSText(text string) string {
 		"”", "\"",
 		"‘", "'",
 		"’", "'",
-		"—", "-",
-		"…", "...",
+		"……", "; ",
+		"…", "; ",
+		"[pause]", "; ",
+		"<pause>", "; ",
+		"(pause)", "; ",
+		" -- ", "; ",
+		"--", "; ",
+		" — ", "; ",
+		"—", "; ",
 	)
-	return strings.TrimSpace(r.Replace(text))
+	text = strings.TrimSpace(r.Replace(text))
+
+	// If text ends with multiple dots (e.g. "Loading..."), normalize to a single period
+	text = reTrailingDots.ReplaceAllString(text, ".")
+
+	// Inside text, convert runs of 2+ dots ("..." or "..") into semicolon pauses ("; ")
+	// because Kokoro has no token for "..." and espeak-ng drops them, causing words to stick together.
+	text = reMultiDot.ReplaceAllString(text, "; ")
+
+	// Clean up any double semicolons, leading space before punctuation, or double spaces
+	for strings.Contains(text, "; ;") || strings.Contains(text, ";;") {
+		text = strings.ReplaceAll(text, "; ;", "; ")
+		text = strings.ReplaceAll(text, ";;", "; ")
+	}
+	text = strings.ReplaceAll(text, " ;", ";")
+	text = strings.ReplaceAll(text, " :", ":")
+	for strings.Contains(text, "  ") {
+		text = strings.ReplaceAll(text, "  ", " ")
+	}
+
+	return strings.TrimSpace(text)
 }
 
 // optimizeStreamingClauses converts semicolons, colons, and multi-word comma clauses
