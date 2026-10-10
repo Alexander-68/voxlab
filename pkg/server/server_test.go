@@ -654,5 +654,63 @@ func TestServerStreamingTTS(t *testing.T) {
 	}
 }
 
+func TestServerSpeechEnhancerWebSocket(t *testing.T) {
+	srv := setupTestServer(t)
 
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws", srv.handleWebSocket)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
 
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to dial websocket: %v", err)
+	}
+	defer conn.Close()
+
+	// Initial voice.state message
+	var initialMsg map[string]interface{}
+	_ = conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+	if err := conn.ReadJSON(&initialMsg); err != nil {
+		t.Fatalf("failed to read initial message: %v", err)
+	}
+	if initialMsg["event"] != "voice.state" {
+		t.Fatalf("expected initial voice.state, got %v", initialMsg["event"])
+	}
+
+	// Send set_speech_enhancer action
+	action := map[string]interface{}{
+		"action":  "set_speech_enhancer",
+		"enabled": true,
+		"model":   "gtcrn",
+	}
+	if err := conn.WriteJSON(action); err != nil {
+		t.Fatalf("failed to send set_speech_enhancer: %v", err)
+	}
+
+	// Read reply for enhancer.changed
+	foundChanged := false
+	for i := 0; i < 5; i++ {
+		var reply map[string]interface{}
+		_ = conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+		if err := conn.ReadJSON(&reply); err != nil {
+			break
+		}
+		if reply["event"] == "enhancer.changed" {
+			foundChanged = true
+			data, _ := reply["data"].(map[string]interface{})
+			if data["enabled"] != true {
+				t.Errorf("expected enabled=true, got %v", data["enabled"])
+			}
+			if data["model"] != "gtcrn" {
+				t.Errorf("expected model=gtcrn, got %v", data["model"])
+			}
+			break
+		}
+	}
+
+	if !foundChanged {
+		t.Errorf("expected enhancer.changed event over WebSocket")
+	}
+}

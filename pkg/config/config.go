@@ -12,8 +12,18 @@ type AudioConfig struct {
 	ChunkSamples          int     `json:"chunk_samples"`            // 480 samples = 30ms @ 16kHz
 	NoiseGateThresholdDBFS float64 `json:"noise_gate_threshold_dbfs"` // e.g. -42.0 dBFS
 	HighPassCutoffHz      float64 `json:"high_pass_cutoff_hz"`      // e.g. 80.0 Hz
-	AGCEnabled            bool    `json:"agc_enabled"`
-	TargetRMS             float64 `json:"target_rms"`               // e.g. 0.12 (-18 dBFS)
+	AGCEnabled            bool           `json:"agc_enabled"`
+	TargetRMS             float64        `json:"target_rms"`               // e.g. 0.12 (-18 dBFS)
+	Enhancer              EnhancerConfig `json:"enhancer"`
+}
+
+// EnhancerConfig defines neural speech enhancement / denoising parameters.
+type EnhancerConfig struct {
+	Enabled    bool   `json:"enabled"`               // Whether neural denoising is active (default false)
+	ModelType  string `json:"model_type"`            // "gtcrn" or "dpdfnet" (default "gtcrn")
+	ModelPath  string `json:"model_path,omitempty"`  // Path to model, e.g. "models/gtcrn_simple.onnx"
+	NumThreads int    `json:"num_threads,omitempty"` // Number of threads (default 1)
+	Provider   string `json:"provider,omitempty"`    // Execution provider: "cpu"
 }
 
 // KWSConfig defines keyword spotting parameters.
@@ -91,6 +101,13 @@ func DefaultConfig() *AppConfig {
 			HighPassCutoffHz:      80.0,
 			AGCEnabled:            true,
 			TargetRMS:             0.12,
+			Enhancer: EnhancerConfig{
+				Enabled:    false,
+				ModelType:  "gtcrn",
+				ModelPath:  "models/gtcrn_simple.onnx",
+				NumThreads: 1,
+				Provider:   "cpu",
+			},
 		},
 		KWS: KWSConfig{
 			Enabled:            false,

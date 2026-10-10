@@ -31,6 +31,7 @@ type Server struct {
 	cfg           *config.AppConfig
 	httpServer    *http.Server
 	dsp           *audio.DSPProcessor
+	enhancer      audio.SpeechEnhancer
 	ringBuffer    *audio.RingBuffer
 	stateMachine  *statemachine.StateMachine
 	engine        engine.SpeechEngine
@@ -97,12 +98,14 @@ func NewServer(cfg *config.AppConfig) (*Server, error) {
 	ttsMgr := tts.NewTTSManager(sherpaRunner, dsp)
 	webMic := audio.NewWebSocketSource()
 	hostMic := audio.NewHostNativeSource(cfg.Audio.SampleRate, cfg.Audio.ChunkSamples)
+	enhancer := audio.NewSpeechEnhancer(filepath.Join("bin"), cfg.Engine.ModelDir, cfg.Audio.Enhancer)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	s := &Server{
 		cfg:           cfg,
 		dsp:           dsp,
+		enhancer:      enhancer,
 		ringBuffer:    ringBuf,
 		stateMachine:  sm,
 		engine:        eng,
@@ -136,6 +139,9 @@ func NewServer(cfg *config.AppConfig) (*Server, error) {
 				"asr_engine_name": s.engineDisplayName(),
 				"tts_model":       ttsModel,
 				"tts_is_neural":   isNeural,
+				"enhancer_on":     s.enhancer != nil && s.enhancer.IsEnabled(),
+				"enhancer_type":   s.enhancerModelType(),
+				"enhancer_name":   s.enhancerName(),
 			},
 		})
 	})
@@ -187,6 +193,9 @@ func (s *Server) Stop(ctx context.Context) error {
 	if s.wavSource != nil {
 		_ = s.wavSource.Stop()
 	}
+	if s.enhancer != nil {
+		_ = s.enhancer.Close()
+	}
 	if s.httpServer != nil {
 		return s.httpServer.Shutdown(ctx)
 	}
@@ -197,6 +206,10 @@ func (s *Server) Stop(ctx context.Context) error {
 func (s *Server) SwitchSource(source string) {
 	s.sourceMu.Lock()
 	defer s.sourceMu.Unlock()
+
+	if s.enhancer != nil {
+		s.enhancer.Reset()
+	}
 
 	if s.activeSource == source {
 		return
@@ -289,6 +302,20 @@ func (s *Server) engineDisplayName() string {
 	}
 }
 
+func (s *Server) enhancerModelType() string {
+	if s.enhancer == nil {
+		return "none"
+	}
+	return s.enhancer.ModelType()
+}
+
+func (s *Server) enhancerName() string {
+	if s.enhancer == nil {
+		return "None"
+	}
+	return s.enhancer.Name()
+}
+
 // audioPipelineLoop processes incoming PCM audio chunks through DSP, KWS, and ASR.
 func (s *Server) audioPipelineLoop(ctx context.Context) {
 	for {
@@ -326,8 +353,16 @@ func downsampleWave(samples []float32, targetLen int) []float32 {
 
 // processIncomingAudio handles a single 30ms audio chunk through all active filters and gates.
 func (s *Server) processIncomingAudio(rawChunk []float32) {
+	// Step 0: Neural Speech Enhancement (if enabled)
+	var enhancedChunk []float32
+	if s.enhancer != nil && s.enhancer.IsEnabled() {
+		enhancedChunk = s.enhancer.ProcessChunk(rawChunk)
+	} else {
+		enhancedChunk = rawChunk
+	}
+
 	// Step 1: Preprocessing & Noise Gating
-	cleanChunk, rms, dbfs, passedGate := s.dsp.ProcessChunk(rawChunk)
+	cleanChunk, rms, dbfs, passedGate := s.dsp.ProcessChunk(enhancedChunk)
 
 	// Stream clean audio chunk to clients for live headphone monitoring if remote input active
 	s.sourceMu.Lock()
@@ -354,16 +389,18 @@ func (s *Server) processIncomingAudio(rawChunk []float32) {
 		s.BroadcastJSON(map[string]interface{}{
 			"event": "audio.meter",
 			"data": map[string]interface{}{
-				"rms":         rms,
-				"dbfs":        dbfs,
-				"passed_gate": passedGate,
-				"echo_muted":  s.dsp.IsEchoMuted(),
-				"source":      s.activeSource,
-				"wave":        wave,
-				"clean_wave":  downsampleWave(cleanChunk, 64),
-				"agc_gain":    s.dsp.CurrentGain(),
-				"highpass_on": s.dsp.IsHighPassEnabled(),
-				"agc_on":      s.dsp.IsAGCEnabled(),
+				"rms":           rms,
+				"dbfs":          dbfs,
+				"passed_gate":   passedGate,
+				"echo_muted":    s.dsp.IsEchoMuted(),
+				"source":        s.activeSource,
+				"wave":          wave,
+				"clean_wave":    downsampleWave(cleanChunk, 64),
+				"agc_gain":      s.dsp.CurrentGain(),
+				"highpass_on":   s.dsp.IsHighPassEnabled(),
+				"agc_on":        s.dsp.IsAGCEnabled(),
+				"enhancer_on":   s.enhancer != nil && s.enhancer.IsEnabled(),
+				"enhancer_type": s.enhancerModelType(),
 			},
 		})
 	}
@@ -560,6 +597,9 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			"asr_engine_name": s.engineDisplayName(),
 			"tts_model":       ttsModel,
 			"tts_is_neural":   isNeural,
+			"enhancer_on":     s.enhancer != nil && s.enhancer.IsEnabled(),
+			"enhancer_type":   s.enhancerModelType(),
+			"enhancer_name":   s.enhancerName(),
 		},
 	})
 	connMu.Unlock()
@@ -725,6 +765,28 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 							},
 						})
 					}
+				}
+
+			case "set_speech_enhancer":
+				enabled, _ := req["enabled"].(bool)
+				modelType, _ := req["model"].(string)
+				if s.enhancer != nil {
+					if modelType != "" {
+						_ = s.enhancer.SwitchModel(modelType)
+						s.cfg.Audio.Enhancer.ModelType = s.enhancer.ModelType()
+					}
+					s.enhancer.SetEnabled(enabled)
+					s.cfg.Audio.Enhancer.Enabled = s.enhancer.IsEnabled()
+					log.Printf("[SpeechEnhancer] Setting updated: enabled=%v, model=%s (%s)",
+						s.enhancer.IsEnabled(), s.enhancer.ModelType(), s.enhancer.Name())
+					s.BroadcastJSON(map[string]interface{}{
+						"event": "enhancer.changed",
+						"data": map[string]interface{}{
+							"enabled": s.enhancer.IsEnabled(),
+							"model":   s.enhancer.ModelType(),
+							"name":    s.enhancer.Name(),
+						},
+					})
 				}
 			}
 		}

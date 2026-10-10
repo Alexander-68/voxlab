@@ -157,6 +157,10 @@ class VoiceClient {
     this.sendAction('set_tts_model', { model: modelName });
   }
 
+  setSpeechEnhancer(enabled, model = '') {
+    this.sendAction('set_speech_enhancer', { enabled: !!enabled, model: model });
+  }
+
   setAsrEngine(engine) {
     this.sendAction('set_asr_engine', { engine });
   }

@@ -93,6 +93,17 @@
 
             <div class="toggle-list">
               <label class="toggle-item">
+                <input type="checkbox" id="chk-enhancer">
+                <span id="enhancer-label">Neural Speech Enhancement (<strong id="enhancer-status-val">OFF</strong>)</span>
+              </label>
+              <div id="enhancer-model-container" class="form-group mt-1 hidden" style="margin-left: 24px; margin-bottom: 6px;">
+                <label for="enhancer-model-select" style="font-size: 10px; color: var(--text-dim); text-transform: uppercase;">Enhancement Architecture:</label>
+                <select id="enhancer-model-select" class="form-control" style="font-size: 11px; padding: 2px 6px; height: 26px;">
+                  <option value="gtcrn">GTCRN (Ultra-fast Conv-Recurrent)</option>
+                  <option value="dpdfnet">DPDFNet (Deep Polyphase Filtering)</option>
+                </select>
+              </div>
+              <label class="toggle-item">
                 <input type="checkbox" id="chk-highpass" checked>
                 <span>80Hz High-Pass Filter (De-rumble)</span>
               </label>

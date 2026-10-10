@@ -25,6 +25,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const chkWebrtcNs = document.getElementById('chk-webrtc-ns');
   const webrtcNsLabel = document.getElementById('webrtc-ns-label');
   const chkMonitor = document.getElementById('chk-monitor');
+  const chkEnhancer = document.getElementById('chk-enhancer');
+  const enhancerStatusVal = document.getElementById('enhancer-status-val');
+  const enhancerModelContainer = document.getElementById('enhancer-model-container');
+  const enhancerModelSelect = document.getElementById('enhancer-model-select');
   const dspSettingsBox = document.getElementById('dsp-settings-box');
   const dspBypassedBadge = document.getElementById('dsp-bypassed-badge');
 
@@ -538,6 +542,26 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  function updateEnhancerDisplay(enabled, modelType, name) {
+    if (chkEnhancer) {
+      chkEnhancer.checked = !!enabled;
+    }
+    if (enhancerStatusVal) {
+      enhancerStatusVal.textContent = enabled ? (modelType ? modelType.toUpperCase() : 'ON') : 'OFF';
+      enhancerStatusVal.style.color = enabled ? 'var(--cyan)' : 'inherit';
+    }
+    if (enhancerModelContainer) {
+      if (enabled) {
+        enhancerModelContainer.classList.remove('hidden');
+      } else {
+        enhancerModelContainer.classList.add('hidden');
+      }
+    }
+    if (enhancerModelSelect && modelType) {
+      enhancerModelSelect.value = modelType;
+    }
+  }
+
   client.on('voice.state', (data) => {
     const state = data.to_state || data.state;
     voiceState.textContent = state;
@@ -545,6 +569,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (data.tts_model) {
       updateTtsModelDisplay(data.tts_model, data.tts_is_neural);
+    }
+
+    if (data.enhancer_on !== undefined) {
+      updateEnhancerDisplay(data.enhancer_on, data.enhancer_type, data.enhancer_name);
     }
 
     if (data.asr_engine) {
@@ -568,6 +596,11 @@ document.addEventListener('DOMContentLoaded', () => {
     logEvent('voice.state', `${data.from_state || ''} -> ${state} (${data.trigger || ''})`);
   });
 
+  client.on('enhancer.changed', (data) => {
+    updateEnhancerDisplay(data.enabled, data.model, data.name);
+    logEvent('enhancer.changed', `Speech Enhancement: ${data.name || data.model} (${data.enabled ? 'ACTIVE' : 'BYPASS'})`);
+  });
+
   client.on('asr.engine_changed', (data) => {
     logEvent('asr.engine_changed', `ASR Engine: ${data.engine} (${data.name || ''})`);
     updateAsrEngineDisplay(data.engine);
@@ -583,6 +616,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (agcVal && data.agc_gain !== undefined) {
       agcVal.textContent = `${data.agc_gain.toFixed(1)}x`;
+    }
+
+    if (enhancerStatusVal && data.enhancer_on !== undefined) {
+      enhancerStatusVal.textContent = data.enhancer_on ? (data.enhancer_type ? data.enhancer_type.toUpperCase() : 'ON') : 'OFF';
+      enhancerStatusVal.style.color = data.enhancer_on ? 'var(--cyan)' : 'inherit';
     }
 
     if (data.echo_muted) {
@@ -1072,6 +1110,26 @@ document.addEventListener('DOMContentLoaded', () => {
   if (chkKwsEnable) {
     chkKwsEnable.addEventListener('change', (e) => {
       handleKwsToggle(e.target.checked);
+    });
+  }
+
+  if (chkEnhancer) {
+    chkEnhancer.addEventListener('change', (e) => {
+      const enabled = e.target.checked;
+      const model = enhancerModelSelect ? enhancerModelSelect.value : 'gtcrn';
+      client.setSpeechEnhancer(enabled, model);
+      updateEnhancerDisplay(enabled, model);
+      logEvent('dsp.enhancer', `Neural Speech Enhancement: ${enabled ? 'ENABLED (' + model.toUpperCase() + ')' : 'BYPASSED'}`);
+    });
+  }
+
+  if (enhancerModelSelect) {
+    enhancerModelSelect.addEventListener('change', (e) => {
+      const model = e.target.value;
+      const enabled = chkEnhancer ? chkEnhancer.checked : true;
+      client.setSpeechEnhancer(enabled, model);
+      updateEnhancerDisplay(enabled, model);
+      logEvent('dsp.enhancer_model', `Switched Enhancer Model to: ${model.toUpperCase()}`);
     });
   }
 
