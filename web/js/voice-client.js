@@ -109,8 +109,8 @@ class VoiceClient {
     this.sendAction('confirm', { approved });
   }
 
-  speak(text, voice = 'af_heart', speed = 1.0) {
-    this.sendAction('speak', { payload: { text, voice, speed } });
+  speak(text, voice = 'af_heart', speed = 1.0, streaming = true) {
+    this.sendAction('speak', { payload: { text, voice, speed, streaming } });
   }
 
   setSource(sourceName) {

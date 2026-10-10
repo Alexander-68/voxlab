@@ -113,3 +113,39 @@ func TestTTSManagerModelAndVoices(t *testing.T) {
 		t.Errorf("expected 11 voices after switching to v0_19, got %d", len(curVoices))
 	}
 }
+
+func TestTTSManagerSynthesizeStream(t *testing.T) {
+	dsp := audio.NewDSPProcessor(16000, 80.0, -42.0, true, 0.12)
+	sim := engine.NewSimulatorEngine()
+	mgr := NewTTSManager(sim, dsp)
+
+	var chunks []engine.TTSChunk
+	res, err := mgr.SynthesizeStream(engine.TTSRequest{
+		Text:       "First sentence. Second sentence! Third sentence?",
+		Voice:      "af_heart",
+		Speed:      1.0,
+		SampleRate: 24000,
+	}, func(c engine.TTSChunk) error {
+		chunks = append(chunks, c)
+		return nil
+	})
+
+	if err != nil {
+		t.Fatalf("SynthesizeStream failed: %v", err)
+	}
+	if res == nil || len(res.WAVBytes) == 0 {
+		t.Fatalf("expected valid overall WAV result")
+	}
+	if len(chunks) < 2 {
+		t.Errorf("expected at least 2 streaming chunks, got %d", len(chunks))
+	}
+	for i, c := range chunks {
+		if len(c.WAVBytes) == 0 {
+			t.Errorf("chunk %d has empty WAV bytes", i)
+		}
+		if c.DurationSec <= 0 {
+			t.Errorf("chunk %d has invalid duration: %f", i, c.DurationSec)
+		}
+	}
+}
+

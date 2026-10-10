@@ -520,12 +520,17 @@ func (r *SherpaRunner) getWarmTTS(modelDir string, modelFile string) WarmTTS {
 
 // Synthesize runs Kokoro TTS via in-process warm engine if available, or falls back to sherpa-onnx-offline-tts binary / simulator.
 func (r *SherpaRunner) Synthesize(req TTSRequest) (*TTSResult, error) {
+	return r.SynthesizeStream(req, nil)
+}
+
+// SynthesizeStream runs streaming Kokoro TTS via in-process warm engine callback or fallback pipelines.
+func (r *SherpaRunner) SynthesizeStream(req TTSRequest, onChunk func(chunk TTSChunk) error) (*TTSResult, error) {
 	modelDir, modelExists := findKokoroModelDir(r.cfg.Engine.KokoroModelDir)
 	ttsBin, binExists := findSherpaBin(r.cfg.Engine.SherpaTtsBin)
 
 	if !modelExists && !binExists {
 		// Gracefully fall back to simulator if real model/binary is not yet downloaded
-		return r.simulator.Synthesize(req)
+		return r.simulator.SynthesizeStream(req, onChunk)
 	}
 
 	modelFile := r.resolveKokoroModelFile(modelDir)
@@ -545,11 +550,12 @@ func (r *SherpaRunner) Synthesize(req TTSRequest) (*TTSResult, error) {
 		speed = 2.0
 	}
 
-	// 1. Try In-Memory Warm Engine (sub-second latency, eliminates ~1.8s cold-start)
+	// 1. Try In-Memory Warm Engine (sub-second latency with chunk-by-chunk streaming)
 	if isRegularFile(modelFile) {
 		if warm := r.getWarmTTS(modelDir, modelFile); warm != nil {
-			log.Printf("[SherpaRunner] Synthesizing speech (WARM in-memory): voice='%s' -> sid=%d, speed=%.2f", req.Voice, sid, speed)
-			result, err := warm.Synthesize(cleanText, sid, speed)
+			log.Printf("[SherpaRunner] Synthesizing speech (WARM in-memory, streaming=%v): voice='%s' -> sid=%d, speed=%.2f",
+				onChunk != nil, req.Voice, sid, speed)
+			result, err := warm.SynthesizeStream(cleanText, sid, speed, onChunk)
 			if err == nil {
 				log.Printf("[SherpaRunner] Warm TTS generation complete: %.2fs audio in %dms (RTF=%.3f)",
 					result.DurationSec, result.LatencyMs, float64(result.LatencyMs)/(result.DurationSec*1000.0))
@@ -561,7 +567,7 @@ func (r *SherpaRunner) Synthesize(req TTSRequest) (*TTSResult, error) {
 
 	// 2. Fall back to CLI process execution
 	if !binExists || !modelExists {
-		return r.simulator.Synthesize(req)
+		return r.simulator.SynthesizeStream(req, onChunk)
 	}
 
 	startTime := time.Now()
@@ -626,7 +632,7 @@ func (r *SherpaRunner) Synthesize(req TTSRequest) (*TTSResult, error) {
 
 	if err := cmd.Run(); err != nil {
 		log.Printf("[SherpaRunner] Execution error (%v), falling back to simulator: %s", err, stderr.String())
-		return r.simulator.Synthesize(req)
+		return r.simulator.SynthesizeStream(req, onChunk)
 	}
 
 	wavData, err := os.ReadFile(tempWav)
@@ -641,6 +647,18 @@ func (r *SherpaRunner) Synthesize(req TTSRequest) (*TTSResult, error) {
 
 	duration := float64(len(samples)) / float64(sRate)
 	latency := time.Since(startTime).Milliseconds()
+
+	if onChunk != nil {
+		_ = onChunk(TTSChunk{
+			Index:        0,
+			IsLast:       true,
+			AudioSamples: samples,
+			WAVBytes:     wavData,
+			SampleRate:   sRate,
+			DurationSec:  duration,
+			LatencyMs:    latency,
+		})
+	}
 
 	return &TTSResult{
 		AudioSamples: samples,

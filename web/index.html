@@ -355,6 +355,10 @@
 
           <div class="toggle-list mt-2">
             <label class="toggle-item">
+              <input type="checkbox" id="chk-tts-streaming" checked>
+              <span>Streaming Speech Output (Ultra-Low TTFA)</span>
+            </label>
+            <label class="toggle-item">
               <input type="checkbox" id="chk-auto-speak" checked>
               <span>Auto-Speak Command Feedback</span>
             </label>
@@ -367,9 +371,14 @@
           <!-- Audio Player Card -->
           <div class="audio-playback-card mt-3">
             <audio id="tts-audio-player" controls class="tts-player"></audio>
+            <div id="tts-stream-banner" class="tts-stream-banner hidden" style="display: none; align-items: center; gap: 8px; font-size: 11px; padding: 4px 8px; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 4px; margin-bottom: 6px;">
+              <span class="badge badge-listen" style="padding: 2px 6px; font-size: 10px;">STREAMING</span>
+              <span id="tts-stream-status" style="color: var(--cyan); font-family: monospace;">Receiving chunks...</span>
+            </div>
             <div class="tts-metrics-row">
               <span>Model: <strong id="tts-player-model">--</strong></span>
-              <span>Time-to-Audio: <strong id="metric-tts-latency">-- ms</strong></span>
+              <span>TTFA (1st Chunk): <strong id="metric-tts-ttfa" style="color: var(--cyan);">-- ms</strong></span>
+              <span>Total Latency: <strong id="metric-tts-latency">-- ms</strong></span>
               <span>Duration: <strong id="metric-tts-dur">-- s</strong></span>
             </div>
           </div>

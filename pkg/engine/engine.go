@@ -25,6 +25,17 @@ type TTSResult struct {
 	LatencyMs    int64     `json:"latency_ms"`
 }
 
+// TTSChunk represents an incrementally synthesized audio fragment for low-latency streaming playback.
+type TTSChunk struct {
+	Index        int       `json:"index"`
+	IsLast       bool      `json:"is_last"`
+	AudioSamples []float32 `json:"-"`
+	WAVBytes     []byte    `json:"-"`
+	SampleRate   int       `json:"sample_rate"`
+	DurationSec  float64   `json:"duration_sec"`
+	LatencyMs    int64     `json:"latency_ms"`
+}
+
 // SpeechEngine defines the interface for VAD, KWS, ASR, and TTS.
 type SpeechEngine interface {
 	Name() string
@@ -33,7 +44,9 @@ type SpeechEngine interface {
 	ProcessASRChunk(chunk []float32, isDictation bool) (*ASRResult, error)
 	ResetASR()
 	Synthesize(req TTSRequest) (*TTSResult, error)
+	SynthesizeStream(req TTSRequest, onChunk func(chunk TTSChunk) error) (*TTSResult, error)
 	TTSModelInfo() (modelName string, isNeural bool)
 	SetTTSModel(modelName string) error
 	InstalledTTSModels() []string
 }
+

@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	"voxlab/pkg/audio"
 )
 
 type cVitsModelConfig struct {
@@ -136,11 +138,36 @@ type windowsWarmTTS struct {
 	createFn       *syscall.LazyProc
 	destroyFn      *syscall.LazyProc
 	genFn          *syscall.LazyProc
+	genWithCbFn    *syscall.LazyProc
 	destroyAudioFn *syscall.LazyProc
 	handle         uintptr
 	modelKey       string
 	mu             sync.Mutex
 }
+
+var (
+	warmTtsCbMu sync.Mutex
+	warmTtsCbFn func(samples []float32, progress float32) error
+)
+
+func warmTtsProgressCallback(samplesPtr uintptr, numSamples int32, progressBits uintptr, arg uintptr) uintptr {
+	warmTtsCbMu.Lock()
+	fn := warmTtsCbFn
+	warmTtsCbMu.Unlock()
+
+	if fn != nil && numSamples > 0 && samplesPtr != 0 {
+		src := unsafe.Slice((*float32)(unsafe.Pointer(samplesPtr)), int(numSamples))
+		chunk := make([]float32, numSamples)
+		copy(chunk, src)
+		progress := math.Float32frombits(uint32(progressBits))
+		if err := fn(chunk, progress); err != nil {
+			return 0 // Abort synthesis immediately
+		}
+	}
+	return 1
+}
+
+var warmTtsCallbackPtr = syscall.NewCallback(warmTtsProgressCallback)
 
 func (w *windowsWarmTTS) IsWarm() bool {
 	w.mu.Lock()
@@ -155,6 +182,10 @@ func (w *windowsWarmTTS) ModelKey() string {
 }
 
 func (w *windowsWarmTTS) Synthesize(text string, sid int, speed float64) (*TTSResult, error) {
+	return w.SynthesizeStream(text, sid, speed, nil)
+}
+
+func (w *windowsWarmTTS) SynthesizeStream(text string, sid int, speed float64, onChunk func(chunk TTSChunk) error) (*TTSResult, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -171,6 +202,96 @@ func (w *windowsWarmTTS) Synthesize(text string, sid int, speed float64) (*TTSRe
 	textPtr := toCString(text, &keep)
 	speedBits := math.Float32bits(float32(speed))
 
+	// If streaming callback requested and SherpaOnnxOfflineTtsGenerateWithCallback procedure is available
+	if onChunk != nil && w.genWithCbFn != nil && w.genWithCbFn.Find() == nil {
+		var (
+			chunkIdx   int
+			sampleRate = 24000
+			cbErr      error
+		)
+
+		warmTtsCbMu.Lock()
+		warmTtsCbFn = func(samples []float32, progress float32) error {
+			chunkIdx++
+			dur := float64(len(samples)) / float64(sampleRate)
+			lat := time.Since(startTime).Milliseconds()
+			wav, err := audio.EncodeWAV(samples, sampleRate)
+			if err != nil {
+				return err
+			}
+			c := TTSChunk{
+				Index:        chunkIdx - 1,
+				IsLast:       false,
+				AudioSamples: samples,
+				WAVBytes:     wav,
+				SampleRate:   sampleRate,
+				DurationSec:  dur,
+				LatencyMs:    lat,
+			}
+			if err := onChunk(c); err != nil {
+				cbErr = err
+				return err
+			}
+			return nil
+		}
+		warmTtsCbMu.Unlock()
+
+		audioPtr, _, callErr := w.genWithCbFn.Call(
+			w.handle,
+			textPtr,
+			uintptr(sid),
+			uintptr(speedBits),
+			warmTtsCallbackPtr,
+			0,
+		)
+
+		warmTtsCbMu.Lock()
+		warmTtsCbFn = nil
+		warmTtsCbMu.Unlock()
+
+		if cbErr != nil {
+			if audioPtr != 0 {
+				w.destroyAudioFn.Call(audioPtr)
+			}
+			return nil, fmt.Errorf("streaming synthesis aborted: %w", cbErr)
+		}
+
+		if audioPtr == 0 {
+			return nil, fmt.Errorf("sherpa-onnx c-api streaming synthesis failed: %v", callErr)
+		}
+
+		audioStruct := (*cGeneratedAudio)(unsafe.Pointer(audioPtr))
+		if audioStruct == nil || audioStruct.N <= 0 || audioStruct.Samples == nil {
+			w.destroyAudioFn.Call(audioPtr)
+			return nil, fmt.Errorf("synthesis returned empty audio waveform")
+		}
+
+		sampleRate = int(audioStruct.SampleRate)
+		samples := make([]float32, audioStruct.N)
+		src := unsafe.Slice(audioStruct.Samples, audioStruct.N)
+		copy(samples, src)
+
+		w.destroyAudioFn.Call(audioPtr)
+
+		latency := time.Since(startTime).Milliseconds()
+		// If native engine did not fire callbacks (single sentence), dispatch as chunk 0
+		if chunkIdx == 0 {
+			wav, _ := audio.EncodeWAV(samples, sampleRate)
+			_ = onChunk(TTSChunk{
+				Index:        0,
+				IsLast:       true,
+				AudioSamples: samples,
+				WAVBytes:     wav,
+				SampleRate:   sampleRate,
+				DurationSec:  float64(len(samples)) / float64(sampleRate),
+				LatencyMs:    latency,
+			})
+		}
+
+		return float32SliceToTTSResult(samples, sampleRate, latency)
+	}
+
+	// Standard non-streaming path
 	audioPtr, _, err := w.genFn.Call(
 		w.handle,
 		textPtr,
@@ -189,7 +310,6 @@ func (w *windowsWarmTTS) Synthesize(text string, sid int, speed float64) (*TTSRe
 		return nil, fmt.Errorf("synthesis returned empty audio waveform")
 	}
 
-	// Copy samples into Go managed slice
 	samples := make([]float32, audioStruct.N)
 	src := unsafe.Slice(audioStruct.Samples, audioStruct.N)
 	copy(samples, src)
@@ -197,7 +317,19 @@ func (w *windowsWarmTTS) Synthesize(text string, sid int, speed float64) (*TTSRe
 
 	w.destroyAudioFn.Call(audioPtr)
 
-	return float32SliceToTTSResult(samples, sampleRate, latency)
+	res, err := float32SliceToTTSResult(samples, sampleRate, latency)
+	if err == nil && onChunk != nil {
+		_ = onChunk(TTSChunk{
+			Index:        0,
+			IsLast:       true,
+			AudioSamples: samples,
+			WAVBytes:     res.WAVBytes,
+			SampleRate:   sampleRate,
+			DurationSec:  res.DurationSec,
+			LatencyMs:    latency,
+		})
+	}
+	return res, err
 }
 
 func (w *windowsWarmTTS) Close() error {
@@ -250,6 +382,7 @@ func newPlatformWarmTTS(
 	}
 	destroyFn := dll.NewProc("SherpaOnnxDestroyOfflineTts")
 	genFn := dll.NewProc("SherpaOnnxOfflineTtsGenerate")
+	genWithCbFn := dll.NewProc("SherpaOnnxOfflineTtsGenerateWithCallback")
 	destroyAudioFn := dll.NewProc("SherpaOnnxDestroyOfflineTtsGeneratedAudio")
 
 	if numThreads <= 0 {
@@ -299,6 +432,7 @@ func newPlatformWarmTTS(
 		createFn:       createFn,
 		destroyFn:      destroyFn,
 		genFn:          genFn,
+		genWithCbFn:    genWithCbFn,
 		destroyAudioFn: destroyAudioFn,
 		handle:         ttsPtr,
 		modelKey:       key,

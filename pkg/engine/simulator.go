@@ -147,6 +147,11 @@ func (s *SimulatorEngine) ResetASR() {
 
 // Synthesize simulates Kokoro TTS by generating rich harmonic vocalic waveforms.
 func (s *SimulatorEngine) Synthesize(req TTSRequest) (*TTSResult, error) {
+	return s.SynthesizeStream(req, nil)
+}
+
+// SynthesizeStream generates speech audio incrementally for low-latency streaming playback.
+func (s *SimulatorEngine) SynthesizeStream(req TTSRequest, onChunk func(chunk TTSChunk) error) (*TTSResult, error) {
 	startTime := time.Now()
 
 	sampleRate := req.SampleRate
@@ -154,65 +159,110 @@ func (s *SimulatorEngine) Synthesize(req TTSRequest) (*TTSResult, error) {
 		sampleRate = 24000
 	}
 
-	// Approximate speech duration: ~80ms per character with speed adjustment
-	charCount := len(req.Text)
-	if charCount < 5 {
-		charCount = 5
-	}
 	speed := req.Speed
 	if speed <= 0 {
 		speed = 1.0
 	}
-	durationSec := (float64(charCount) * 0.065) / speed
-	if durationSec < 0.8 {
-		durationSec = 0.8
+
+	cleanText := strings.TrimSpace(req.Text)
+	if cleanText == "" {
+		cleanText = "Hello"
 	}
 
-	totalSamples := int(float64(sampleRate) * durationSec)
-	samples := make([]float32, totalSamples)
-	sr := float64(sampleRate)
+	// Split text into natural phrase chunks by punctuation (. , ! ? ;) for streaming
+	var parts []string
+	var current strings.Builder
+	for _, r := range cleanText {
+		current.WriteRune(r)
+		if r == '.' || r == '!' || r == '?' || r == ';' || r == ',' {
+			p := strings.TrimSpace(current.String())
+			if len(p) > 0 {
+				parts = append(parts, p)
+			}
+			current.Reset()
+		}
+	}
+	if rem := strings.TrimSpace(current.String()); len(rem) > 0 {
+		parts = append(parts, rem)
+	}
+	if len(parts) == 0 {
+		parts = []string{cleanText}
+	}
 
-	// Voice pitch variation based on speaker name
-	basePitch := 220.0 // Default female pitch (e.g. af_heart)
+	var allSamples []float32
+	basePitch := 220.0
 	if strings.HasPrefix(req.Voice, "am_") {
-		basePitch = 130.0 // Male pitch (e.g. am_adam)
+		basePitch = 130.0
 	}
-
-	// Formant synthesis simulation
 	f1 := basePitch * 2.2
 	f2 := basePitch * 3.8
+	sr := float64(sampleRate)
 
-	for i := 0; i < totalSamples; i++ {
-		t := float64(i) / sr
-		// Amplitude envelope with soft attack and release
-		env := 1.0
-		if t < 0.05 {
-			env = t / 0.05
-		} else if t > durationSec-0.1 {
-			env = (durationSec - t) / 0.1
+	for idx, part := range parts {
+		charCount := len(part)
+		if charCount < 3 {
+			charCount = 3
 		}
-		// Pitch cadence vibrato
-		pitch := basePitch + 15.0*math.Sin(2.0*math.Pi*2.5*t)
-		v0 := math.Sin(2.0 * math.Pi * pitch * t)
-		v1 := 0.4 * math.Sin(2.0*math.Pi*f1*t)
-		v2 := 0.2 * math.Sin(2.0*math.Pi*f2*t)
+		durationSec := (float64(charCount) * 0.065) / speed
+		if durationSec < 0.4 {
+			durationSec = 0.4
+		}
 
-		// Modulation
-		samples[i] = float32(0.35 * env * (v0 + v1 + v2))
+		chunkTotalSamples := int(float64(sampleRate) * durationSec)
+		chunkSamples := make([]float32, chunkTotalSamples)
+
+		for i := 0; i < chunkTotalSamples; i++ {
+			t := float64(i) / sr
+			env := 1.0
+			if t < 0.05 {
+				env = t / 0.05
+			} else if t > durationSec-0.08 {
+				env = (durationSec - t) / 0.08
+			}
+			pitch := basePitch + 15.0*math.Sin(2.0*math.Pi*2.5*t)
+			v0 := math.Sin(2.0 * math.Pi * pitch * t)
+			v1 := 0.4 * math.Sin(2.0*math.Pi*f1*t)
+			v2 := 0.2 * math.Sin(2.0*math.Pi*f2*t)
+			chunkSamples[i] = float32(0.35 * env * (v0 + v1 + v2))
+		}
+
+		allSamples = append(allSamples, chunkSamples...)
+
+		if onChunk != nil {
+			wavBytes, err := audio.EncodeWAV(chunkSamples, sampleRate)
+			if err != nil {
+				return nil, fmt.Errorf("failed to encode chunk WAV: %w", err)
+			}
+			lat := time.Since(startTime).Milliseconds()
+			isLast := idx == len(parts)-1
+			c := TTSChunk{
+				Index:        idx,
+				IsLast:       isLast,
+				AudioSamples: chunkSamples,
+				WAVBytes:     wavBytes,
+				SampleRate:   sampleRate,
+				DurationSec:  durationSec,
+				LatencyMs:    lat,
+			}
+			if err := onChunk(c); err != nil {
+				return nil, err
+			}
+		}
 	}
 
-	wavBytes, err := audio.EncodeWAV(samples, sampleRate)
+	totalWav, err := audio.EncodeWAV(allSamples, sampleRate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode WAV: %w", err)
 	}
 
+	totalDuration := float64(len(allSamples)) / float64(sampleRate)
 	latency := time.Since(startTime).Milliseconds()
 
 	return &TTSResult{
-		AudioSamples: samples,
-		WAVBytes:     wavBytes,
+		AudioSamples: allSamples,
+		WAVBytes:     totalWav,
 		SampleRate:   sampleRate,
-		DurationSec:  durationSec,
+		DurationSec:  totalDuration,
 		LatencyMs:    latency,
 	}, nil
 }

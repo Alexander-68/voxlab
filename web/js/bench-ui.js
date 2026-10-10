@@ -93,6 +93,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const ttsModelBadge = document.getElementById('tts-model-badge');
   const ttsModelName = document.getElementById('tts-model-name');
   const ttsPlayerModel = document.getElementById('tts-player-model');
+  const chkTtsStreaming = document.getElementById('chk-tts-streaming');
+  const ttsStreamBanner = document.getElementById('tts-stream-banner');
+  const ttsStreamStatus = document.getElementById('tts-stream-status');
+  const metricTtsTtfa = document.getElementById('metric-tts-ttfa');
 
   // Instantiate Voice Client and Audio Capture
   const client = new VoiceClient();
@@ -681,7 +685,8 @@ document.addEventListener('DOMContentLoaded', () => {
       else if (data.intent_id === 'START_RECORDING') prompt = 'Recording started on main channel.';
       else if (data.intent_id === 'STOP_RECORDING') prompt = 'Recording stopped and saved.';
       else if (data.intent_id === 'DISPLAY_DARK') prompt = 'Display brightness lowered.';
-      client.speak(prompt, ttsVoiceSelect.value, parseFloat(ttsSpeedSlider.value));
+      const isStreaming = chkTtsStreaming ? chkTtsStreaming.checked : true;
+      client.speak(prompt, ttsVoiceSelect.value, parseFloat(ttsSpeedSlider.value), isStreaming);
     }
   });
 
@@ -706,35 +711,191 @@ document.addEventListener('DOMContentLoaded', () => {
     dictationStatusBadge.className = 'badge badge-ready';
   });
 
+  // --- Low-Latency Web Audio API Streaming Player ---
+  let streamAudioCtx = null;
+  let streamNextStartTime = 0;
+  let activeAudioSources = [];
+  let isStreamPlaying = false;
+  let streamChunksReceived = 0;
+  let streamChunksPlayed = 0;
+  let streamTotalChunks = 0;
+  let streamPlaybackCompleteTimer = null;
+
+  function getStreamAudioCtx() {
+    if (!streamAudioCtx) {
+      const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+      streamAudioCtx = new AudioCtxClass();
+    }
+    if (streamAudioCtx.state === 'suspended') {
+      streamAudioCtx.resume();
+    }
+    return streamAudioCtx;
+  }
+
+  function stopStreamingPlayback() {
+    activeAudioSources.forEach((src) => {
+      try {
+        src.stop();
+        src.disconnect();
+      } catch (_) {}
+    });
+    activeAudioSources = [];
+    isStreamPlaying = false;
+    streamNextStartTime = 0;
+    streamChunksReceived = 0;
+    streamChunksPlayed = 0;
+    streamTotalChunks = 0;
+    if (streamPlaybackCompleteTimer) {
+      clearTimeout(streamPlaybackCompleteTimer);
+      streamPlaybackCompleteTimer = null;
+    }
+    if (ttsStreamBanner) {
+      ttsStreamBanner.style.display = 'none';
+    }
+    client.sendPlaybackStatus(false);
+  }
+
+  function base64ToArrayBuffer(base64) {
+    const binaryString = window.atob(base64);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes.buffer;
+  }
+
   client.on('tts.started', (data) => {
+    const isStreaming = data.streaming !== false && (chkTtsStreaming ? chkTtsStreaming.checked : true);
+    // Stop any ongoing playback
+    if (!ttsAudioPlayer.paused) {
+      ttsAudioPlayer.pause();
+      ttsAudioPlayer.currentTime = 0;
+    }
+    stopStreamingPlayback();
+
     const modelTag = data.model ? ` [${data.model}]` : '';
     const speedTag = data.speed ? ` @ ${data.speed}x` : '';
-    logEvent('tts.started', `"${data.text}" (${data.voice}${speedTag})${modelTag}`);
+    const modeTag = isStreaming ? ' [STREAMING]' : ' [OFFLINE]';
+    logEvent('tts.started', `"${data.text}" (${data.voice}${speedTag})${modelTag}${modeTag}`);
+
     if (data.model) {
       updateTtsModelDisplay(data.model, data.is_neural);
     }
     btnSynthesize.disabled = true;
-    btnSynthesize.textContent = '⏳ Synthesizing Audio...';
+    btnSynthesize.textContent = isStreaming ? '⚡ Streaming Output...' : '⏳ Synthesizing Audio...';
+
+    if (isStreaming) {
+      if (ttsStreamBanner) {
+        ttsStreamBanner.style.display = 'flex';
+        ttsStreamStatus.textContent = 'Awaiting first neural audio chunk...';
+      }
+      if (metricTtsTtfa) {
+        metricTtsTtfa.textContent = '...';
+      }
+    }
+  });
+
+  client.on('tts.chunk', async (data) => {
+    const isStreaming = chkTtsStreaming ? chkTtsStreaming.checked : true;
+    if (!isStreaming) return;
+
+    try {
+      const ctx = getStreamAudioCtx();
+      const arrayBuf = base64ToArrayBuffer(data.wav_base64);
+      const audioBuf = await ctx.decodeAudioData(arrayBuf);
+
+      streamChunksReceived++;
+      if (ttsStreamBanner) {
+        ttsStreamBanner.style.display = 'flex';
+        ttsStreamStatus.textContent = `Streaming chunk #${data.index + 1} (${data.duration_sec.toFixed(2)}s, TTFA: ${data.latency_ms}ms)...`;
+      }
+
+      // Record TTFA on first chunk
+      if (data.index === 0 && metricTtsTtfa) {
+        metricTtsTtfa.textContent = `${data.latency_ms} ms`;
+        logEvent('tts.ttfa', `Time-to-First-Audio (TTFA): ${data.latency_ms}ms (${data.duration_sec.toFixed(2)}s first phrase)`);
+      }
+
+      // Seamless timeline scheduling in Web Audio API
+      const source = ctx.createBufferSource();
+      source.buffer = audioBuf;
+      source.connect(ctx.destination);
+
+      const now = ctx.currentTime;
+      const startTime = Math.max(now + 0.015, streamNextStartTime);
+      source.start(startTime);
+      streamNextStartTime = startTime + audioBuf.duration;
+
+      activeAudioSources.push(source);
+
+      if (!isStreamPlaying) {
+        isStreamPlaying = true;
+        logEvent('playback.start', 'Audio playback started -> Echo Gate MUTED');
+        client.sendPlaybackStatus(true);
+      }
+
+      source.onended = () => {
+        streamChunksPlayed++;
+        const idx = activeAudioSources.indexOf(source);
+        if (idx !== -1) activeAudioSources.splice(idx, 1);
+
+        if (activeAudioSources.length === 0 && streamTotalChunks > 0 && streamChunksPlayed >= streamTotalChunks) {
+          logEvent('playback.end', 'Audio playback completed -> Echo Gate OPEN');
+          stopStreamingPlayback();
+        }
+      };
+
+      if (streamPlaybackCompleteTimer) clearTimeout(streamPlaybackCompleteTimer);
+      const remainingMs = Math.max(100, (streamNextStartTime - now) * 1000 + 400);
+      streamPlaybackCompleteTimer = setTimeout(() => {
+        if (streamTotalChunks > 0 && streamChunksPlayed >= streamTotalChunks) {
+          logEvent('playback.end', 'Audio playback completed -> Echo Gate OPEN');
+          stopStreamingPlayback();
+        }
+      }, remainingMs);
+
+    } catch (e) {
+      console.warn('[TTS] Failed to decode/schedule stream chunk:', e);
+    }
   });
 
   client.on('tts.finished', (data) => {
+    const isStreaming = data.streaming && (chkTtsStreaming ? chkTtsStreaming.checked : true);
     const modelTag = data.model ? ` [${data.model}]` : '';
-    logEvent('tts.finished', `Duration: ${data.duration_sec.toFixed(2)}s, TTFA: ${data.latency_ms}ms${modelTag}`);
+    const ttfaMsg = data.first_chunk_latency_ms ? `, TTFA: ${data.first_chunk_latency_ms}ms` : '';
+    logEvent('tts.finished', `Total: ${data.duration_sec.toFixed(2)}s, Latency: ${data.latency_ms}ms${ttfaMsg}${modelTag}`);
+
     metricTtsLatency.textContent = `${data.latency_ms} ms`;
     metricTtsDur.textContent = `${data.duration_sec.toFixed(2)} s`;
+    if (metricTtsTtfa && data.first_chunk_latency_ms) {
+      metricTtsTtfa.textContent = `${data.first_chunk_latency_ms} ms`;
+    }
     if (ttsPlayerModel && data.model) {
       ttsPlayerModel.textContent = data.model;
     }
     btnSynthesize.disabled = false;
     btnSynthesize.textContent = '🔊 Synthesize & Speak';
 
-    if (data.wav_base64) {
-      const audioUrl = `data:audio/wav;base64,${data.wav_base64}`;
-      ttsAudioPlayer.src = audioUrl;
-      ttsAudioPlayer.play().catch((e) => {
-        console.warn('Autoplay prevented or failed:', e);
-        client.sendPlaybackStatus(false);
-      });
+    streamTotalChunks = data.chunks_count || 1;
+
+    if (isStreaming) {
+      if (data.wav_base64) {
+        ttsAudioPlayer.src = `data:audio/wav;base64,${data.wav_base64}`;
+      }
+      if (ttsStreamBanner) {
+        ttsStreamStatus.textContent = `All ${streamTotalChunks} chunks synthesized. Playing...`;
+      }
+    } else {
+      if (ttsStreamBanner) ttsStreamBanner.style.display = 'none';
+      if (data.wav_base64) {
+        const audioUrl = `data:audio/wav;base64,${data.wav_base64}`;
+        ttsAudioPlayer.src = audioUrl;
+        ttsAudioPlayer.play().catch((e) => {
+          console.warn('Autoplay prevented or failed:', e);
+          client.sendPlaybackStatus(false);
+        });
+      }
     }
   });
 
@@ -951,6 +1112,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isBrowserRecognizing && browserRecognizer) {
       try { browserRecognizer.stop(); } catch (_) {}
     }
+    stopStreamingPlayback();
     if (!ttsAudioPlayer.paused) {
       ttsAudioPlayer.pause();
       ttsAudioPlayer.currentTime = 0;
@@ -967,6 +1129,7 @@ document.addEventListener('DOMContentLoaded', () => {
     isPttActive = true;
     isBrowserWakeActive = false;
     if (browserWakeResetTimer) clearTimeout(browserWakeResetTimer);
+    stopStreamingPlayback();
     if (!ttsAudioPlayer.paused) {
       ttsAudioPlayer.pause();
       ttsAudioPlayer.currentTime = 0;
@@ -1080,7 +1243,8 @@ document.addEventListener('DOMContentLoaded', () => {
   btnSynthesize.addEventListener('click', () => {
     const text = ttsInputText.value.trim();
     if (!text) return;
-    client.speak(text, ttsVoiceSelect.value, parseFloat(ttsSpeedSlider.value));
+    const isStreaming = chkTtsStreaming ? chkTtsStreaming.checked : true;
+    client.speak(text, ttsVoiceSelect.value, parseFloat(ttsSpeedSlider.value), isStreaming);
   });
 
   // Custom Command Injections
@@ -1161,7 +1325,8 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => {
       const text = btn.getAttribute('data-text');
       ttsInputText.value = text;
-      client.speak(text, ttsVoiceSelect.value, parseFloat(ttsSpeedSlider.value));
+      const isStreaming = chkTtsStreaming ? chkTtsStreaming.checked : true;
+      client.speak(text, ttsVoiceSelect.value, parseFloat(ttsSpeedSlider.value), isStreaming);
     });
   });
 

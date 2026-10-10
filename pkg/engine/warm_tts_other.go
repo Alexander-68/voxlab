@@ -10,6 +10,10 @@ func (s *stubWarmTTS) Synthesize(text string, sid int, speed float64) (*TTSResul
 	return nil, fmt.Errorf("in-process warm TTS is not supported on this platform")
 }
 
+func (s *stubWarmTTS) SynthesizeStream(text string, sid int, speed float64, onChunk func(chunk TTSChunk) error) (*TTSResult, error) {
+	return nil, fmt.Errorf("in-process warm TTS is not supported on this platform")
+}
+
 func (s *stubWarmTTS) IsWarm() bool {
 	return false
 }

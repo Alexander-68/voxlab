@@ -616,7 +616,11 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 					if speed <= 0 {
 						speed = 1.0
 					}
-					go s.executeTTS(text, voice, speed)
+					streaming := true
+					if st, ok := p["streaming"].(bool); ok {
+						streaming = st
+					}
+					go s.executeTTS(text, voice, speed, streaming)
 				}
 
 			case "set_source":
@@ -735,7 +739,7 @@ func (s *Server) SetPlaybackActive(playing bool) {
 }
 
 // executeTTS executes Kokoro TTS and broadcasts audio waveform and metrics.
-func (s *Server) executeTTS(text, voice string, speed float64) {
+func (s *Server) executeTTS(text, voice string, speed float64, streaming bool) {
 	if text == "" {
 		return
 	}
@@ -754,15 +758,53 @@ func (s *Server) executeTTS(text, voice string, speed float64) {
 			"speed":     speed,
 			"model":     ttsModel,
 			"is_neural": isNeural,
+			"streaming": streaming,
 		},
 	})
 
-	ttsRes, err := s.ttsMgr.Synthesize(engine.TTSRequest{
+	var (
+		firstChunkLatency int64
+		chunkCount        int
+	)
+
+	onChunkCb := func(chunk engine.TTSChunk) error {
+		chunkCount++
+		if chunkCount == 1 {
+			firstChunkLatency = chunk.LatencyMs
+		}
+		chunkWavB64 := base64.StdEncoding.EncodeToString(chunk.WAVBytes)
+		s.BroadcastJSON(map[string]interface{}{
+			"event": "tts.chunk",
+			"data": map[string]interface{}{
+				"index":        chunk.Index,
+				"is_last":      chunk.IsLast,
+				"duration_sec": chunk.DurationSec,
+				"latency_ms":   chunk.LatencyMs,
+				"sample_rate":  chunk.SampleRate,
+				"wav_base64":   chunkWavB64,
+			},
+		})
+		return nil
+	}
+
+	var (
+		ttsRes *engine.TTSResult
+		err    error
+	)
+
+	req := engine.TTSRequest{
 		Text:       text,
 		Voice:      voice,
 		Speed:      speed,
 		SampleRate: s.cfg.TTS.SampleRate,
-	})
+	}
+
+	if streaming {
+		ttsRes, err = s.ttsMgr.SynthesizeStream(req, onChunkCb)
+	} else {
+		ttsRes, err = s.ttsMgr.Synthesize(req)
+	}
+
 	if err != nil {
 		log.Printf("[Error] TTS error: %v", err)
 		return
@@ -773,14 +815,17 @@ func (s *Server) executeTTS(text, voice string, speed float64) {
 	s.BroadcastJSON(map[string]interface{}{
 		"event": "tts.finished",
 		"data": map[string]interface{}{
-			"text":         text,
-			"voice":        voice,
-			"model":        ttsModel,
-			"is_neural":    isNeural,
-			"duration_sec": ttsRes.DurationSec,
-			"latency_ms":   ttsRes.LatencyMs,
-			"sample_rate":  ttsRes.SampleRate,
-			"wav_base64":   wavB64,
+			"text":                   text,
+			"voice":                  voice,
+			"model":                  ttsModel,
+			"is_neural":              isNeural,
+			"duration_sec":           ttsRes.DurationSec,
+			"latency_ms":             ttsRes.LatencyMs,
+			"first_chunk_latency_ms": firstChunkLatency,
+			"chunks_count":           chunkCount,
+			"sample_rate":            ttsRes.SampleRate,
+			"streaming":              streaming,
+			"wav_base64":             wavB64,
 		},
 	})
 

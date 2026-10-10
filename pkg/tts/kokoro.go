@@ -38,6 +38,11 @@ func (m *TTSManager) Synthesize(req engine.TTSRequest) (*engine.TTSResult, error
 	return m.engine.Synthesize(req)
 }
 
+// SynthesizeStream generates streaming speech audio chunks without muting input.
+func (m *TTSManager) SynthesizeStream(req engine.TTSRequest, onChunk func(chunk engine.TTSChunk) error) (*engine.TTSResult, error) {
+	return m.engine.SynthesizeStream(req, onChunk)
+}
+
 // SetSpeaking manages half-duplex echo suppression during actual audio playback through speakers.
 func (m *TTSManager) SetSpeaking(speaking bool) {
 	m.mu.Lock()

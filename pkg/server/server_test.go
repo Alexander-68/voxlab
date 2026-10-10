@@ -586,4 +586,73 @@ func TestServerKWSConfiguration(t *testing.T) {
 	}
 }
 
+func TestServerStreamingTTS(t *testing.T) {
+	srv := setupTestServer(t)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws", srv.handleWebSocket)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("WebSocket connection failed: %v", err)
+	}
+	defer conn.Close()
+
+	// Drain initial state message
+	_ = conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+	_, _, _ = conn.ReadMessage()
+
+	// Send speak action with streaming
+	_ = conn.WriteJSON(map[string]interface{}{
+		"action": "speak",
+		"payload": map[string]interface{}{
+			"text":      "First clause. Second clause! Third clause?",
+			"voice":     "af_heart",
+			"speed":     1.0,
+			"streaming": true,
+		},
+	})
+
+	var gotStarted bool
+	var chunkCount int
+	var gotFinished bool
+
+	for !gotFinished {
+		_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			t.Fatalf("ReadMessage failed (chunkCount=%d): %v", chunkCount, err)
+		}
+		var ev struct {
+			Event string                 `json:"event"`
+			Data  map[string]interface{} `json:"data"`
+		}
+		if err := json.Unmarshal(msg, &ev); err != nil {
+			continue
+		}
+		switch ev.Event {
+		case "tts.started":
+			gotStarted = true
+		case "tts.chunk":
+			chunkCount++
+		case "tts.finished":
+			gotFinished = true
+		}
+	}
+
+	if !gotStarted {
+		t.Errorf("expected to receive tts.started event")
+	}
+	if chunkCount == 0 {
+		t.Errorf("expected to receive at least 1 tts.chunk event, got %d", chunkCount)
+	}
+	if !gotFinished {
+		t.Errorf("expected to receive tts.finished event")
+	}
+}
+
+
 
