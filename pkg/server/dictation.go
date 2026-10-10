@@ -41,6 +41,9 @@ func formatDictationPhraseInternal(rawText string, isContinuation bool) string {
 		return ""
 	}
 
+	// 0. Normalize to lowercase so all-caps neural recognizer output (e.g. Zipformer) is natural
+	text = strings.ToLower(text)
+
 	// 1. Convert spoken keywords to punctuation symbols
 	text = rePeriod.ReplaceAllString(text, ".")
 	text = reComma.ReplaceAllString(text, ",")
@@ -63,7 +66,12 @@ func formatDictationPhraseInternal(rawText string, isContinuation bool) string {
 		return ""
 	}
 
-	// 3. Capitalization
+	// 3. Automatic punctuation '.' on pause if phrase does not already end with punctuation
+	if !reEndsWithPunct.MatchString(text) {
+		text += "."
+	}
+
+	// 4. Capitalization
 	if !isContinuation {
 		text = reLeadingChar.ReplaceAllStringFunc(text, func(s string) string {
 			r := []rune(s)

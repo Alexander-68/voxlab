@@ -17,6 +17,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const vuBar = document.getElementById('vu-bar');
   const meterDbfs = document.getElementById('meter-dbfs');
   const gateIndicator = document.getElementById('gate-indicator');
+  const chkLiveScope = document.getElementById('chk-live-scope');
+  const liveScopeStatus = document.getElementById('live-scope-status');
   const noiseGateSlider = document.getElementById('noise-gate-slider');
   const noiseGateVal = document.getElementById('noise-gate-val');
   const chkHighpass = document.getElementById('chk-highpass');
@@ -109,10 +111,37 @@ document.addEventListener('DOMContentLoaded', () => {
     client.sendAudioChunk(chunk);
   });
   capture.setCanvas(scopeCanvas);
-  capture.clearVisualizer();
+  let scopeEnabled = localStorage.getItem('voxlab_live_scope') !== 'false';
+  if (chkLiveScope) {
+    chkLiveScope.checked = scopeEnabled;
+    if (liveScopeStatus) {
+      liveScopeStatus.textContent = scopeEnabled ? 'ON' : 'OFF';
+      liveScopeStatus.style.color = scopeEnabled ? 'var(--cyan)' : 'var(--text-dim)';
+    }
+    capture.setScopeEnabled(scopeEnabled);
+    if (!scopeEnabled) {
+      vuBar.style.width = '0%';
+      meterDbfs.textContent = 'OFF';
+    }
+
+    chkLiveScope.addEventListener('change', () => {
+      scopeEnabled = chkLiveScope.checked;
+      localStorage.setItem('voxlab_live_scope', scopeEnabled ? 'true' : 'false');
+      if (liveScopeStatus) {
+        liveScopeStatus.textContent = scopeEnabled ? 'ON' : 'OFF';
+        liveScopeStatus.style.color = scopeEnabled ? 'var(--cyan)' : 'var(--text-dim)';
+      }
+      capture.setScopeEnabled(scopeEnabled);
+      if (!scopeEnabled) {
+        vuBar.style.width = '0%';
+        meterDbfs.textContent = 'OFF';
+      }
+    });
+  }
 
   // Local continuous 60 FPS meter update when Web UI mic is active
   capture.onMeter = (rms, localDbfs) => {
+    if (!scopeEnabled) return;
     if (capture.isRecording && (!audioSourceSelect || audioSourceSelect.value === 'web_ui_mic')) {
       meterDbfs.textContent = `${localDbfs} dBFS`;
       const norm = Math.max(0, Math.min(100, ((localDbfs + 60) / 60) * 100));
@@ -123,7 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Dictation Punctuation & Formatting Helpers ---
   function formatDictationPhrase(rawText, isContinuation = false) {
     if (!rawText) return '';
-    let text = rawText.trim();
+    let text = rawText.trim().toLowerCase();
     if (!text) return '';
 
     const punctuationMap = [
@@ -150,6 +179,11 @@ document.addEventListener('DOMContentLoaded', () => {
     text = text.replace(/^[ \t]+|[ \t]+$/g, '');
 
     if (!text) return '';
+
+    // Automatic punctuation '.' on pause if phrase does not already end with punctuation
+    if (!/[.?!,;:\n]$/.test(text)) {
+      text += '.';
+    }
 
     // If NOT a continuation of an unfinished sentence, capitalize the first letter
     if (!isContinuation) {
@@ -617,8 +651,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   client.on('audio.meter', (data) => {
-    // Only update meter from server if not driven locally by Web Audio mic
-    if (!capture.isRecording || data.source !== 'web_ui_mic') {
+    // Only update meter from server if scope is enabled and not driven locally by Web Audio mic
+    if (scopeEnabled && (!capture.isRecording || data.source !== 'web_ui_mic')) {
       const dbfs = Math.round(data.dbfs);
       meterDbfs.textContent = `${dbfs} dBFS`;
 
@@ -650,8 +684,8 @@ document.addEventListener('DOMContentLoaded', () => {
       gateIndicator.textContent = 'NOISE GATED';
     }
 
-    // Feed remote waveform into continuous 60 FPS visualizer
-    if (data.wave && data.wave.length > 0 && (!capture.isRecording || data.source !== 'web_ui_mic')) {
+    // Feed remote waveform into continuous visualizer only when scope is enabled
+    if (scopeEnabled && data.wave && data.wave.length > 0 && (!capture.isRecording || data.source !== 'web_ui_mic')) {
       capture.pushRemoteWave(data.wave, data.passed_gate);
     }
   });

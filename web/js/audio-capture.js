@@ -22,11 +22,59 @@ class AudioCapture {
     this.remoteAnimId = null;
     this.isRemote = false;
     this.remoteBuffer = new Float32Array(256);
+    this.scopeEnabled = true;
 
     // Live headphone monitor for remote audio (Host Native Mic and WAV injection)
     this.isMonitoring = false;
     this.monitorCtx = null;
     this.nextScheduleTime = 0;
+  }
+
+  setScopeEnabled(enabled) {
+    this.scopeEnabled = !!enabled;
+    if (!this.scopeEnabled) {
+      if (this.animId) {
+        cancelAnimationFrame(this.animId);
+        this.animId = null;
+      }
+      if (this.remoteAnimId) {
+        cancelAnimationFrame(this.remoteAnimId);
+        this.remoteAnimId = null;
+      }
+      this.drawDisabledVisualizer();
+    } else {
+      if (this.isRecording) {
+        this.startVisualizer();
+      } else if (this.isRemote) {
+        this.startRemoteVisualizer();
+      } else {
+        this.clearVisualizer();
+      }
+    }
+  }
+
+  drawDisabledVisualizer() {
+    if (!this.canvasCtx || !this.canvas) return;
+    const ctx = this.canvasCtx;
+    const width = this.canvas.width;
+    const height = this.canvas.height;
+    ctx.fillStyle = '#06090d';
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(0, height / 2);
+    ctx.lineTo(width, height / 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#64748b';
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Live Scope & Meter Disabled (CPU Saved)', width / 2, height / 2 - 12);
   }
 
   setCanvas(canvasElement) {
@@ -172,6 +220,14 @@ class AudioCapture {
 
   startVisualizer() {
     if (!this.canvas || !this.analyserNode) return;
+    if (this.animId) {
+      cancelAnimationFrame(this.animId);
+      this.animId = null;
+    }
+    if (!this.scopeEnabled) {
+      this.drawDisabledVisualizer();
+      return;
+    }
 
     const bufferLength = this.analyserNode.frequencyBinCount;
     const timeData = new Uint8Array(bufferLength);
@@ -256,6 +312,7 @@ class AudioCapture {
   }
 
   pushRemoteWave(samples, passedGate = true) {
+    if (!this.scopeEnabled) return;
     if (!this.remoteBuffer) {
       this.remoteBuffer = new Float32Array(256);
     }
@@ -270,8 +327,13 @@ class AudioCapture {
   startRemoteVisualizer() {
     if (this.remoteAnimId) {
       cancelAnimationFrame(this.remoteAnimId);
+      this.remoteAnimId = null;
     }
     if (!this.canvas) return;
+    if (!this.scopeEnabled) {
+      this.drawDisabledVisualizer();
+      return;
+    }
 
     const draw = () => {
       this.remoteAnimId = requestAnimationFrame(draw);

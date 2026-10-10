@@ -8,6 +8,7 @@ import (
 	"math"
 	"net"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -46,7 +47,7 @@ func NewWarmASR(tok, enc, dec, joi string) (WarmASR, error) {
 		"--encoder="+enc,
 		"--decoder="+dec,
 		"--joiner="+joi,
-		"--num-threads=2",
+		"--num-threads=4",
 		fmt.Sprintf("--port=%d", port),
 	)
 
@@ -59,9 +60,9 @@ func NewWarmASR(tok, enc, dec, joi string) (WarmASR, error) {
 		port: port,
 	}
 
-	// Poll port until ready (up to 6 seconds for ONNX models to load into RAM once)
+	// Poll port until ready (up to 15 seconds for ONNX models to load into RAM once on Windows)
 	ready := false
-	for i := 0; i < 60; i++ {
+	for i := 0; i < 150; i++ {
 		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 100*time.Millisecond)
 		if err == nil {
 			conn.Close()
@@ -77,7 +78,7 @@ func NewWarmASR(tok, enc, dec, joi string) (WarmASR, error) {
 	}
 
 	server.ready = true
-	log.Printf("[SherpaRunner] Warm streaming ASR server initialized on port %d (zero cold starts)", port)
+	log.Printf("[SherpaRunner] Warm streaming ASR server initialized on port %d with 4 threads (zero cold starts)", port)
 	return server, nil
 }
 
@@ -184,8 +185,9 @@ func (s *warmASRServer) Transcribe(samples []float32) (*ASRResult, error) {
 	}
 
 	return &ASRResult{
-		Transcript: finalTranscript,
+		Transcript: strings.ToLower(strings.TrimSpace(finalTranscript)),
 		Tokens:     finalTokens,
+		Confidence: 0.95,
 		IsFinal:    true,
 	}, nil
 }

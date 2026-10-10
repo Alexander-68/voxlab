@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -530,16 +531,19 @@ func (s *Server) handleASRWorkItem(item asrWorkItem) {
 			} else {
 				// Phrase segment completed during a pause in speech.
 				// Dictation mode continues until explicitly stopped by user!
-				s.dictationDraft = AppendDictationPhrase(s.dictationDraft, asrRes.Transcript)
-				words := len(intent.Tokenize(s.dictationDraft))
-				s.BroadcastJSON(map[string]interface{}{
-					"event": "annotation.draft",
-					"data": map[string]interface{}{
-						"target_id":  s.dictationTarget,
-						"draft_text": s.dictationDraft,
-						"word_count": words,
-					},
-				})
+				cleanText := strings.TrimSpace(asrRes.Transcript)
+				if cleanText != "" {
+					s.dictationDraft = AppendDictationPhrase(s.dictationDraft, cleanText)
+					words := len(intent.Tokenize(s.dictationDraft))
+					s.BroadcastJSON(map[string]interface{}{
+						"event": "annotation.draft",
+						"data": map[string]interface{}{
+							"target_id":  s.dictationTarget,
+							"draft_text": s.dictationDraft,
+							"word_count": words,
+						},
+					})
+				}
 			}
 		}
 	}

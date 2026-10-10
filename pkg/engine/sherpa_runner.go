@@ -29,6 +29,7 @@ type SherpaRunner struct {
 	warmASR       WarmASR
 	mu            sync.Mutex
 	turnAudio     []float32
+	preRoll       [][]float32
 	speechChunks  int
 	silenceChunks int
 	lastPartial   time.Time
@@ -54,10 +55,13 @@ func NewSherpaRunner(cfg *config.AppConfig) *SherpaRunner {
 	go func() {
 		tok, enc, dec, joi, modelsExist := findZipformerModelDir(cfg.Engine.ZipformerDir)
 		if modelsExist {
-			if warm, err := NewWarmASR(tok, enc, dec, joi); err == nil {
+			warm, err := NewWarmASR(tok, enc, dec, joi)
+			if err == nil {
 				runner.mu.Lock()
 				runner.warmASR = warm
 				runner.mu.Unlock()
+			} else {
+				log.Printf("[SherpaRunner] Background Warm ASR initialization notice: %v", err)
 			}
 		}
 	}()
@@ -94,9 +98,23 @@ func (r *SherpaRunner) ProcessASRChunk(chunk []float32, isDictation bool) (*ASRR
 	defer r.mu.Unlock()
 
 	_, dbfs := audio.CalculateRMS(chunk)
-	isVoice := dbfs > -38.0
+	isVoice := dbfs > -42.0
+
+	if !isVoice && r.speechChunks == 0 {
+		// Maintain a 12-chunk (~360ms) circular pre-roll buffer to preserve leading word consonants
+		r.preRoll = append(r.preRoll, chunk)
+		if len(r.preRoll) > 12 {
+			r.preRoll = r.preRoll[1:]
+		}
+	}
 
 	if isVoice {
+		if r.speechChunks == 0 && len(r.preRoll) > 0 {
+			for _, pChunk := range r.preRoll {
+				r.turnAudio = append(r.turnAudio, pChunk...)
+			}
+			r.preRoll = nil
+		}
 		r.speechChunks++
 		r.silenceChunks = 0
 		r.turnAudio = append(r.turnAudio, chunk...)
@@ -115,10 +133,11 @@ func (r *SherpaRunner) ProcessASRChunk(chunk []float32, isDictation bool) (*ASRR
 		requiredSilenceChunks = 42
 	}
 
-	if r.speechChunks >= 8 && r.silenceChunks >= requiredSilenceChunks && len(r.turnAudio) >= 16000*4/10 {
+	if r.speechChunks >= 8 && r.silenceChunks >= requiredSilenceChunks && len(r.turnAudio) >= 16000*3/10 {
 		audioToTranscribe := make([]float32, len(r.turnAudio))
 		copy(audioToTranscribe, r.turnAudio)
 		r.turnAudio = nil
+		r.preRoll = nil
 		r.speechChunks = 0
 		r.silenceChunks = 0
 
@@ -147,6 +166,7 @@ func (r *SherpaRunner) ProcessASRChunk(chunk []float32, isDictation bool) (*ASRR
 			log.Printf("[SherpaRunner] ASR inference error: %v, falling back to simulator", err)
 			return r.simulator.ProcessASRChunk(chunk, isDictation)
 		}
+		res.Transcript = strings.ToLower(strings.TrimSpace(res.Transcript))
 		res.IsFinal = true
 		return res, nil
 	}
@@ -180,7 +200,7 @@ func (r *SherpaRunner) transcribeWAV(bin, tok, enc, dec, joi string, samples []f
 		"--encoder="+enc,
 		"--decoder="+dec,
 		"--joiner="+joi,
-		"--num-threads=2",
+		"--num-threads=4",
 		tempWav,
 	)
 
@@ -192,6 +212,7 @@ func (r *SherpaRunner) transcribeWAV(bin, tok, enc, dec, joi string, samples []f
 	outStr := string(outBytes)
 	var text string
 	var tokens []string
+	jsonFound := false
 
 	lines := strings.Split(outStr, "\n")
 	for _, line := range lines {
@@ -202,21 +223,33 @@ func (r *SherpaRunner) transcribeWAV(bin, tok, enc, dec, joi string, samples []f
 				Tokens []string `json:"tokens"`
 			}
 			if err := json.Unmarshal([]byte(trimmed), &parsed); err == nil {
-				text = strings.TrimSpace(parsed.Text)
+				text = strings.ToLower(strings.TrimSpace(parsed.Text))
 				tokens = parsed.Tokens
+				jsonFound = true
 				break
 			}
 		}
 	}
 
-	if text == "" {
+	// Only fall back to line inspection if JSON output was completely missing from the binary
+	if !jsonFound && text == "" {
 		for _, line := range lines {
 			trimmed := strings.TrimSpace(line)
-			if len(trimmed) > 0 && !strings.HasPrefix(trimmed, "OnlineRecognizer") &&
-				!strings.HasPrefix(trimmed, "Start") && !strings.HasPrefix(trimmed, "Recognizer") &&
-				!strings.HasPrefix(trimmed, "Number of threads") && !strings.HasPrefix(trimmed, "D:") &&
-				!strings.HasPrefix(trimmed, "{") {
-				text = trimmed
+			if len(trimmed) > 0 &&
+				!strings.HasPrefix(trimmed, "OnlineRecognizer") &&
+				!strings.HasPrefix(trimmed, "Start") &&
+				!strings.HasPrefix(trimmed, "Recognizer") &&
+				!strings.HasPrefix(trimmed, "Number of threads") &&
+				!strings.HasPrefix(trimmed, "D:") &&
+				!strings.HasPrefix(trimmed, "C:") &&
+				!strings.HasPrefix(trimmed, "{") &&
+				!strings.Contains(trimmed, ".wav") &&
+				!strings.Contains(trimmed, "voxlab_asr_") &&
+				!strings.Contains(trimmed, `\`) &&
+				!strings.Contains(trimmed, "/") &&
+				!strings.Contains(trimmed, "Elapsed") &&
+				!strings.Contains(trimmed, "RTF") {
+				text = strings.ToLower(trimmed)
 				break
 			}
 		}
@@ -234,6 +267,7 @@ func (r *SherpaRunner) transcribeWAV(bin, tok, enc, dec, joi string, samples []f
 func (r *SherpaRunner) ResetASR() {
 	r.mu.Lock()
 	r.turnAudio = nil
+	r.preRoll = nil
 	r.speechChunks = 0
 	r.silenceChunks = 0
 	r.mu.Unlock()
