@@ -545,4 +545,45 @@ func TestServerASREngineSwitching(t *testing.T) {
 	}
 }
 
+func TestServerKWSConfiguration(t *testing.T) {
+	srv := setupTestServer(t)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws", srv.handleWebSocket)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("WebSocket connection failed: %v", err)
+	}
+	defer conn.Close()
+
+	// Initial default should be disabled
+	if srv.cfg.KWS.Enabled {
+		t.Errorf("expected KWS.Enabled to default to false")
+	}
+
+	// Enable KWS
+	_ = conn.WriteJSON(map[string]interface{}{
+		"action":  "set_kws_enable",
+		"enabled": true,
+	})
+	time.Sleep(50 * time.Millisecond)
+	if !srv.cfg.KWS.Enabled {
+		t.Errorf("expected KWS.Enabled to be true after set_kws_enable")
+	}
+
+	// Change KWS keyword
+	_ = conn.WriteJSON(map[string]interface{}{
+		"action":  "set_kws_keyword",
+		"keyword": "hey console",
+	})
+	time.Sleep(50 * time.Millisecond)
+	if srv.cfg.KWS.Keyword != "hey console" {
+		t.Errorf("expected KWS.Keyword to be 'hey console', got %q", srv.cfg.KWS.Keyword)
+	}
+}
+
 

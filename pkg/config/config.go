@@ -93,7 +93,7 @@ func DefaultConfig() *AppConfig {
 			TargetRMS:             0.12,
 		},
 		KWS: KWSConfig{
-			Enabled:            true,
+			Enabled:            false,
 			Keyword:            "hey voxlab",
 			Threshold:          0.40,
 			PreRollDurationSec: 1.0,

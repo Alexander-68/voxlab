@@ -116,28 +116,26 @@
             <h3>Wake-Word Detector (KWS) <span id="kws-disabled-badge" class="badge badge-muted hidden" style="font-size: 10px;">Disabled in Dictation</span></h3>
             <div class="toggle-list">
               <label class="toggle-item">
-                <input type="checkbox" id="chk-kws-enable" checked>
+                <input type="checkbox" id="chk-kws-enable">
                 <span>Continuous Wake-Word Detection</span>
               </label>
             </div>
             <div class="form-group mt-2">
               <label for="kws-keyword">Wake Phrase</label>
-              <select id="kws-keyword" class="form-control">
-                <option value="hey voxlab">"Hey VoxLab"</option>
-                <option value="hey console">"Hey Console"</option>
-                <option value="open settings">"Open Settings" (Direct)</option>
-              </select>
+              <input type="text" id="kws-keyword" class="form-control" placeholder="Enter wake phrase (e.g. hey voxlab)..." value="hey voxlab" autocomplete="off">
             </div>
-            <div class="slider-group">
-              <div class="slider-header">
-                <label>Sensitivity Threshold</label>
-                <span id="kws-thresh-val">0.40</span>
+            <div id="kws-acoustic-controls">
+              <div class="slider-group">
+                <div class="slider-header">
+                  <label>Sensitivity Threshold</label>
+                  <span id="kws-thresh-val">0.40</span>
+                </div>
+                <input type="range" id="kws-thresh-slider" min="0.10" max="0.90" value="0.40" step="0.05">
               </div>
-              <input type="range" id="kws-thresh-slider" min="0.10" max="0.90" value="0.40" step="0.05">
-            </div>
-            <div class="ring-buffer-indicator">
-              <span>Pre-roll Buffer:</span>
-              <strong id="ring-buf-status">1000 ms armed</strong>
+              <div class="ring-buffer-indicator">
+                <span>Pre-roll Buffer:</span>
+                <strong id="ring-buf-status">1000 ms armed</strong>
+              </div>
             </div>
           </div>
         </div>

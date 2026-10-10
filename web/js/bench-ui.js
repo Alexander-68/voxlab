@@ -30,11 +30,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // KWS
   const chkKwsEnable = document.getElementById('chk-kws-enable');
-  const kwsKeywordSelect = document.getElementById('kws-keyword');
+  const kwsKeywordInput = document.getElementById('kws-keyword');
   const kwsThreshSlider = document.getElementById('kws-thresh-slider');
   const kwsThreshVal = document.getElementById('kws-thresh-val');
   const kwsSettingsBox = document.getElementById('kws-settings-box');
   const kwsDisabledBadge = document.getElementById('kws-disabled-badge');
+  const kwsAcousticControls = document.getElementById('kws-acoustic-controls');
 
   // Tabs
   const tabBtnCommands = document.getElementById('tab-btn-commands');
@@ -163,6 +164,9 @@ document.addEventListener('DOMContentLoaded', () => {
   let browserRecognizer = null;
   let isBrowserRecognizing = false;
   let isDictationActive = false;
+  let isPttActive = false;
+  let isBrowserWakeActive = false;
+  let browserWakeResetTimer = null;
   let browserTargetMode = 'command';
 
   if (SpeechRecognition) {
@@ -176,9 +180,14 @@ document.addEventListener('DOMContentLoaded', () => {
       browserRecognizer.onstart = () => {
         isBrowserRecognizing = true;
         if (browserTargetMode === 'command') {
-          asrStatusBadge.textContent = 'Listening (Browser)';
+          const isKws = chkKwsEnable && chkKwsEnable.checked && (kwsKeywordInput ? kwsKeywordInput.value.trim().length > 0 : false);
+          asrStatusBadge.textContent = isPttActive ? 'Listening (PTT)' : (isKws ? 'Listening (KWS)' : 'Listening (Browser)');
           asrStatusBadge.className = 'badge badge-listen';
-          commandTranscriptBox.innerHTML = '<span style="color:var(--cyan);">[Browser Web Speech] Listening...</span>';
+          if (!isPttActive && isKws && !isBrowserWakeActive) {
+            commandTranscriptBox.innerHTML = `<span class="placeholder-text">Awaiting wake phrase ("${escapeHtml(kwsKeywordInput.value.trim())}") or Push to talk...</span>`;
+          } else if (isPttActive) {
+            commandTranscriptBox.innerHTML = '<span style="color:#60a5fa;">[Push to talk] Listening for command...</span>';
+          }
         } else {
           dictationStatusBadge.textContent = 'Listening (Browser)';
           dictationStatusBadge.className = 'badge badge-listen';
@@ -199,16 +208,82 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         }
 
-        const display = finalStr || interim;
+        const display = (finalStr || interim).trim();
         if (browserTargetMode === 'command') {
-          if (display) {
-            commandTranscriptBox.innerHTML = `<strong>${escapeHtml(display)}</strong>`;
+          const wakePhrase = (kwsKeywordInput ? kwsKeywordInput.value.trim().toLowerCase() : 'hey voxlab');
+          const isKwsEnabled = chkKwsEnable && chkKwsEnable.checked && wakePhrase.length > 0;
+
+          // Case 1: Manual Push-to-Talk active -> directly transcribe and execute command
+          if (isPttActive || !isKwsEnabled) {
+            if (display) {
+              commandTranscriptBox.innerHTML = `<strong>${escapeHtml(display)}</strong>`;
+            }
+            if (finalStr.trim()) {
+              logEvent('browser_asr.final', `"${finalStr.trim()}"`);
+              client.injectText(finalStr.trim(), 'command');
+              isPttActive = false;
+            }
+            return;
           }
-          if (finalStr.trim()) {
-            logEvent('browser_asr.final', `"${finalStr.trim()}"`);
-            client.injectText(finalStr.trim(), 'command');
+
+          // Case 2: Option A - Continuous Wake-Word Detection active in Browser Mode
+          const lowDisplay = display.toLowerCase();
+          const hasWakePhrase = wakePhrase && lowDisplay.includes(wakePhrase);
+
+          if (hasWakePhrase) {
+            // Wake phrase spotted in speech!
+            asrStatusBadge.textContent = 'Listening';
+            asrStatusBadge.className = 'badge badge-listen';
+
+            const wakeIdx = lowDisplay.indexOf(wakePhrase);
+            const remainder = display.slice(wakeIdx + wakePhrase.length).replace(/^[,\s.:;?!]+/, '').trim();
+
+            if (!remainder) {
+              // User spoke wake phrase alone ("Hey VoxLab")
+              isBrowserWakeActive = true;
+              commandTranscriptBox.innerHTML = `<span style="color:#38bdf8;">[Wake word: "${escapeHtml(wakePhrase)}"]</span> Listening for command...`;
+              logEvent('browser_kws.detected', `Wake phrase spotted: "${wakePhrase}"`);
+              if (browserWakeResetTimer) clearTimeout(browserWakeResetTimer);
+              browserWakeResetTimer = setTimeout(() => {
+                isBrowserWakeActive = false;
+                if (!isPttActive && asrStatusBadge.textContent.includes('Listening')) {
+                  asrStatusBadge.textContent = 'Listening (KWS)';
+                  asrStatusBadge.className = 'badge badge-subtle';
+                  commandTranscriptBox.innerHTML = `<span class="placeholder-text">Awaiting wake phrase ("${escapeHtml(wakePhrase)}") or Push to talk...</span>`;
+                }
+              }, 6000);
+            } else {
+              // User spoke wake phrase + command in one breath ("Hey VoxLab open settings")
+              commandTranscriptBox.innerHTML = `<span style="color:#38bdf8;">[Wake word: "${escapeHtml(wakePhrase)}"]</span> <strong>${escapeHtml(remainder)}</strong>`;
+              if (finalStr.trim()) {
+                const finalLow = finalStr.toLowerCase();
+                const fWakeIdx = finalLow.indexOf(wakePhrase);
+                const finalCmd = finalStr.slice(fWakeIdx + wakePhrase.length).replace(/^[,\s.:;?!]+/, '').trim();
+                if (finalCmd) {
+                  logEvent('browser_kws.final', `Wake command executed: "${finalCmd}"`);
+                  client.injectText(finalCmd, 'command');
+                  isBrowserWakeActive = false;
+                  if (browserWakeResetTimer) clearTimeout(browserWakeResetTimer);
+                }
+              }
+            }
+          } else if (isBrowserWakeActive) {
+            // Wake phrase was spotted in previous turn, this utterance is the command!
+            if (display) {
+              commandTranscriptBox.innerHTML = `<span style="color:#38bdf8;">[Command]:</span> <strong>${escapeHtml(display)}</strong>`;
+            }
+            if (finalStr.trim()) {
+              logEvent('browser_kws.followup', `Command executed: "${finalStr.trim()}"`);
+              client.injectText(finalStr.trim(), 'command');
+              isBrowserWakeActive = false;
+              if (browserWakeResetTimer) clearTimeout(browserWakeResetTimer);
+            }
+          } else {
+            // Conversational speech / chatter without wake phrase -> ignore
+            commandTranscriptBox.innerHTML = `<span class="placeholder-text" style="color:var(--text-muted);">Awaiting wake phrase ("${escapeHtml(wakePhrase)}") or Push to talk...</span>`;
           }
         } else {
+          // Dictation mode
           if (display) {
             dictationLiveBox.innerHTML = `<strong>${escapeHtml(display)}</strong>`;
           }
@@ -239,7 +314,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       browserRecognizer.onend = () => {
         isBrowserRecognizing = false;
-        // Continuous dictation: do not stop on pause in speech, continue until "Stop dictation" is clicked
+        // Continuous dictation: continue until "Stop dictation" is clicked
         if (browserTargetMode === 'dictation' && isDictationActive) {
           try {
             browserRecognizer.continuous = true;
@@ -250,9 +325,24 @@ document.addEventListener('DOMContentLoaded', () => {
             console.warn('Could not auto-restart browser dictation recognizer:', e);
           }
         }
+
+        // Continuous wake-word detection in browser mode: continue listening for wake phrase
+        const currAsr = asrEngineSelect ? asrEngineSelect.value : 'sherpa';
+        const isKwsEnabled = chkKwsEnable && chkKwsEnable.checked && (kwsKeywordInput ? kwsKeywordInput.value.trim().length > 0 : false);
+        if (currAsr === 'browser' && browserTargetMode === 'command' && isKwsEnabled && tabBtnCommands.classList.contains('active')) {
+          try {
+            browserRecognizer.continuous = true;
+            browserRecognizer.start();
+            isBrowserRecognizing = true;
+            return;
+          } catch (e) {
+            console.warn('Could not auto-restart browser KWS recognizer:', e);
+          }
+        }
+
         if (browserTargetMode === 'command') {
           if (asrStatusBadge.textContent.includes('Listening')) {
-            asrStatusBadge.textContent = 'Ready';
+            asrStatusBadge.textContent = isKwsEnabled ? 'Listening (KWS)' : 'Ready';
             asrStatusBadge.className = 'badge badge-subtle';
           }
         } else {
@@ -295,7 +385,7 @@ document.addEventListener('DOMContentLoaded', () => {
       engineStatus.title = `Active ASR Engine: ${label}`;
     }
 
-    // In browser mode: visibly disable panel "Noise Cancelling & Filters" and fix "Audio Capture Source" to web_ui_mic
+    // In browser mode: visibly disable panel "Noise Cancelling & Filters", fix "Audio Capture Source" to web_ui_mic, hide acoustic controls
     if (engine === 'browser') {
       if (audioSourceSelect) {
         audioSourceSelect.value = 'web_ui_mic';
@@ -320,6 +410,20 @@ document.addEventListener('DOMContentLoaded', () => {
       if (dspBypassedBadge) {
         dspBypassedBadge.classList.remove('hidden');
       }
+      if (kwsAcousticControls) {
+        kwsAcousticControls.style.display = 'none';
+      }
+      // If continuous wake-word detection is enabled, arm browser recognizer for wake phrase spotting
+      if (chkKwsEnable && chkKwsEnable.checked && (kwsKeywordInput ? kwsKeywordInput.value.trim().length > 0 : false) && tabBtnCommands.classList.contains('active')) {
+        browserTargetMode = 'command';
+        isPttActive = false;
+        try {
+          if (!isBrowserRecognizing && browserRecognizer) {
+            browserRecognizer.continuous = true;
+            browserRecognizer.start();
+          }
+        } catch (_) {}
+      }
     } else {
       if (audioSourceSelect) {
         audioSourceSelect.disabled = false;
@@ -335,6 +439,12 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       if (dspBypassedBadge) {
         dspBypassedBadge.classList.add('hidden');
+      }
+      if (kwsAcousticControls) {
+        kwsAcousticControls.style.display = '';
+      }
+      if (!isDictationActive && isBrowserRecognizing && browserRecognizer) {
+        try { browserRecognizer.stop(); } catch (_) {}
       }
       if (audioSourceSelect) {
         updateSourceControls(audioSourceSelect.value);
@@ -521,18 +631,6 @@ document.addEventListener('DOMContentLoaded', () => {
     commandTranscriptBox.innerHTML = `<span style="color:#38bdf8;">[Wake word: "${data.phrase}"] Listening...</span>`;
     asrStatusBadge.textContent = 'Listening';
     asrStatusBadge.className = 'badge badge-listen';
-
-    const currAsr = asrEngineSelect ? asrEngineSelect.value : 'sherpa';
-    if (currAsr === 'browser' && SpeechRecognition && browserRecognizer) {
-      browserTargetMode = 'command';
-      try {
-        if (!isBrowserRecognizing) {
-          browserRecognizer.start();
-        }
-      } catch (e) {
-        console.warn('Could not auto-start Web Speech API on wake-word:', e);
-      }
-    }
   });
 
   client.on('transcript.partial', (data) => {
@@ -751,6 +849,71 @@ document.addEventListener('DOMContentLoaded', () => {
     client.setKwsThreshold(val);
   });
 
+  // KWS controls & validation
+  function updateKwsValidation() {
+    const kw = kwsKeywordInput ? kwsKeywordInput.value.trim() : '';
+    const hasKeyword = kw.length > 0;
+    if (chkKwsEnable) {
+      if (!hasKeyword) {
+        chkKwsEnable.disabled = true;
+        if (chkKwsEnable.checked) {
+          chkKwsEnable.checked = false;
+          handleKwsToggle(false);
+        }
+      } else {
+        if (!kwsSettingsBox || !kwsSettingsBox.classList.contains('section-disabled')) {
+          chkKwsEnable.disabled = false;
+        }
+      }
+    }
+  }
+
+  function handleKwsToggle(enabled) {
+    client.setKwsEnabled(enabled);
+    logEvent('kws.toggle', `Continuous Wake-Word Detection: ${enabled ? 'ENABLED' : 'DISABLED'}`);
+    const currAsr = asrEngineSelect ? asrEngineSelect.value : 'sherpa';
+    if (currAsr === 'browser') {
+      if (enabled && tabBtnCommands.classList.contains('active')) {
+        browserTargetMode = 'command';
+        isPttActive = false;
+        isBrowserWakeActive = false;
+        try {
+          if (!isBrowserRecognizing && browserRecognizer) {
+            browserRecognizer.continuous = true;
+            browserRecognizer.start();
+          }
+        } catch (_) {}
+        commandTranscriptBox.innerHTML = `<span class="placeholder-text">Awaiting wake phrase ("${escapeHtml(kwsKeywordInput ? kwsKeywordInput.value.trim() : '')}") or Push to talk...</span>`;
+        asrStatusBadge.textContent = 'Listening (KWS)';
+        asrStatusBadge.className = 'badge badge-subtle';
+      } else {
+        if (!isDictationActive && isBrowserRecognizing && browserRecognizer) {
+          try { browserRecognizer.stop(); } catch (_) {}
+        }
+        if (!isDictationActive) {
+          asrStatusBadge.textContent = 'Ready';
+          asrStatusBadge.className = 'badge badge-subtle';
+        }
+      }
+    }
+  }
+
+  if (kwsKeywordInput) {
+    kwsKeywordInput.addEventListener('input', () => {
+      updateKwsValidation();
+      const kw = kwsKeywordInput.value.trim();
+      if (kw) {
+        client.setKwsKeyword(kw);
+      }
+    });
+  }
+
+  if (chkKwsEnable) {
+    chkKwsEnable.addEventListener('change', (e) => {
+      handleKwsToggle(e.target.checked);
+    });
+  }
+
   chkHighpass.addEventListener('change', (e) => {
     client.setHighPass(e.target.checked);
     logEvent('dsp.highpass', `80Hz Highpass De-rumble: ${e.target.checked ? 'ENABLED' : 'BYPASSED'}`);
@@ -782,6 +945,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Buttons
   btnCancel.addEventListener('click', () => {
     isDictationActive = false;
+    isPttActive = false;
+    isBrowserWakeActive = false;
+    if (browserWakeResetTimer) clearTimeout(browserWakeResetTimer);
     if (isBrowserRecognizing && browserRecognizer) {
       try { browserRecognizer.stop(); } catch (_) {}
     }
@@ -798,6 +964,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   btnPttCommand.addEventListener('click', () => {
     isDictationActive = false;
+    isPttActive = true;
+    isBrowserWakeActive = false;
+    if (browserWakeResetTimer) clearTimeout(browserWakeResetTimer);
     if (!ttsAudioPlayer.paused) {
       ttsAudioPlayer.pause();
       ttsAudioPlayer.currentTime = 0;
@@ -814,12 +983,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       browserTargetMode = 'command';
-      browserRecognizer.continuous = false;
+      commandTranscriptBox.innerHTML = '<span style="color:#60a5fa;">[Push to talk] Listening for command...</span>';
+      asrStatusBadge.textContent = 'Listening (PTT)';
+      asrStatusBadge.className = 'badge badge-listen';
+      const isContinuous = chkKwsEnable && chkKwsEnable.checked && (kwsKeywordInput ? kwsKeywordInput.value.trim().length > 0 : false);
+      browserRecognizer.continuous = isContinuous;
       try {
-        if (isBrowserRecognizing) {
-          browserRecognizer.stop();
+        if (!isBrowserRecognizing) {
+          browserRecognizer.start();
         }
-        browserRecognizer.start();
       } catch (e) {
         console.warn('SpeechRecognition start error:', e);
       }
@@ -1004,9 +1176,22 @@ document.addEventListener('DOMContentLoaded', () => {
     if (kwsSettingsBox) {
       kwsSettingsBox.classList.remove('section-disabled');
       kwsSettingsBox.querySelectorAll('input, select, button').forEach((el) => { el.disabled = false; });
+      updateKwsValidation();
     }
     if (kwsDisabledBadge) {
       kwsDisabledBadge.classList.add('hidden');
+    }
+    // If browser mode and KWS is enabled, resume continuous wake word spotting
+    const currAsr = asrEngineSelect ? asrEngineSelect.value : 'sherpa';
+    if (currAsr === 'browser' && chkKwsEnable && chkKwsEnable.checked && (kwsKeywordInput ? kwsKeywordInput.value.trim().length > 0 : false)) {
+      browserTargetMode = 'command';
+      isPttActive = false;
+      try {
+        if (!isBrowserRecognizing && browserRecognizer) {
+          browserRecognizer.continuous = true;
+          browserRecognizer.start();
+        }
+      } catch (_) {}
     }
   });
 
@@ -1023,6 +1208,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (kwsDisabledBadge) {
       kwsDisabledBadge.classList.remove('hidden');
+    }
+    // Stop continuous command wake-word recognizer if running
+    if (browserTargetMode === 'command' && isBrowserRecognizing && browserRecognizer && !isDictationActive) {
+      try { browserRecognizer.stop(); } catch (_) {}
     }
   });
 
@@ -1247,6 +1436,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     })
     .catch(() => {});
+
+  // Initialize KWS validation state
+  updateKwsValidation();
 
   // Connect WebSocket
   client.connect();

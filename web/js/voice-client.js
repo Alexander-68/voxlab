@@ -125,6 +125,14 @@ class VoiceClient {
     this.sendAction('set_kws_threshold', { threshold: threshold });
   }
 
+  setKwsEnabled(enabled) {
+    this.sendAction('set_kws_enable', { enabled: !!enabled });
+  }
+
+  setKwsKeyword(keyword) {
+    this.sendAction('set_kws_keyword', { keyword: keyword });
+  }
+
   setAgc(enabled) {
     this.sendAction('set_agc', { enabled: enabled });
   }

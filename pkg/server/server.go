@@ -643,6 +643,18 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 					log.Printf("[KWS] Wake-word threshold set to %.2f", th)
 				}
 
+			case "set_kws_enable":
+				if en, ok := req["enabled"].(bool); ok {
+					s.cfg.KWS.Enabled = en
+					log.Printf("[KWS] Continuous wake-word enabled: %v", en)
+				}
+
+			case "set_kws_keyword":
+				if kw, ok := req["keyword"].(string); ok {
+					s.cfg.KWS.Keyword = kw
+					log.Printf("[KWS] Wake-word phrase set to: %q", kw)
+				}
+
 			case "set_agc":
 				if en, ok := req["enabled"].(bool); ok {
 					s.dsp.SetAGCEnabled(en)
