@@ -487,20 +487,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateTtsModelDisplay(model, isNeural) {
     if (!model) return;
+    const cleanModel = model.replace(/\s*\[Warm RAM\]/gi, '').trim();
     if (ttsModelBadge) {
-      ttsModelBadge.textContent = model.toUpperCase();
+      ttsModelBadge.textContent = cleanModel.toUpperCase();
       ttsModelBadge.className = isNeural ? 'badge badge-connected' : 'badge badge-muted';
-      ttsModelBadge.title = `Active TTS Model: ${model}`;
+      ttsModelBadge.title = `Active TTS Model: ${cleanModel}`;
     }
     if (ttsModelName) {
-      ttsModelName.textContent = model;
+      ttsModelName.textContent = cleanModel;
     }
     if (ttsPlayerModel) {
-      ttsPlayerModel.textContent = model;
+      ttsPlayerModel.textContent = cleanModel;
     }
     if (ttsModelSelect) {
       let matched = false;
-      const lowModel = model.toLowerCase();
+      const lowModel = cleanModel.toLowerCase();
       // 1. Exact match
       for (const opt of ttsModelSelect.options) {
         if (opt.value && opt.value.toLowerCase() === lowModel) {

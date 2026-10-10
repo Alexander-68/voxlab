@@ -455,6 +455,10 @@ func (r *SherpaRunner) resolveKokoroModelFile(modelDir string) string {
 func (r *SherpaRunner) getWarmTTS(modelDir string, modelFile string) WarmTTS {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.getWarmTTSLocked(modelDir, modelFile)
+}
+
+func (r *SherpaRunner) getWarmTTSLocked(modelDir string, modelFile string) WarmTTS {
 
 	numThreads := r.cfg.Engine.NumThreads
 	if numThreads <= 0 {
@@ -519,6 +523,34 @@ func (r *SherpaRunner) getWarmTTS(modelDir string, modelFile string) WarmTTS {
 	}
 	r.warmTTS = warm
 	return warm
+}
+
+// WarmUp pre-loads the active Kokoro model into RAM and synthesizes "Hello" to keep the model always warm.
+func (r *SherpaRunner) WarmUp() {
+	r.mu.Lock()
+	modelDir, modelExists := findKokoroModelDir(r.cfg.Engine.KokoroModelDir)
+	var modelFile string
+	if modelExists {
+		modelFile = r.resolveKokoroModelFile(modelDir)
+	}
+	r.mu.Unlock()
+
+	if !modelExists || !isRegularFile(modelFile) {
+		return
+	}
+	warm := r.getWarmTTS(modelDir, modelFile)
+	if warm == nil {
+		return
+	}
+	version := detectKokoroVersion(filepath.Base(modelDir))
+	sid := mapVoiceToSID("default", version)
+	t0 := time.Now()
+	_, err := warm.SynthesizeStream("Hello", sid, 1.0, nil)
+	if err == nil {
+		log.Printf("[SherpaRunner] Model warmed up with 'Hello' in %v (file: %s)", time.Since(t0), filepath.Base(modelFile))
+	} else {
+		log.Printf("[SherpaRunner] Model warmup notice: %v", err)
+	}
 }
 
 // Synthesize runs Kokoro TTS via in-process warm engine if available, or falls back to sherpa-onnx-offline-tts binary / simulator.
@@ -716,13 +748,6 @@ func (r *SherpaRunner) TTSModelInfo() (string, bool) {
 	}
 
 	status := fmt.Sprintf("%s (%s)", base, variant)
-	r.mu.Lock()
-	isWarm := r.warmTTS != nil && r.warmTTS.IsWarm()
-	r.mu.Unlock()
-	if isWarm {
-		status += " [Warm RAM]"
-	}
-
 	return status, true
 }
 
@@ -796,6 +821,10 @@ func (r *SherpaRunner) SetTTSModel(modelName string) error {
 	}
 
 	log.Printf("[SherpaRunner] Switched active Kokoro model to: %s (file: %s)", targetDir, r.cfg.Engine.KokoroModelFile)
+
+	// Keep model always warm: synthesize "Hello" after model switch
+	go r.WarmUp()
+
 	return nil
 }
 
