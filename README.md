@@ -83,9 +83,12 @@
      - Distractor suppression (rejects conversational chatter quietly).
      - Negation detection (e.g. *"do not stop recording"* is rejected).
      - Multi-turn confirmation state machine (`IDLE` $\to$ `COMMAND_LISTEN` $\to$ `PROCESS` $\to$ `CONFIRM` $\to$ `IDLE`).
+     - 600ms responsive silence endpointing.
    - **Purpose 2: Voice Dictations**:
-     - Continuous streaming speech transcription with live partial updates.
-     - Silence endpointing and duration capping.
+     - **Live Partial Speech Streaming**: Neural recognizer streams interim text hypotheses live every ~650ms during continuous speech.
+     - **Natural Pause Endpointing & Auto-Punctuation**: Inter-phrase silence endpointing tuned to ~720ms. Phrases completed on pause automatically receive sentence termination (`.`) and subsequent phrases are automatically capitalized. Spoken punctuation keywords (`period`, `comma`, `question mark`, etc.) are recognized.
+     - **Noise & Keyboard Clack Drop**: When typing noise or background sound triggers VAD without intelligible speech, the test bench cleanly resets back to listening state without hanging.
+     - **Leading Syllable Pre-roll**: 360ms circular buffer preserves initial consonants and word onsets.
      - Strictly isolated from command execution: words spoken during dictation can never accidentally trigger system commands.
      - Draft review workflow: edit, approve, copy, or discard.
 
@@ -98,9 +101,13 @@
    - Speed adjustment ($0.7\times$ to $1.5\times$).
    - Output to browser speaker AND host speaker with automated half-duplex echo gate suppression.
 
-6. **Dual Engine Mode**:
+6. **Web UI Test Bench Controls & CPU Optimization**:
+   - **Optional Live Oscilloscope & Audio Meter**: A dedicated toggle disables canvas `requestAnimationFrame` loops and DOM meter updates completely, freeing 100% of visualizer CPU cycles.
+   - **Decoupled ASR Pipeline Worker**: The audio processing loop and 30Hz WebSocket metering run on an independent thread, ensuring audio visualizers and level meters never stall during speech recognition.
+
+7. **Dual Engine Mode**:
    - **Simulator Mode (Default)**: Zero-dependency Go engine with realistic latencies, simulated ASR partials, and synthetic audio for instant development and testing.
-   - **Sherpa-ONNX Mode**: Executes native Sherpa-ONNX binaries against pre-trained ONNX neural network weights.
+   - **Sherpa-ONNX Mode**: Executes persistent, resident in-memory daemon (`sherpa-onnx-online-websocket-server`) with 4-thread neural Zipformer models for sub-second recognition latency.
 
 ---
 

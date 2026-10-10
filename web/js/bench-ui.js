@@ -727,21 +727,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
   client.on('transcript.partial', (data) => {
     if (data.mode === 'dictation') {
-      dictationLiveBox.innerHTML = `<strong>${escapeHtml(data.transcript)}</strong> <span class="badge badge-listen">...</span>`;
-      dictationStatusBadge.textContent = 'Transcribing';
-      dictationStatusBadge.className = 'badge badge-listen';
+      if (!data.transcript || data.transcript.trim() === '') {
+        dictationLiveBox.innerHTML = `<span>Listening... speak to dictate.</span>`;
+        dictationStatusBadge.textContent = 'Listening';
+        dictationStatusBadge.className = 'badge badge-listen';
+      } else {
+        dictationLiveBox.innerHTML = `<strong>${escapeHtml(data.transcript)}</strong> <span class="badge badge-listen">...</span>`;
+        dictationStatusBadge.textContent = 'Transcribing';
+        dictationStatusBadge.className = 'badge badge-listen';
+      }
     } else {
-      commandTranscriptBox.innerHTML = `<strong>${escapeHtml(data.transcript)}</strong> <span class="badge badge-listen">...</span>`;
-      asrStatusBadge.textContent = 'Decoding';
-      asrStatusBadge.className = 'badge badge-listen';
+      if (!data.transcript || data.transcript.trim() === '') {
+        commandTranscriptBox.innerHTML = `<span>Listening for command...</span>`;
+        asrStatusBadge.textContent = 'Listening';
+        asrStatusBadge.className = 'badge badge-listen';
+      } else {
+        commandTranscriptBox.innerHTML = `<strong>${escapeHtml(data.transcript)}</strong> <span class="badge badge-listen">...</span>`;
+        asrStatusBadge.textContent = 'Decoding';
+        asrStatusBadge.className = 'badge badge-listen';
+      }
     }
   });
 
   client.on('transcript.final', (data) => {
     logEvent('transcript.final', `"${data.transcript}"`);
-    commandTranscriptBox.innerHTML = `<strong>${escapeHtml(data.transcript)}</strong>`;
-    asrStatusBadge.textContent = 'Finalized';
-    asrStatusBadge.className = 'badge badge-ready';
+    if (!data.transcript || data.transcript.trim() === '') {
+      commandTranscriptBox.innerHTML = `<span>(No command detected)</span>`;
+      asrStatusBadge.textContent = 'Ready';
+      asrStatusBadge.className = 'badge badge-ready';
+    } else {
+      commandTranscriptBox.innerHTML = `<strong>${escapeHtml(data.transcript)}</strong>`;
+      asrStatusBadge.textContent = 'Finalized';
+      asrStatusBadge.className = 'badge badge-ready';
+    }
   });
 
   client.on('intent_matched', (data) => {

@@ -126,11 +126,12 @@ func (r *SherpaRunner) ProcessASRChunk(chunk []float32, isDictation bool) (*ASRR
 	}
 
 	// Trailing silence pause endpointing:
-	// For dictation: allow natural pauses between thoughts (~1260ms = 42 chunks @ 30ms).
-	// For commands: allow ~840ms (28 chunks @ 30ms) to prevent premature cutoffs.
-	requiredSilenceChunks := 28
+	// For dictation: natural inter-phrase pause (~720ms = 24 chunks @ 30ms) ensures
+	// distinct sentences get individual punctuation without merging consecutive thoughts.
+	// For commands: ~600ms (20 chunks @ 30ms) for snappy response.
+	requiredSilenceChunks := 20
 	if isDictation {
-		requiredSilenceChunks = 42
+		requiredSilenceChunks = 24
 	}
 
 	if r.speechChunks >= 8 && r.silenceChunks >= requiredSilenceChunks && len(r.turnAudio) >= 16000*3/10 {
@@ -171,13 +172,24 @@ func (r *SherpaRunner) ProcessASRChunk(chunk []float32, isDictation bool) (*ASRR
 		return res, nil
 	}
 
-	// While speaking, stream partial preview
-	if r.speechChunks >= 8 && time.Since(r.lastPartial) >= 400*time.Millisecond {
+	// While speaking, stream real partial hypothesis every ~650ms if warm recognizer is resident
+	if r.speechChunks >= 8 && time.Since(r.lastPartial) >= 650*time.Millisecond {
 		r.lastPartial = time.Now()
-		return &ASRResult{
-			Transcript: "(recognizing speech...)",
-			IsFinal:    false,
-		}, nil
+		if r.warmASR != nil && r.warmASR.IsWarm() && len(r.turnAudio) >= 16000*3/10 {
+			partialAudio := make([]float32, len(r.turnAudio))
+			copy(partialAudio, r.turnAudio)
+			if partialRes, err := r.warmASR.Transcribe(partialAudio); err == nil && partialRes != nil {
+				txt := strings.ToLower(strings.TrimSpace(partialRes.Transcript))
+				if txt != "" {
+					return &ASRResult{
+						Transcript: txt,
+						Tokens:     partialRes.Tokens,
+						IsFinal:    false,
+					}, nil
+				}
+			}
+		}
+		return nil, nil
 	}
 
 	return nil, nil

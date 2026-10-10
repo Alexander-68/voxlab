@@ -543,6 +543,16 @@ func (s *Server) handleASRWorkItem(item asrWorkItem) {
 							"word_count": words,
 						},
 					})
+				} else {
+					// No intelligible speech detected (e.g. keyboard typing / room noise).
+					// Clear partial preview so UI immediately drops back to ready listening state!
+					s.BroadcastJSON(map[string]interface{}{
+						"event": "transcript.partial",
+						"data": map[string]interface{}{
+							"mode":       "dictation",
+							"transcript": "",
+						},
+					})
 				}
 			}
 		}
