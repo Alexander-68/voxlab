@@ -12,3 +12,7 @@ models/
 # OS artifacts
 .DS_Store
 Thumbs.db
+
+# Logs
+log.txt
+*.log
