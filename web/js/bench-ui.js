@@ -59,6 +59,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Dictation Tab
   const btnStartDictation = document.getElementById('btn-start-dictation');
   const btnStopDictation = document.getElementById('btn-stop-dictation');
+  const customDictInput = document.getElementById('custom-dict-input');
+  const btnCustomDictInject = document.getElementById('btn-custom-dict-inject');
   const dictationLiveBox = document.getElementById('dictation-live-box');
   const dictationStatusBadge = document.getElementById('dictation-status-badge');
   const dictationDraftText = document.getElementById('dictation-draft-text');
@@ -95,10 +97,68 @@ document.addEventListener('DOMContentLoaded', () => {
   capture.setCanvas(scopeCanvas);
   capture.clearVisualizer();
 
+  // --- Dictation Punctuation & Formatting Helpers ---
+  function formatDictationPhrase(rawText) {
+    if (!rawText) return '';
+    let text = rawText.trim();
+    if (!text) return '';
+
+    const punctuationMap = [
+      { regex: /\b(period|full stop)\b/gi, replacement: '.' },
+      { regex: /\bcomma\b/gi, replacement: ',' },
+      { regex: /\bquestion mark\b/gi, replacement: '?' },
+      { regex: /\bexclamation (?:mark|point)\b/gi, replacement: '!' },
+      { regex: /\bsemicolon\b/gi, replacement: ';' },
+      { regex: /\bcolon\b/gi, replacement: ':' },
+      { regex: /\bnew paragraph\b/gi, replacement: '\n\n' },
+      { regex: /\bnew line\b/gi, replacement: '\n' },
+    ];
+
+    for (const { regex, replacement } of punctuationMap) {
+      text = text.replace(regex, replacement);
+    }
+
+    // Adjust spacing around punctuation and clean newlines
+    text = text.replace(/[ \t]+([.,;:?!])/g, '$1');
+    text = text.replace(/([.,;:?!])([a-zA-Z0-9])/g, '$1 $2');
+    text = text.replace(/[ \t]*\n[ \t]*/g, '\n');
+    text = text.replace(/\n{3,}/g, '\n\n');
+    text = text.replace(/[ \t]{2,}/g, ' ');
+    text = text.replace(/^[ \t]+|[ \t]+$/g, '');
+
+    if (!text) return '';
+
+    // Append semicolon if no punctuation was spoken at the end of the phrase
+    if (!/[.;,!?:\n]$/.test(text)) {
+      text += ';';
+    }
+
+    // Capitalize first letter of the phrase (accounting for leading newlines)
+    text = text.replace(/^(\s*)([a-z])/i, (_, p1, p2) => p1 + p2.toUpperCase());
+    // Capitalize after sentence-ending punctuation (. ? !)
+    text = text.replace(/([.?!]\s+)([a-z])/g, (_, p1, p2) => p1 + p2.toUpperCase());
+    // Capitalize after newlines
+    text = text.replace(/(\n+\s*)([a-z])/g, (_, p1, p2) => p1 + p2.toUpperCase());
+
+    return text;
+  }
+
+  function appendDictationPhrase(currentText, newPhrase) {
+    const formatted = formatDictationPhrase(newPhrase);
+    if (!formatted) return currentText || '';
+    if (!currentText || !currentText.trim()) return formatted;
+    const current = currentText.trimEnd();
+    if (formatted.startsWith('\n')) {
+      return current + formatted;
+    }
+    return current + ' ' + formatted;
+  }
+
   // --- Browser Web Speech API Support ---
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   let browserRecognizer = null;
   let isBrowserRecognizing = false;
+  let isDictationActive = false;
   let browserTargetMode = 'command';
 
   if (SpeechRecognition) {
@@ -149,12 +209,13 @@ document.addEventListener('DOMContentLoaded', () => {
             dictationLiveBox.innerHTML = `<strong>${escapeHtml(display)}</strong>`;
           }
           if (finalStr.trim()) {
-            const current = dictationDraftText.value.trim();
-            dictationDraftText.value = current ? `${current} ${finalStr.trim()}` : finalStr.trim();
+            const formatted = formatDictationPhrase(finalStr);
+            dictationDraftText.value = appendDictationPhrase(dictationDraftText.value, finalStr);
+            dictationLiveBox.innerHTML = `<strong>${escapeHtml(formatted)}</strong>`;
             draftWordCount.textContent = dictationDraftText.value.trim().split(/\s+/).filter(Boolean).length;
-            dictationStatusBadge.textContent = 'Draft Ready';
+            dictationStatusBadge.textContent = 'Dictating';
             dictationStatusBadge.className = 'badge badge-ready';
-            logEvent('browser_asr.dictation', `Draft text: "${finalStr.trim()}"`);
+            logEvent('browser_asr.dictation', `Draft text: "${dictationDraftText.value}"`);
           }
         }
       };
@@ -174,13 +235,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
       browserRecognizer.onend = () => {
         isBrowserRecognizing = false;
+        // Continuous dictation: do not stop on pause in speech, continue until "Stop dictation" is clicked
+        if (browserTargetMode === 'dictation' && isDictationActive) {
+          try {
+            browserRecognizer.continuous = true;
+            browserRecognizer.start();
+            isBrowserRecognizing = true;
+            return;
+          } catch (e) {
+            console.warn('Could not auto-restart browser dictation recognizer:', e);
+          }
+        }
         if (browserTargetMode === 'command') {
           if (asrStatusBadge.textContent.includes('Listening')) {
             asrStatusBadge.textContent = 'Ready';
             asrStatusBadge.className = 'badge badge-subtle';
           }
         } else {
-          if (dictationStatusBadge.textContent.includes('Listening')) {
+          if (!isDictationActive && dictationStatusBadge.textContent.includes('Listening')) {
             dictationStatusBadge.textContent = 'Idle';
             dictationStatusBadge.className = 'badge badge-subtle';
           }
@@ -659,6 +731,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Buttons
   btnCancel.addEventListener('click', () => {
+    isDictationActive = false;
     if (isBrowserRecognizing && browserRecognizer) {
       try { browserRecognizer.stop(); } catch (_) {}
     }
@@ -674,6 +747,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   btnPttCommand.addEventListener('click', () => {
+    isDictationActive = false;
     if (!ttsAudioPlayer.paused) {
       ttsAudioPlayer.pause();
       ttsAudioPlayer.currentTime = 0;
@@ -690,6 +764,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       browserTargetMode = 'command';
+      browserRecognizer.continuous = false;
       try {
         if (isBrowserRecognizing) {
           browserRecognizer.stop();
@@ -707,13 +782,16 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   btnStartDictation.addEventListener('click', () => {
+    isDictationActive = true;
     const currAsr = asrEngineSelect ? asrEngineSelect.value : 'sherpa';
     if (currAsr === 'browser') {
       if (!SpeechRecognition || !browserRecognizer) {
         alert('Browser Web Speech API is not supported in this browser runtime (requires Chrome, Edge, or Safari).');
+        isDictationActive = false;
         return;
       }
       browserTargetMode = 'dictation';
+      browserRecognizer.continuous = true;
       try {
         if (isBrowserRecognizing) {
           browserRecognizer.stop();
@@ -731,17 +809,19 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   btnStopDictation.addEventListener('click', () => {
+    isDictationActive = false;
     if (isBrowserRecognizing && browserRecognizer) {
       try { browserRecognizer.stop(); } catch (_) {}
     }
     client.cancelTurn();
-    dictationLiveBox.innerHTML = '<span class="placeholder-text">Dictation ended.</span>';
+    dictationLiveBox.innerHTML = '<span class="placeholder-text">Dictation stopped.</span>';
     dictationStatusBadge.textContent = 'Idle';
     dictationStatusBadge.className = 'badge badge-subtle';
   });
 
   if (asrEngineSelect) {
     asrEngineSelect.addEventListener('change', (e) => {
+      isDictationActive = false;
       const mode = e.target.value;
       if (mode === 'browser' && !SpeechRecognition) {
         alert('Browser Web Speech API is not supported in this browser runtime. Please use Chrome, Edge, or Safari.');
@@ -771,6 +851,7 @@ document.addEventListener('DOMContentLoaded', () => {
   btnClearDraft.addEventListener('click', () => {
     dictationDraftText.value = '';
     draftWordCount.textContent = '0';
+    client.injectText('', 'dictation');
   });
 
   // Kokoro Synthesize
@@ -801,7 +882,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Quick Injections
+  // Quick Command Injections
   document.querySelectorAll('.btn-inject').forEach((btn) => {
     btn.addEventListener('click', () => {
       const text = btn.getAttribute('data-text');
@@ -809,6 +890,47 @@ document.addEventListener('DOMContentLoaded', () => {
         customCmdInput.value = text;
       }
       client.injectText(text, 'command');
+    });
+  });
+
+  // Custom Dictation Injections
+  function handleCustomDictInject(textToInject) {
+    const raw = (textToInject !== undefined ? textToInject : (customDictInput ? customDictInput.value : '')).trim();
+    if (!raw) return;
+    const formatted = formatDictationPhrase(raw);
+    dictationDraftText.value = appendDictationPhrase(dictationDraftText.value, raw);
+    dictationLiveBox.innerHTML = `<strong>${escapeHtml(formatted)}</strong>`;
+    draftWordCount.textContent = dictationDraftText.value.trim().split(/\s+/).filter(Boolean).length;
+    dictationStatusBadge.textContent = 'Dictating';
+    dictationStatusBadge.className = 'badge badge-ready';
+    logEvent('dictation.inject', `Injected: "${formatted}"`);
+    client.injectText(raw, 'dictation');
+    if (customDictInput && textToInject === undefined) {
+      customDictInput.value = '';
+    }
+  }
+
+  if (btnCustomDictInject) {
+    btnCustomDictInject.addEventListener('click', () => handleCustomDictInject());
+  }
+
+  if (customDictInput) {
+    customDictInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleCustomDictInject();
+      }
+    });
+  }
+
+  // Quick Dictation Buttons
+  document.querySelectorAll('.btn-inject-dict').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const text = btn.getAttribute('data-text');
+      if (customDictInput) {
+        customDictInput.value = text;
+      }
+      handleCustomDictInject(text);
     });
   });
 
@@ -827,6 +949,7 @@ document.addEventListener('DOMContentLoaded', () => {
     tabBtnDictation.classList.remove('active');
     tabContentCommands.classList.add('active');
     tabContentDictation.classList.remove('active');
+    if (btnPttCommand) btnPttCommand.style.display = '';
   });
 
   tabBtnDictation.addEventListener('click', () => {
@@ -834,6 +957,7 @@ document.addEventListener('DOMContentLoaded', () => {
     tabBtnCommands.classList.remove('active');
     tabContentDictation.classList.add('active');
     tabContentCommands.classList.remove('active');
+    if (btnPttCommand) btnPttCommand.style.display = 'none';
   });
 
   btnClearLog.addEventListener('click', () => {

@@ -442,7 +442,6 @@ func (s *Server) processIncomingAudio(rawChunk []float32) {
 		}
 		if asrRes != nil {
 			if !asrRes.IsFinal {
-				s.dictationDraft = asrRes.Transcript
 				s.BroadcastJSON(map[string]interface{}{
 					"event": "transcript.partial",
 					"data": map[string]interface{}{
@@ -452,14 +451,15 @@ func (s *Server) processIncomingAudio(rawChunk []float32) {
 					},
 				})
 			} else {
-				s.dictationDraft = asrRes.Transcript
-				s.stateMachine.SpeechEndpointed(asrRes.Transcript)
-				words := len(asrRes.Tokens)
+				// Phrase segment completed during a pause in speech.
+				// Dictation mode continues until explicitly stopped by user!
+				s.dictationDraft = AppendDictationPhrase(s.dictationDraft, asrRes.Transcript)
+				words := len(intent.Tokenize(s.dictationDraft))
 				s.BroadcastJSON(map[string]interface{}{
 					"event": "annotation.draft",
 					"data": map[string]interface{}{
 						"target_id":  s.dictationTarget,
-						"draft_text": asrRes.Transcript,
+						"draft_text": s.dictationDraft,
 						"word_count": words,
 					},
 				})
@@ -589,6 +589,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				if mode == "dictation" {
 					target, _ := req["target_id"].(string)
 					s.dictationTarget = target
+					s.dictationDraft = ""
 					s.stateMachine.StartDictation(target)
 				} else {
 					s.stateMachine.StartCommand()
@@ -664,13 +665,17 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				text, _ := req["text"].(string)
 				mode, _ := req["mode"].(string)
 				if mode == "dictation" {
-					s.dictationDraft = text
+					if text == "" {
+						s.dictationDraft = ""
+					} else {
+						s.dictationDraft = AppendDictationPhrase(s.dictationDraft, text)
+					}
 					s.BroadcastJSON(map[string]interface{}{
 						"event": "annotation.draft",
 						"data": map[string]interface{}{
 							"target_id":  "injected",
-							"draft_text": text,
-							"word_count": len(intent.Tokenize(text)),
+							"draft_text": s.dictationDraft,
+							"word_count": len(intent.Tokenize(s.dictationDraft)),
 						},
 					})
 				} else {
