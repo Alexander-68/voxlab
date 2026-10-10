@@ -507,4 +507,42 @@ func TestServerModelManagement(t *testing.T) {
 	}
 }
 
+func TestServerASREngineSwitching(t *testing.T) {
+	srv := setupTestServer(t)
+
+	// Default engine
+	if srv.ASREngineMode() == "" {
+		t.Errorf("expected non-empty initial ASR engine mode")
+	}
+
+	// Switch to browser
+	if err := srv.SetASREngineMode("browser"); err != nil {
+		t.Fatalf("failed setting ASR mode to browser: %v", err)
+	}
+	if srv.ASREngineMode() != "browser" {
+		t.Errorf("expected ASR mode 'browser', got %s", srv.ASREngineMode())
+	}
+
+	// Switch to sim
+	if err := srv.SetASREngineMode("sim"); err != nil {
+		t.Fatalf("failed setting ASR mode to sim: %v", err)
+	}
+	if srv.ASREngineMode() != "sim" {
+		t.Errorf("expected ASR mode 'sim', got %s", srv.ASREngineMode())
+	}
+
+	// Switch to sherpa
+	if err := srv.SetASREngineMode("sherpa"); err != nil {
+		t.Fatalf("failed setting ASR mode to sherpa: %v", err)
+	}
+	if srv.ASREngineMode() != "sherpa" {
+		t.Errorf("expected ASR mode 'sherpa', got %s", srv.ASREngineMode())
+	}
+
+	// Invalid mode error
+	if err := srv.SetASREngineMode("invalid_mode"); err == nil {
+		t.Errorf("expected error when setting invalid ASR mode")
+	}
+}
+
 

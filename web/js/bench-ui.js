@@ -38,6 +38,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const tabContentCommands = document.getElementById('tab-content-commands');
   const tabContentDictation = document.getElementById('tab-content-dictation');
 
+  // ASR Engine Selector
+  const asrEngineSelect = document.getElementById('asr-engine-select');
+  const asrEngineName = document.getElementById('asr-engine-name');
+
   // Commands Tab
   const btnPttCommand = document.getElementById('btn-ptt-command');
   const commandTranscriptBox = document.getElementById('command-transcript-box');
@@ -90,6 +94,131 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   capture.setCanvas(scopeCanvas);
   capture.clearVisualizer();
+
+  // --- Browser Web Speech API Support ---
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let browserRecognizer = null;
+  let isBrowserRecognizing = false;
+  let browserTargetMode = 'command';
+
+  if (SpeechRecognition) {
+    try {
+      browserRecognizer = new SpeechRecognition();
+      browserRecognizer.continuous = false;
+      browserRecognizer.interimResults = true;
+      browserRecognizer.maxAlternatives = 1;
+      browserRecognizer.lang = 'en-US';
+
+      browserRecognizer.onstart = () => {
+        isBrowserRecognizing = true;
+        if (browserTargetMode === 'command') {
+          asrStatusBadge.textContent = 'Listening (Browser)';
+          asrStatusBadge.className = 'badge badge-listen';
+          commandTranscriptBox.innerHTML = '<span style="color:var(--cyan);">[Browser Web Speech] Listening...</span>';
+        } else {
+          dictationStatusBadge.textContent = 'Listening (Browser)';
+          dictationStatusBadge.className = 'badge badge-listen';
+          dictationLiveBox.innerHTML = '<span style="color:var(--cyan);">[Browser Web Speech] Listening...</span>';
+        }
+        logEvent('browser_asr.start', 'Browser SpeechRecognition started');
+      };
+
+      browserRecognizer.onresult = (event) => {
+        let interim = '';
+        let finalStr = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          const item = event.results[i];
+          if (item.isFinal) {
+            finalStr += item[0].transcript;
+          } else {
+            interim += item[0].transcript;
+          }
+        }
+
+        const display = finalStr || interim;
+        if (browserTargetMode === 'command') {
+          if (display) {
+            commandTranscriptBox.innerHTML = `<strong>${escapeHtml(display)}</strong>`;
+          }
+          if (finalStr.trim()) {
+            logEvent('browser_asr.final', `"${finalStr.trim()}"`);
+            client.injectText(finalStr.trim(), 'command');
+          }
+        } else {
+          if (display) {
+            dictationLiveBox.innerHTML = `<strong>${escapeHtml(display)}</strong>`;
+          }
+          if (finalStr.trim()) {
+            const current = dictationDraftText.value.trim();
+            dictationDraftText.value = current ? `${current} ${finalStr.trim()}` : finalStr.trim();
+            draftWordCount.textContent = dictationDraftText.value.trim().split(/\s+/).filter(Boolean).length;
+            dictationStatusBadge.textContent = 'Draft Ready';
+            dictationStatusBadge.className = 'badge badge-ready';
+            logEvent('browser_asr.dictation', `Draft text: "${finalStr.trim()}"`);
+          }
+        }
+      };
+
+      browserRecognizer.onerror = (event) => {
+        isBrowserRecognizing = false;
+        const err = event.error || 'unknown';
+        logEvent('browser_asr.error', `Web Speech API error: ${err}`);
+        if (browserTargetMode === 'command') {
+          asrStatusBadge.textContent = `Error: ${err}`;
+          asrStatusBadge.className = 'badge badge-disconnected';
+        } else {
+          dictationStatusBadge.textContent = `Error: ${err}`;
+          dictationStatusBadge.className = 'badge badge-disconnected';
+        }
+      };
+
+      browserRecognizer.onend = () => {
+        isBrowserRecognizing = false;
+        if (browserTargetMode === 'command') {
+          if (asrStatusBadge.textContent.includes('Listening')) {
+            asrStatusBadge.textContent = 'Ready';
+            asrStatusBadge.className = 'badge badge-subtle';
+          }
+        } else {
+          if (dictationStatusBadge.textContent.includes('Listening')) {
+            dictationStatusBadge.textContent = 'Idle';
+            dictationStatusBadge.className = 'badge badge-subtle';
+          }
+        }
+      };
+    } catch (e) {
+      console.warn('[VoxLab] Web Speech API init failed:', e);
+    }
+  }
+
+  function updateAsrEngineDisplay(engine) {
+    if (!engine) return;
+    let label = 'Sherpa-ONNX';
+    let badgeText = 'SHERPA NEURAL';
+    let badgeClass = 'badge badge-connected';
+
+    if (engine === 'browser') {
+      label = 'Browser Web Speech API';
+      badgeText = 'WEB SPEECH API';
+      badgeClass = 'badge badge-info';
+    } else if (engine === 'sim') {
+      label = 'Simulator';
+      badgeText = 'SIMULATOR';
+      badgeClass = 'badge badge-muted';
+    }
+
+    if (asrEngineName) {
+      asrEngineName.textContent = label;
+    }
+    if (asrEngineSelect && asrEngineSelect.value !== engine) {
+      asrEngineSelect.value = engine;
+    }
+    if (engineStatus) {
+      engineStatus.textContent = badgeText;
+      engineStatus.className = badgeClass;
+      engineStatus.title = `Active ASR Engine: ${label}`;
+    }
+  }
 
   // --- WebSocket Event Handlers ---
   client.on('connection', ({ connected }) => {
@@ -182,15 +311,13 @@ document.addEventListener('DOMContentLoaded', () => {
       updateTtsModelDisplay(data.tts_model, data.tts_is_neural);
     }
 
-    if (data.engine_mode && engineStatus) {
+    if (data.asr_engine) {
+      updateAsrEngineDisplay(data.asr_engine);
+    } else if (data.engine_mode && engineStatus) {
       if (data.engine_mode.includes('sherpa')) {
-        engineStatus.textContent = 'SHERPA NEURAL';
-        engineStatus.className = 'badge badge-connected';
-        engineStatus.title = 'Real streaming Zipformer neural ASR active';
+        updateAsrEngineDisplay('sherpa');
       } else {
-        engineStatus.textContent = 'SIMULATOR';
-        engineStatus.className = 'badge badge-muted';
-        engineStatus.title = 'Mock testbench simulation active (models not found)';
+        updateAsrEngineDisplay('sim');
       }
     }
 
@@ -203,6 +330,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     logEvent('voice.state', `${data.from_state || ''} -> ${state} (${data.trigger || ''})`);
+  });
+
+  client.on('asr.engine_changed', (data) => {
+    logEvent('asr.engine_changed', `ASR Engine: ${data.engine} (${data.name || ''})`);
+    updateAsrEngineDisplay(data.engine);
   });
 
   client.on('audio.meter', (data) => {
@@ -267,6 +399,18 @@ document.addEventListener('DOMContentLoaded', () => {
     commandTranscriptBox.innerHTML = `<span style="color:#38bdf8;">[Wake word: "${data.phrase}"] Listening...</span>`;
     asrStatusBadge.textContent = 'Listening';
     asrStatusBadge.className = 'badge badge-listen';
+
+    const currAsr = asrEngineSelect ? asrEngineSelect.value : 'sherpa';
+    if (currAsr === 'browser' && SpeechRecognition && browserRecognizer) {
+      browserTargetMode = 'command';
+      try {
+        if (!isBrowserRecognizing) {
+          browserRecognizer.start();
+        }
+      } catch (e) {
+        console.warn('Could not auto-start Web Speech API on wake-word:', e);
+      }
+    }
   });
 
   client.on('transcript.partial', (data) => {
@@ -337,7 +481,7 @@ document.addEventListener('DOMContentLoaded', () => {
     logEvent('annotation.draft', `Draft received (${data.word_count} words)`);
     dictationDraftText.value = data.draft_text;
     draftWordCount.textContent = data.word_count;
-    dictationLiveBox.innerHTML = `<span>Utterance finished. Draft ready for review.</span>`;
+    dictationLiveBox.innerHTML = `<span>Dictation finished. Draft ready for review.</span>`;
     dictationStatusBadge.textContent = 'Draft Ready';
     dictationStatusBadge.className = 'badge badge-ready';
   });
@@ -515,6 +659,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Buttons
   btnCancel.addEventListener('click', () => {
+    if (isBrowserRecognizing && browserRecognizer) {
+      try { browserRecognizer.stop(); } catch (_) {}
+    }
     if (!ttsAudioPlayer.paused) {
       ttsAudioPlayer.pause();
       ttsAudioPlayer.currentTime = 0;
@@ -535,25 +682,80 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!tabBtnCommands.classList.contains('active')) {
       tabBtnCommands.click();
     }
-    client.activateCommand();
-    commandTranscriptBox.innerHTML = '<span style="color:#60a5fa;">[Push to talk] Listening for command...</span>';
-    asrStatusBadge.textContent = 'Listening';
-    asrStatusBadge.className = 'badge badge-listen';
+
+    const currAsr = asrEngineSelect ? asrEngineSelect.value : 'sherpa';
+    if (currAsr === 'browser') {
+      if (!SpeechRecognition || !browserRecognizer) {
+        alert('Browser Web Speech API is not supported in this browser runtime (requires Chrome, Edge, or Safari).');
+        return;
+      }
+      browserTargetMode = 'command';
+      try {
+        if (isBrowserRecognizing) {
+          browserRecognizer.stop();
+        }
+        browserRecognizer.start();
+      } catch (e) {
+        console.warn('SpeechRecognition start error:', e);
+      }
+    } else {
+      client.activateCommand();
+      commandTranscriptBox.innerHTML = '<span style="color:#60a5fa;">[Push to talk] Listening for command...</span>';
+      asrStatusBadge.textContent = 'Listening';
+      asrStatusBadge.className = 'badge badge-listen';
+    }
   });
 
   btnStartDictation.addEventListener('click', () => {
-    client.startDictation('scope_inspection_1');
-    dictationLiveBox.innerHTML = '<span style="color:#60a5fa;">[Dictation Session Open] Speak your notes...</span>';
-    dictationStatusBadge.textContent = 'Listening';
-    dictationStatusBadge.className = 'badge badge-listen';
+    const currAsr = asrEngineSelect ? asrEngineSelect.value : 'sherpa';
+    if (currAsr === 'browser') {
+      if (!SpeechRecognition || !browserRecognizer) {
+        alert('Browser Web Speech API is not supported in this browser runtime (requires Chrome, Edge, or Safari).');
+        return;
+      }
+      browserTargetMode = 'dictation';
+      try {
+        if (isBrowserRecognizing) {
+          browserRecognizer.stop();
+        }
+        browserRecognizer.start();
+      } catch (e) {
+        console.warn('SpeechRecognition start error:', e);
+      }
+    } else {
+      client.startDictation('scope_inspection_1');
+      dictationLiveBox.innerHTML = '<span style="color:#60a5fa;">[Dictation Session Open] Speak your notes...</span>';
+      dictationStatusBadge.textContent = 'Listening';
+      dictationStatusBadge.className = 'badge badge-listen';
+    }
   });
 
   btnStopDictation.addEventListener('click', () => {
+    if (isBrowserRecognizing && browserRecognizer) {
+      try { browserRecognizer.stop(); } catch (_) {}
+    }
     client.cancelTurn();
     dictationLiveBox.innerHTML = '<span class="placeholder-text">Dictation ended.</span>';
     dictationStatusBadge.textContent = 'Idle';
     dictationStatusBadge.className = 'badge badge-subtle';
   });
+
+  if (asrEngineSelect) {
+    asrEngineSelect.addEventListener('change', (e) => {
+      const mode = e.target.value;
+      if (mode === 'browser' && !SpeechRecognition) {
+        alert('Browser Web Speech API is not supported in this browser runtime. Please use Chrome, Edge, or Safari.');
+        asrEngineSelect.value = 'sherpa';
+        return;
+      }
+      if (isBrowserRecognizing && browserRecognizer) {
+        try { browserRecognizer.stop(); } catch (_) {}
+      }
+      client.setAsrEngine(mode);
+      updateAsrEngineDisplay(mode);
+      logEvent('asr.engine_select', `ASR Engine switched to: ${mode}`);
+    });
+  }
 
   btnSaveDraft.addEventListener('click', () => {
     alert('Annotation draft approved and persisted to procedure log!');

@@ -43,6 +43,11 @@ type Server struct {
 	sourceMu      sync.Mutex
 	audioInChan   chan []float32
 
+	asrEngineMode string // "sherpa", "browser", "sim"
+	engineMu      sync.RWMutex
+	sherpaEngine  engine.SpeechEngine
+	simEngine     engine.SpeechEngine
+
 	ctx    context.Context
 	cancel context.CancelFunc
 
@@ -79,14 +84,17 @@ func NewServer(cfg *config.AppConfig) (*Server, error) {
 	}
 	matcher := intent.NewIntentMatcher(catalog, cfg.Intent.ConfidenceThreshold, cfg.Intent.MarginThreshold)
 
-	var eng engine.SpeechEngine
+	sherpaRunner := engine.NewSherpaRunner(cfg)
+	simRunner := engine.NewSimulatorEngine()
+
+	asrMode := "sim"
+	var eng engine.SpeechEngine = simRunner
 	if cfg.Engine.Mode == "sherpa" {
-		eng = engine.NewSherpaRunner(cfg)
-	} else {
-		eng = engine.NewSimulatorEngine()
+		asrMode = "sherpa"
+		eng = sherpaRunner
 	}
 
-	ttsMgr := tts.NewTTSManager(eng, dsp)
+	ttsMgr := tts.NewTTSManager(sherpaRunner, dsp)
 	webMic := audio.NewWebSocketSource()
 	hostMic := audio.NewHostNativeSource(cfg.Audio.SampleRate, cfg.Audio.ChunkSamples)
 
@@ -98,6 +106,9 @@ func NewServer(cfg *config.AppConfig) (*Server, error) {
 		ringBuffer:    ringBuf,
 		stateMachine:  sm,
 		engine:        eng,
+		sherpaEngine:  sherpaRunner,
+		simEngine:     simRunner,
+		asrEngineMode: asrMode,
 		matcher:       matcher,
 		ttsMgr:        ttsMgr,
 		webMicSource:  webMic,
@@ -115,14 +126,16 @@ func NewServer(cfg *config.AppConfig) (*Server, error) {
 		s.BroadcastJSON(map[string]interface{}{
 			"event": "voice.state",
 			"data": map[string]interface{}{
-				"from_state":    ev.FromState,
-				"to_state":      ev.ToState,
-				"trigger":       ev.Trigger,
-				"timestamp":     ev.Timestamp.Format(time.RFC3339Nano),
-				"extra":         ev.Data,
-				"engine_mode":   s.engine.Name(),
-				"tts_model":     ttsModel,
-				"tts_is_neural": isNeural,
+				"from_state":      ev.FromState,
+				"to_state":        ev.ToState,
+				"trigger":         ev.Trigger,
+				"timestamp":       ev.Timestamp.Format(time.RFC3339Nano),
+				"extra":           ev.Data,
+				"engine_mode":     s.engine.Name(),
+				"asr_engine":      s.ASREngineMode(),
+				"asr_engine_name": s.engineDisplayName(),
+				"tts_model":       ttsModel,
+				"tts_is_neural":   isNeural,
 			},
 		})
 	})
@@ -224,6 +237,56 @@ func (s *Server) SwitchSource(source string) {
 			"device_name": devName,
 		},
 	})
+}
+
+// SetASREngineMode updates the active ASR engine between 'sherpa', 'browser', and 'sim'.
+func (s *Server) SetASREngineMode(mode string) error {
+	s.engineMu.Lock()
+	defer s.engineMu.Unlock()
+
+	switch mode {
+	case "sherpa":
+		s.asrEngineMode = "sherpa"
+		s.engine = s.sherpaEngine
+	case "browser":
+		s.asrEngineMode = "browser"
+	case "sim":
+		s.asrEngineMode = "sim"
+		s.engine = s.simEngine
+	default:
+		return fmt.Errorf("unknown ASR engine mode: %s", mode)
+	}
+
+	log.Printf("[VoxLab] Active ASR engine switched to: %s (%s)", s.asrEngineMode, s.engineDisplayName())
+
+	s.BroadcastJSON(map[string]interface{}{
+		"event": "asr.engine_changed",
+		"data": map[string]interface{}{
+			"engine": s.asrEngineMode,
+			"name":   s.engineDisplayName(),
+		},
+	})
+	return nil
+}
+
+// ASREngineMode returns the current ASR engine mode.
+func (s *Server) ASREngineMode() string {
+	s.engineMu.RLock()
+	defer s.engineMu.RUnlock()
+	return s.asrEngineMode
+}
+
+func (s *Server) engineDisplayName() string {
+	switch s.asrEngineMode {
+	case "sherpa":
+		return "Sherpa-ONNX (Offline Neural)"
+	case "browser":
+		return "Browser Web Speech API"
+	case "sim":
+		return "Testbench Simulator"
+	default:
+		return s.asrEngineMode
+	}
 }
 
 // audioPipelineLoop processes incoming PCM audio chunks through DSP, KWS, and ASR.
@@ -333,6 +396,16 @@ func (s *Server) processIncomingAudio(rawChunk []float32) {
 	}
 
 	// Step 3: Speech Recognition when in listening states
+	s.engineMu.RLock()
+	currentASRMode := s.asrEngineMode
+	s.engineMu.RUnlock()
+
+	// If browser Web Speech API is active, the browser performs recognition directly in client;
+	// Host daemon skips ASR chunk decoding to avoid duplicate/competing transcripts.
+	if currentASRMode == "browser" {
+		return
+	}
+
 	if state == statemachine.StateCommandListen {
 		asrRes, err := s.engine.ProcessASRChunk(cleanChunk, false)
 		if err != nil {
@@ -479,12 +552,14 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	_ = conn.WriteJSON(map[string]interface{}{
 		"event": "voice.state",
 		"data": map[string]interface{}{
-			"to_state":      s.stateMachine.Current(),
-			"timestamp":     time.Now().Format(time.RFC3339),
-			"active_source": s.activeSource,
-			"engine_mode":   s.engine.Name(),
-			"tts_model":     ttsModel,
-			"tts_is_neural": isNeural,
+			"to_state":        s.stateMachine.Current(),
+			"timestamp":       time.Now().Format(time.RFC3339),
+			"active_source":   s.activeSource,
+			"engine_mode":     s.engine.Name(),
+			"asr_engine":      s.ASREngineMode(),
+			"asr_engine_name": s.engineDisplayName(),
+			"tts_model":       ttsModel,
+			"tts_is_neural":   isNeural,
 		},
 	})
 	connMu.Unlock()
@@ -546,6 +621,14 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			case "set_source":
 				source, _ := req["source"].(string)
 				s.SwitchSource(source)
+
+			case "set_asr_engine":
+				engName, _ := req["engine"].(string)
+				if engName != "" {
+					if err := s.SetASREngineMode(engName); err != nil {
+						log.Printf("[Error] Failed setting ASR engine %s: %v", engName, err)
+					}
+				}
 
 			case "set_noise_gate":
 				if th, ok := req["threshold_dbfs"].(float64); ok {

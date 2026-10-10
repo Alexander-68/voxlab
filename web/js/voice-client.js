@@ -148,4 +148,8 @@ class VoiceClient {
   setTtsModel(modelName) {
     this.sendAction('set_tts_model', { model: modelName });
   }
+
+  setAsrEngine(engine) {
+    this.sendAction('set_asr_engine', { engine });
+  }
 }

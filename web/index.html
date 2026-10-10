@@ -158,6 +158,19 @@
         </div>
 
         <div class="panel-body">
+          <!-- ASR Engine Selection -->
+          <div class="form-group mb-3">
+            <div class="slider-header mb-1">
+              <label for="asr-engine-select">ASR Engine</label>
+              <span class="helper-text" style="font-size: 11px;">Active: <strong id="asr-engine-name" style="color: var(--cyan);">Sherpa-ONNX</strong></span>
+            </div>
+            <select id="asr-engine-select" class="form-control">
+              <option value="sherpa">🟣 Sherpa-ONNX (Offline Neural Streaming Zipformer)</option>
+              <option value="browser">🌐 Browser Web Speech API (Built-in SpeechRecognition)</option>
+              <option value="sim">🧪 Testbench Simulator (Mock Voice Engine)</option>
+            </select>
+          </div>
+
           <!-- Commands Tab Content -->
           <div id="tab-content-commands" class="tab-content active">
             <!-- Quick Command Injection (Zero-Mic Bench Test) -->
@@ -230,8 +243,8 @@
           <!-- Dictation Tab Content -->
           <div id="tab-content-dictation" class="tab-content">
             <div class="turn-controls">
-              <button id="btn-start-dictation" class="btn btn-accent">📝 Start Spoken Dictation</button>
-              <button id="btn-stop-dictation" class="btn btn-secondary">⏹️ Finish Utterance</button>
+              <button id="btn-start-dictation" class="btn btn-accent">📝 Start dictation</button>
+              <button id="btn-stop-dictation" class="btn btn-secondary">⏹️ Finish dictation</button>
             </div>
 
             <!-- Live Streaming Dictation Stream -->
@@ -242,7 +255,7 @@
               </div>
               <div class="card-body">
                 <div id="dictation-live-box" class="transcript-box">
-                  <span class="placeholder-text">Press 'Start Spoken Dictation' and begin speaking...</span>
+                  <span class="placeholder-text">Press 'Start dictation' and begin speaking...</span>
                 </div>
               </div>
             </div>
