@@ -130,6 +130,7 @@ func TestSynthesizeChinese(t *testing.T) {
 	cfg.Engine.KokoroModelDir = "models/kokoro-multi-lang-v1_1"
 	cfg.Engine.SherpaTtsBin = "sherpa-onnx-offline-tts"
 	runner := NewSherpaRunner(cfg)
+	t.Cleanup(func() { _ = runner.Close() })
 	res, err := runner.Synthesize(TTSRequest{
 		Text:  "你好，世界。",
 		Voice: "zf_001",
@@ -148,6 +149,7 @@ func TestSynthesizeKokoroV10(t *testing.T) {
 	cfg.Engine.KokoroModelDir = "models/kokoro-multi-lang-v1_0"
 	cfg.Engine.SherpaTtsBin = "sherpa-onnx-offline-tts"
 	runner := NewSherpaRunner(cfg)
+	t.Cleanup(func() { _ = runner.Close() })
 
 	// Test heart voice (sid 3)
 	res, err := runner.Synthesize(TTSRequest{
@@ -195,6 +197,7 @@ func TestKokoroFP16Model(t *testing.T) {
 	cfg.Engine.KokoroModelDir = "models/kokoro-multi-lang-v1_1"
 	cfg.Engine.SherpaTtsBin = "sherpa-onnx-offline-tts"
 	runner := NewSherpaRunner(cfg)
+	t.Cleanup(func() { _ = runner.Close() })
 
 	if err := runner.SetTTSModel("kokoro-multi-lang-v1_0 (FP16)"); err != nil {
 		t.Fatalf("failed to set model to FP16: %v", err)
@@ -241,6 +244,7 @@ func TestKokoroINT8Model(t *testing.T) {
 	cfg.Engine.KokoroModelDir = "models/kokoro-multi-lang-v1_1"
 	cfg.Engine.SherpaTtsBin = "sherpa-onnx-offline-tts"
 	runner := NewSherpaRunner(cfg)
+	t.Cleanup(func() { _ = runner.Close() })
 
 	if err := runner.SetTTSModel("kokoro-multi-lang-v1_1 (INT8)"); err != nil {
 		t.Fatalf("failed to set model to INT8: %v", err)

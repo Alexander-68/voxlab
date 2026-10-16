@@ -43,7 +43,7 @@ type IntentConfig struct {
 
 // DictationConfig defines voice annotation settings.
 type DictationConfig struct {
-	SilenceEndpointMs int     `json:"silence_endpoint_ms"` // e.g. 800ms trailing silence
+	SilenceEndpointMs int     `json:"silence_endpoint_ms"` // trailing pause that endpoints a phrase (ASR server rule2)
 	MaxDurationSec    float64 `json:"max_duration_sec"`    // e.g. 30.0s session cap
 }
 
@@ -121,7 +121,7 @@ func DefaultConfig() *AppConfig {
 			CatalogPath:         "data/commands.json",
 		},
 		Dictation: DictationConfig{
-			SilenceEndpointMs: 800,
+			SilenceEndpointMs: 720, // sherpa rule2 trailing pause that closes a phrase/command
 			MaxDurationSec:    30.0,
 		},
 		Engine: EngineConfig{

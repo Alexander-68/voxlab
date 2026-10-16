@@ -812,9 +812,15 @@ document.addEventListener('DOMContentLoaded', () => {
     logEvent('annotation.draft', `Draft received (${data.word_count} words)`);
     dictationDraftText.value = data.draft_text;
     draftWordCount.textContent = data.word_count;
-    dictationLiveBox.innerHTML = `<span>Dictation finished. Draft ready for review.</span>`;
-    dictationStatusBadge.textContent = 'Draft Ready';
-    dictationStatusBadge.className = 'badge badge-ready';
+    if (isDictationActive) {
+      dictationLiveBox.innerHTML = `<span>Listening... speak to dictate.</span>`;
+      dictationStatusBadge.textContent = 'Listening';
+      dictationStatusBadge.className = 'badge badge-listen';
+    } else {
+      dictationLiveBox.innerHTML = `<span>Dictation finished. Draft ready for review.</span>`;
+      dictationStatusBadge.textContent = 'Draft Ready';
+      dictationStatusBadge.className = 'badge badge-ready';
+    }
   });
 
   // --- Low-Latency Web Audio API Streaming Player ---
@@ -1377,7 +1383,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isBrowserRecognizing && browserRecognizer) {
       try { browserRecognizer.stop(); } catch (_) {}
     }
-    client.cancelTurn();
+    client.stopDictation();
     dictationLiveBox.innerHTML = '<span class="placeholder-text">Dictation stopped.</span>';
     dictationStatusBadge.textContent = 'Idle';
     dictationStatusBadge.className = 'badge badge-subtle';

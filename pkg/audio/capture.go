@@ -293,13 +293,13 @@ func (s *HostNativeSource) Start(ctx context.Context, out chan<- []float32) erro
 		stdout, err := captureCmd.StdoutPipe()
 		if err != nil {
 			log.Printf("[Audio] Pipe error: %v, falling back to simulation", err)
-			s.runSimulatedLoop(subCtx, out)
+			go s.runSimulatedLoop(subCtx, out)
 			return nil
 		}
 
 		if err := captureCmd.Start(); err != nil {
 			log.Printf("[Audio] Host capture process error: %v, falling back to simulation", err)
-			s.runSimulatedLoop(subCtx, out)
+			go s.runSimulatedLoop(subCtx, out)
 			return nil
 		}
 

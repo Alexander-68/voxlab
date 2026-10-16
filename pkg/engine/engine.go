@@ -42,6 +42,7 @@ type SpeechEngine interface {
 	DetectVAD(chunk []float32) (isVoice bool, prob float32)
 	DetectWakeWord(chunk []float32) (detected bool, keyword string, confidence float64)
 	ProcessASRChunk(chunk []float32, isDictation bool) (*ASRResult, error)
+	FlushASR() string // finalize the in-progress utterance and return its text
 	ResetASR()
 	Synthesize(req TTSRequest) (*TTSResult, error)
 	SynthesizeStream(req TTSRequest, onChunk func(chunk TTSChunk) error) (*TTSResult, error)

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"path/filepath"
@@ -60,6 +61,7 @@ type Server struct {
 	monitorMu      sync.RWMutex
 	monitorEnabled bool
 
+	dictMu          sync.Mutex // guards dictation draft/target (written by WS handlers and the ASR loop)
 	dictationDraft  string
 	dictationTarget string
 
@@ -71,6 +73,7 @@ type asrWorkItem struct {
 	chunk       []float32
 	state       statemachine.State
 	isDictation bool
+	flush       bool // finalize pending speech and end the dictation session
 }
 
 // NewServer initializes the VoxLab server with all pipelines.
@@ -143,7 +146,7 @@ func NewServer(cfg *config.AppConfig) (*Server, error) {
 				"trigger":         ev.Trigger,
 				"timestamp":       ev.Timestamp.Format(time.RFC3339Nano),
 				"extra":           ev.Data,
-				"engine_mode":     s.engine.Name(),
+				"engine_mode":     s.currentEngine().Name(),
 				"asr_engine":      s.ASREngineMode(),
 				"asr_engine_name": s.engineDisplayName(),
 				"tts_model":       ttsModel,
@@ -206,6 +209,10 @@ func (s *Server) Stop(ctx context.Context) error {
 	if s.enhancer != nil {
 		_ = s.enhancer.Close()
 	}
+	// Kill the warm ASR daemon; child processes outlive us on Windows.
+	if c, ok := s.sherpaEngine.(io.Closer); ok {
+		_ = c.Close()
+	}
 	if s.httpServer != nil {
 		return s.httpServer.Shutdown(ctx)
 	}
@@ -265,31 +272,44 @@ func (s *Server) SwitchSource(source string) {
 // SetASREngineMode updates the active ASR engine between 'sherpa', 'browser', and 'sim'.
 func (s *Server) SetASREngineMode(mode string) error {
 	s.engineMu.Lock()
-	defer s.engineMu.Unlock()
-
+	old := s.engine
 	switch mode {
 	case "sherpa":
-		s.asrEngineMode = "sherpa"
 		s.engine = s.sherpaEngine
 	case "browser":
-		s.asrEngineMode = "browser"
 	case "sim":
-		s.asrEngineMode = "sim"
 		s.engine = s.simEngine
 	default:
+		s.engineMu.Unlock()
 		return fmt.Errorf("unknown ASR engine mode: %s", mode)
 	}
+	s.asrEngineMode = mode
+	s.engineMu.Unlock()
+	old.ResetASR()
 
-	log.Printf("[VoxLab] Active ASR engine switched to: %s (%s)", s.asrEngineMode, s.engineDisplayName())
+	name := s.engineDisplayName()
+	log.Printf("[VoxLab] Active ASR engine switched to: %s (%s)", mode, name)
 
 	s.BroadcastJSON(map[string]interface{}{
 		"event": "asr.engine_changed",
 		"data": map[string]interface{}{
-			"engine": s.asrEngineMode,
-			"name":   s.engineDisplayName(),
+			"engine": mode,
+			"name":   name,
 		},
 	})
 	return nil
+}
+
+func (s *Server) currentEngine() engine.SpeechEngine {
+	s.engineMu.RLock()
+	defer s.engineMu.RUnlock()
+	return s.engine
+}
+
+func (s *Server) currentSource() string {
+	s.sourceMu.Lock()
+	defer s.sourceMu.Unlock()
+	return s.activeSource
 }
 
 // ASREngineMode returns the current ASR engine mode.
@@ -300,7 +320,7 @@ func (s *Server) ASREngineMode() string {
 }
 
 func (s *Server) engineDisplayName() string {
-	switch s.asrEngineMode {
+	switch mode := s.ASREngineMode(); mode {
 	case "sherpa":
 		return "Sherpa-ONNX (Offline Neural)"
 	case "browser":
@@ -308,7 +328,7 @@ func (s *Server) engineDisplayName() string {
 	case "sim":
 		return "Testbench Simulator"
 	default:
-		return s.asrEngineMode
+		return mode
 	}
 }
 
@@ -375,9 +395,7 @@ func (s *Server) processIncomingAudio(rawChunk []float32) {
 	cleanChunk, rms, dbfs, passedGate := s.dsp.ProcessChunk(enhancedChunk)
 
 	// Stream clean audio chunk to clients for live headphone monitoring if remote input active
-	s.sourceMu.Lock()
-	currSource := s.activeSource
-	s.sourceMu.Unlock()
+	currSource := s.currentSource()
 	if currSource != "web_ui_mic" && s.IsMonitorEnabled() {
 		pcmBytes := audio.Float32ToBytesPCM(cleanChunk)
 		s.BroadcastBinary(pcmBytes)
@@ -404,7 +422,7 @@ func (s *Server) processIncomingAudio(rawChunk []float32) {
 				"passed_gate":   passedGate,
 				"gate_disabled": !s.dsp.IsGateEnabled(),
 				"echo_muted":    s.dsp.IsEchoMuted(),
-				"source":        s.activeSource,
+				"source":        currSource,
 				"wave":          wave,
 				"clean_wave":    downsampleWave(cleanChunk, 64),
 				"agc_gain":      s.dsp.CurrentGain(),
@@ -428,7 +446,7 @@ func (s *Server) processIncomingAudio(rawChunk []float32) {
 
 	// Step 2: Wake Word Detection when in IDLE
 	if (state == statemachine.StateIdle) && s.cfg.KWS.Enabled && passedGate {
-		detected, kw, conf := s.engine.DetectWakeWord(cleanChunk)
+		detected, kw, conf := s.currentEngine().DetectWakeWord(cleanChunk)
 		if detected && conf >= s.cfg.KWS.Threshold {
 			log.Printf("[VoxLab] Wake-word '%s' detected (confidence: %.2f)", kw, conf)
 			s.stateMachine.WakeWordTriggered(kw, conf)
@@ -443,29 +461,20 @@ func (s *Server) processIncomingAudio(rawChunk []float32) {
 		}
 	}
 
-	// Step 3: Speech Recognition when in listening states
-	s.engineMu.RLock()
-	currentASRMode := s.asrEngineMode
-	s.engineMu.RUnlock()
-
-	// If browser Web Speech API is active, the browser performs recognition directly in client;
-	// Host daemon skips ASR chunk decoding to avoid duplicate/competing transcripts.
-	if currentASRMode == "browser" {
+	// Step 3: Speech Recognition when in listening states.
+	// In browser mode the Web Speech API recognizes in the client; skip host ASR.
+	if s.ASREngineMode() == "browser" {
+		return
+	}
+	if state != statemachine.StateCommandListen && state != statemachine.StateAnnotationListen {
 		return
 	}
 
-	// Forward clean audio chunk to decoupled ASR pipeline worker
-	// so the real-time audioPipelineLoop and 30Hz dBFS audio.meter broadcasts are NEVER interrupted!
-	if state == statemachine.StateCommandListen {
-		select {
-		case s.asrChan <- asrWorkItem{chunk: cleanChunk, state: state, isDictation: false}:
-		default:
-		}
-	} else if state == statemachine.StateAnnotationListen {
-		select {
-		case s.asrChan <- asrWorkItem{chunk: cleanChunk, state: state, isDictation: true}:
-		default:
-		}
+	// Forward to the decoupled ASR worker so metering is never blocked by inference.
+	select {
+	case s.asrChan <- asrWorkItem{chunk: cleanChunk, state: state, isDictation: state == statemachine.StateAnnotationListen}:
+	default:
+		log.Printf("[Warning] ASR queue full, dropping audio chunk")
 	}
 }
 
@@ -484,79 +493,79 @@ func (s *Server) asrPipelineLoop(ctx context.Context) {
 }
 
 func (s *Server) handleASRWorkItem(item asrWorkItem) {
-	if item.state == statemachine.StateCommandListen {
-		asrRes, err := s.engine.ProcessASRChunk(item.chunk, false)
-		if err != nil {
-			log.Printf("[Error] Command ASR error: %v", err)
-			return
-		}
-		if asrRes != nil {
-			if !asrRes.IsFinal {
-				s.BroadcastJSON(map[string]interface{}{
-					"event": "transcript.partial",
-					"data": map[string]interface{}{
-						"mode":       "command",
-						"transcript": asrRes.Transcript,
-						"tokens":     asrRes.Tokens,
-					},
-				})
-			} else {
-				// Final utterance recognized!
-				s.BroadcastJSON(map[string]interface{}{
-					"event": "transcript.final",
-					"data": map[string]interface{}{
-						"mode":       "command",
-						"transcript": asrRes.Transcript,
-					},
-				})
-				s.handleFinalCommandTranscript(asrRes.Transcript)
-			}
-		}
-	} else if item.state == statemachine.StateAnnotationListen {
-		asrRes, err := s.engine.ProcessASRChunk(item.chunk, true)
-		if err != nil {
-			log.Printf("[Error] Dictation ASR error: %v", err)
-			return
-		}
-		if asrRes != nil {
-			if !asrRes.IsFinal {
-				s.BroadcastJSON(map[string]interface{}{
-					"event": "transcript.partial",
-					"data": map[string]interface{}{
-						"mode":       "dictation",
-						"transcript": asrRes.Transcript,
-						"tokens":     asrRes.Tokens,
-					},
-				})
-			} else {
-				// Phrase segment completed during a pause in speech.
-				// Dictation mode continues until explicitly stopped by user!
-				cleanText := strings.TrimSpace(asrRes.Transcript)
-				if cleanText != "" {
-					s.dictationDraft = AppendDictationPhrase(s.dictationDraft, cleanText)
-					words := len(intent.Tokenize(s.dictationDraft))
-					s.BroadcastJSON(map[string]interface{}{
-						"event": "annotation.draft",
-						"data": map[string]interface{}{
-							"target_id":  s.dictationTarget,
-							"draft_text": s.dictationDraft,
-							"word_count": words,
-						},
-					})
-				} else {
-					// No intelligible speech detected (e.g. keyboard typing / room noise).
-					// Clear partial preview so UI immediately drops back to ready listening state!
-					s.BroadcastJSON(map[string]interface{}{
-						"event": "transcript.partial",
-						"data": map[string]interface{}{
-							"mode":       "dictation",
-							"transcript": "",
-						},
-					})
-				}
-			}
-		}
+	// Chunks queued before a state change (endpoint, cancel, stop) belong to a finished turn.
+	if s.stateMachine.Current() != item.state {
+		return
 	}
+	eng := s.currentEngine()
+
+	if item.flush {
+		s.appendDictation(eng.FlushASR())
+		s.stateMachine.FinishReview(true)
+		return
+	}
+
+	mode := "command"
+	if item.isDictation {
+		mode = "dictation"
+	}
+	res, err := eng.ProcessASRChunk(item.chunk, item.isDictation)
+	if err != nil {
+		log.Printf("[Error] %s ASR error: %v", mode, err)
+		return
+	}
+	if res == nil {
+		return
+	}
+
+	switch {
+	case !res.IsFinal:
+		s.BroadcastJSON(map[string]interface{}{
+			"event": "transcript.partial",
+			"data": map[string]interface{}{
+				"mode":       mode,
+				"transcript": res.Transcript,
+				"tokens":     res.Tokens,
+			},
+		})
+	case item.isDictation:
+		// Segment endpointed on a pause; dictation continues until explicitly stopped.
+		s.appendDictation(res.Transcript)
+	default:
+		s.BroadcastJSON(map[string]interface{}{
+			"event": "transcript.final",
+			"data": map[string]interface{}{
+				"mode":       "command",
+				"transcript": res.Transcript,
+			},
+		})
+		s.handleFinalCommandTranscript(res.Transcript)
+	}
+}
+
+// appendDictation adds a recognized phrase to the draft and broadcasts it.
+// Empty text (noise, typing) just clears the live partial so the UI returns to listening.
+func (s *Server) appendDictation(text string) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		s.BroadcastJSON(map[string]interface{}{
+			"event": "transcript.partial",
+			"data":  map[string]interface{}{"mode": "dictation", "transcript": ""},
+		})
+		return
+	}
+	s.dictMu.Lock()
+	s.dictationDraft = AppendDictationPhrase(s.dictationDraft, text)
+	draft, target := s.dictationDraft, s.dictationTarget
+	s.dictMu.Unlock()
+	s.BroadcastJSON(map[string]interface{}{
+		"event": "annotation.draft",
+		"data": map[string]interface{}{
+			"target_id":  target,
+			"draft_text": draft,
+			"word_count": len(intent.Tokenize(draft)),
+		},
+	})
 }
 
 // handleFinalCommandTranscript evaluates a finalized phrase through Intent Matcher and State Machine.
@@ -645,8 +654,8 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		"data": map[string]interface{}{
 			"to_state":        s.stateMachine.Current(),
 			"timestamp":       time.Now().Format(time.RFC3339),
-			"active_source":   s.activeSource,
-			"engine_mode":     s.engine.Name(),
+			"active_source":   s.currentSource(),
+			"engine_mode":     s.currentEngine().Name(),
 			"asr_engine":      s.ASREngineMode(),
 			"asr_engine_name": s.engineDisplayName(),
 			"tts_model":       ttsModel,
@@ -666,7 +675,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		if messageType == websocket.BinaryMessage {
 			// Binary PCM audio chunk from Web UI mic (16-bit PCM little endian)
-			if s.activeSource == "web_ui_mic" {
+			if s.currentSource() == "web_ui_mic" {
 				samples := audio.BytesToFloat32PCM(payload)
 				s.webMicSource.PushChunk(samples)
 			}
@@ -682,8 +691,11 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				mode, _ := req["mode"].(string)
 				if mode == "dictation" {
 					target, _ := req["target_id"].(string)
+					s.dictMu.Lock()
 					s.dictationTarget = target
 					s.dictationDraft = ""
+					s.dictMu.Unlock()
+					s.currentEngine().ResetASR()
 					s.stateMachine.StartDictation(target)
 				} else {
 					s.stateMachine.StartCommand()
@@ -692,7 +704,17 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			case "cancel":
 				s.SetPlaybackActive(false)
 				s.stateMachine.Cancel()
-				s.engine.ResetASR()
+				s.currentEngine().ResetASR()
+
+			case "stop":
+				// End dictation but keep speech not yet endpointed. Queued behind pending
+				// audio so the recognizer sees every chunk before finalizing.
+				if st := s.stateMachine.Current(); st == statemachine.StateAnnotationListen {
+					s.asrChan <- asrWorkItem{state: st, isDictation: true, flush: true}
+				} else {
+					s.stateMachine.Cancel()
+					s.currentEngine().ResetASR()
+				}
 
 			case "playback_status":
 				playing, _ := req["playing"].(bool)
@@ -779,17 +801,20 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				text, _ := req["text"].(string)
 				mode, _ := req["mode"].(string)
 				if mode == "dictation" {
+					s.dictMu.Lock()
 					if text == "" {
 						s.dictationDraft = ""
 					} else {
 						s.dictationDraft = AppendDictationPhrase(s.dictationDraft, text)
 					}
+					draft := s.dictationDraft
+					s.dictMu.Unlock()
 					s.BroadcastJSON(map[string]interface{}{
 						"event": "annotation.draft",
 						"data": map[string]interface{}{
 							"target_id":  "injected",
-							"draft_text": s.dictationDraft,
-							"word_count": len(intent.Tokenize(s.dictationDraft)),
+							"draft_text": draft,
+							"word_count": len(intent.Tokenize(draft)),
 						},
 					})
 				} else {

@@ -137,6 +137,12 @@ func (s *SimulatorEngine) ProcessASRChunk(chunk []float32, isDictation bool) (*A
 	return nil, nil
 }
 
+// FlushASR drops the in-progress simulated utterance.
+func (s *SimulatorEngine) FlushASR() string {
+	s.ResetASR()
+	return ""
+}
+
 // ResetASR clears accumulated streaming state.
 func (s *SimulatorEngine) ResetASR() {
 	s.mu.Lock()

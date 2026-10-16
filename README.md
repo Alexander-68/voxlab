@@ -85,8 +85,8 @@
      - Multi-turn confirmation state machine (`IDLE` $\to$ `COMMAND_LISTEN` $\to$ `PROCESS` $\to$ `CONFIRM` $\to$ `IDLE`).
      - 600ms responsive silence endpointing.
    - **Purpose 2: Voice Dictations**:
-     - **Live Partial Speech Streaming**: Neural recognizer streams interim text hypotheses live every ~650ms during continuous speech.
-     - **Natural Pause Endpointing & Auto-Punctuation**: Inter-phrase silence endpointing tuned to ~720ms. Phrases completed on pause automatically receive sentence termination (`.`) and subsequent phrases are automatically capitalized. Spoken punctuation keywords (`period`, `comma`, `question mark`, etc.) are recognized.
+     - **Live Partial Speech Streaming**: Each listening session holds one live stream to the resident recognizer; interim hypotheses arrive every ~330ms.
+     - **Natural Pause Endpointing & Auto-Punctuation**: The recognizer endpoints phrases itself on a ~720ms pause (`dictation.silence_endpoint_ms`), so gate/AGC settings do not affect endpointing; Stop Dictation flushes the phrase in progress. Phrases completed on pause automatically receive sentence termination (`.`) and subsequent phrases are automatically capitalized. Spoken punctuation keywords (`period`, `comma`, `question mark`, etc.) are recognized.
      - **Noise & Keyboard Clack Drop**: When typing noise or background sound triggers VAD without intelligible speech, the test bench cleanly resets back to listening state without hanging.
      - **Leading Syllable Pre-roll**: 360ms circular buffer preserves initial consonants and word onsets.
      - Strictly isolated from command execution: words spoken during dictation can never accidentally trigger system commands.

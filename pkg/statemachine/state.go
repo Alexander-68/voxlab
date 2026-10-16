@@ -162,6 +162,11 @@ func (sm *StateMachine) SetSpeaking(speaking bool) bool {
 	if speaking {
 		return sm.transition(StateSpeaking, "TTS_START", nil)
 	}
+	// Playback-stopped reports also arrive when nothing was playing (e.g. UI resets);
+	// they must not abort a listening session.
+	if sm.Current() != StateSpeaking {
+		return false
+	}
 	return sm.transition(StateIdle, "TTS_FINISH", nil)
 }
 

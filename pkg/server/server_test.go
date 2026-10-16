@@ -2,16 +2,21 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"voxlab/pkg/audio"
 	"voxlab/pkg/config"
 	"voxlab/pkg/engine"
+	"voxlab/pkg/statemachine"
 	"voxlab/pkg/tts"
 )
 
@@ -22,6 +27,7 @@ func setupTestServer(t *testing.T) *Server {
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)
 	}
+	t.Cleanup(func() { _ = srv.Stop(context.Background()) })
 	return srv
 }
 
@@ -719,5 +725,101 @@ func TestServerSpeechEnhancerWebSocket(t *testing.T) {
 
 	if !foundChanged {
 		t.Errorf("expected enhancer.changed event over WebSocket")
+	}
+}
+
+// TestServerLiveDictation streams real speech as the web mic: the first phrase must be
+// endpointed by the pause, the second (no pause) must survive pressing Stop.
+func TestServerLiveDictation(t *testing.T) {
+	wavData, err := os.ReadFile("../../models/sherpa-onnx-streaming-zipformer-en-2023-06-26/test_wavs/0.wav")
+	if err != nil {
+		t.Skip("zipformer test wav not available")
+	}
+	speech, _, err := audio.DecodeWAV(bytes.NewReader(wavData))
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := setupTestServer(t)
+	runner, ok := srv.sherpaEngine.(*engine.SherpaRunner)
+	if !ok || runner.Name() != "sherpa_onnx_native" {
+		t.Skip("sherpa ASR not installed")
+	}
+	for i := 0; i < 200 && !runner.ASRReady(); i++ {
+		time.Sleep(100 * time.Millisecond)
+	}
+	if err := srv.SetASREngineMode("sherpa"); err != nil {
+		t.Fatal(err)
+	}
+	go srv.audioPipelineLoop(srv.ctx)
+	go srv.asrPipelineLoop(srv.ctx)
+	_ = srv.webMicSource.Start(srv.ctx, srv.audioInChan)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws", srv.handleWebSocket)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	drafts := make(chan string, 10)
+	go func() {
+		for {
+			var msg struct {
+				Event string                 `json:"event"`
+				Data  map[string]interface{} `json:"data"`
+			}
+			if conn.ReadJSON(&msg) != nil {
+				return
+			}
+			if msg.Event == "annotation.draft" {
+				drafts <- msg.Data["draft_text"].(string)
+			}
+		}
+	}()
+	waitDraft := func() string {
+		select {
+		case d := <-drafts:
+			return d
+		case <-time.After(8 * time.Second):
+			t.Fatal("timed out waiting for annotation.draft")
+			return ""
+		}
+	}
+	var wmu sync.Mutex
+	send := func(samples []float32) {
+		for i := 0; i < len(samples); i += 480 {
+			wmu.Lock()
+			_ = conn.WriteMessage(websocket.BinaryMessage, audio.Float32ToBytesPCM(samples[i:min(i+480, len(samples))]))
+			wmu.Unlock()
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+
+	_ = conn.WriteJSON(map[string]interface{}{"action": "activate", "mode": "dictation", "target_id": "t1"})
+	time.Sleep(100 * time.Millisecond)
+	send(speech)
+	send(make([]float32, 16000*2))
+	first := waitDraft()
+	if !strings.Contains(first, "yellow lamps") {
+		t.Fatalf("first phrase not endpointed correctly: %q", first)
+	}
+
+	send(speech)
+	wmu.Lock()
+	_ = conn.WriteJSON(map[string]interface{}{"action": "stop"})
+	wmu.Unlock()
+	final := waitDraft()
+	t.Logf("draft: %q", final)
+	if strings.Count(final, "yellow lamps") != 2 {
+		t.Fatalf("second phrase lost on stop: %q", final)
+	}
+	for i := 0; i < 50 && srv.stateMachine.Current() != statemachine.StateIdle; i++ {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if st := srv.stateMachine.Current(); st != statemachine.StateIdle {
+		t.Errorf("expected IDLE after stop, got %s", st)
 	}
 }

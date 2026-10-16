@@ -2,7 +2,6 @@ package engine
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -23,16 +22,16 @@ import (
 
 // SherpaRunner executes official Sherpa-ONNX binaries or falls back to simulation.
 type SherpaRunner struct {
-	cfg           *config.AppConfig
-	simulator     *SimulatorEngine
-	warmTTS       WarmTTS
-	warmASR       WarmASR
-	mu            sync.Mutex
-	turnAudio     []float32
-	preRoll       [][]float32
-	speechChunks  int
-	silenceChunks int
-	lastPartial   time.Time
+	cfg       *config.AppConfig
+	simulator *SimulatorEngine
+	warmTTS   WarmTTS
+	mu        sync.Mutex
+	asrMu     sync.Mutex // guards the ASR fields below; separate from mu so TTS never blocks ASR
+	warmASR   *WarmASR // resident ASR server, set as soon as its process is spawned
+	asrReady  bool     // warmASR finished loading models
+	asrModels bool // zipformer models + server binary are installed
+	asrClosed bool // Close was called; late-starting servers must be killed
+	stream    *ASRStream
 }
 
 // NewSherpaRunner creates a new SherpaRunner instance.
@@ -50,29 +49,47 @@ func NewSherpaRunner(cfg *config.AppConfig) *SherpaRunner {
 		cfg:       cfg,
 		simulator: NewSimulatorEngine(),
 	}
+	_, _, _, _, modelsExist := findZipformerModelDir(cfg.Engine.ZipformerDir)
+	_, binExists := findSherpaBin("sherpa-onnx-online-websocket-server")
+	runner.asrModels = modelsExist && binExists
 
 	// Eagerly warm up ASR in background so first spoken utterance has zero cold start latency
-	go func() {
-		tok, enc, dec, joi, modelsExist := findZipformerModelDir(cfg.Engine.ZipformerDir)
-		if modelsExist {
-			warm, err := NewWarmASR(tok, enc, dec, joi)
-			if err == nil {
-				runner.mu.Lock()
-				runner.warmASR = warm
-				runner.mu.Unlock()
-			} else {
-				log.Printf("[SherpaRunner] Background Warm ASR initialization notice: %v", err)
-			}
-		}
-	}()
-
+	runner.asrMu.Lock()
+	runner.startWarmASRLocked()
+	runner.asrMu.Unlock()
 	return runner
 }
 
+// startWarmASRLocked spawns the resident ASR server and loads it in the background (caller holds asrMu).
+func (r *SherpaRunner) startWarmASRLocked() {
+	if !r.asrModels || r.asrClosed || r.warmASR != nil {
+		return
+	}
+	tok, enc, dec, joi, _ := findZipformerModelDir(r.cfg.Engine.ZipformerDir)
+	warm, err := StartWarmASR(tok, enc, dec, joi, r.cfg.Engine.NumThreads, float64(r.cfg.Dictation.SilenceEndpointMs)/1000)
+	if err != nil {
+		log.Printf("[SherpaRunner] Warm ASR start failed: %v", err)
+		return
+	}
+	r.warmASR = warm
+	go func() {
+		err := warm.WaitReady()
+		r.asrMu.Lock()
+		defer r.asrMu.Unlock()
+		if r.warmASR != warm { // closed or replaced meanwhile
+			return
+		}
+		if err != nil {
+			log.Printf("[SherpaRunner] Warm ASR initialization failed: %v", err)
+			r.warmASR = nil
+			return
+		}
+		r.asrReady = true
+	}()
+}
+
 func (r *SherpaRunner) Name() string {
-	tok, enc, _, _, exists := findZipformerModelDir(r.cfg.Engine.ZipformerDir)
-	bin, binExists := findSherpaBin("sherpa-onnx")
-	if exists && binExists && tok != "" && enc != "" && bin != "" {
+	if r.asrModels {
 		return "sherpa_onnx_native"
 	}
 	return "simulator"
@@ -86,203 +103,75 @@ func (r *SherpaRunner) DetectWakeWord(chunk []float32) (bool, string, float64) {
 	return r.simulator.DetectWakeWord(chunk)
 }
 
+// ProcessASRChunk streams a chunk to the live recognizer and returns the next pending
+// result: an endpointed segment (final), a changed partial hypothesis, or nil.
+// Endpointing is done by sherpa itself on decoded blank frames, so it is independent of
+// gain/noise-gate settings.
 func (r *SherpaRunner) ProcessASRChunk(chunk []float32, isDictation bool) (*ASRResult, error) {
-	tok, enc, dec, joi, modelsExist := findZipformerModelDir(r.cfg.Engine.ZipformerDir)
-	binPath, binExists := findSherpaBin("sherpa-onnx")
-
-	if !modelsExist || !binExists {
+	if !r.asrModels {
 		return r.simulator.ProcessASRChunk(chunk, isDictation)
 	}
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.asrMu.Lock()
+	defer r.asrMu.Unlock()
 
-	_, dbfs := audio.CalculateRMS(chunk)
-	isVoice := dbfs > -42.0
-
-	if !isVoice && r.speechChunks == 0 {
-		// Maintain a 12-chunk (~360ms) circular pre-roll buffer to preserve leading word consonants
-		r.preRoll = append(r.preRoll, chunk)
-		if len(r.preRoll) > 12 {
-			r.preRoll = r.preRoll[1:]
+	if r.stream == nil {
+		if !r.asrReady {
+			r.startWarmASRLocked()
+			return nil, nil // still loading; audio before the model is ready is dropped
 		}
-	}
-
-	if isVoice {
-		if r.speechChunks == 0 && len(r.preRoll) > 0 {
-			for _, pChunk := range r.preRoll {
-				r.turnAudio = append(r.turnAudio, pChunk...)
-			}
-			r.preRoll = nil
-		}
-		r.speechChunks++
-		r.silenceChunks = 0
-		r.turnAudio = append(r.turnAudio, chunk...)
-	} else {
-		if r.speechChunks > 0 {
-			r.silenceChunks++
-			r.turnAudio = append(r.turnAudio, chunk...) // include trailing silence for natural endpointing
-		}
-	}
-
-	// Trailing silence pause endpointing:
-	// For dictation: natural inter-phrase pause (~720ms = 24 chunks @ 30ms) ensures
-	// distinct sentences get individual punctuation without merging consecutive thoughts.
-	// For commands: ~600ms (20 chunks @ 30ms) for snappy response.
-	requiredSilenceChunks := 20
-	if isDictation {
-		requiredSilenceChunks = 24
-	}
-
-	if r.speechChunks >= 8 && r.silenceChunks >= requiredSilenceChunks && len(r.turnAudio) >= 16000*3/10 {
-		audioToTranscribe := make([]float32, len(r.turnAudio))
-		copy(audioToTranscribe, r.turnAudio)
-		r.turnAudio = nil
-		r.preRoll = nil
-		r.speechChunks = 0
-		r.silenceChunks = 0
-
-		var res *ASRResult
-		var err error
-
-		// 1. Try warm in-memory streaming ASR first (instant inference, zero cold starts)
-		if r.warmASR != nil && r.warmASR.IsWarm() {
-			res, err = r.warmASR.Transcribe(audioToTranscribe)
-		} else if tok != "" && enc != "" {
-			if warm, warmErr := NewWarmASR(tok, enc, dec, joi); warmErr == nil {
-				r.warmASR = warm
-				res, err = r.warmASR.Transcribe(audioToTranscribe)
-			}
-		}
-
-		// 2. Fall back to one-shot CLI execution if warm server unavailable
-		if res == nil || err != nil {
-			if err != nil {
-				log.Printf("[SherpaRunner] Warm ASR unavailable (%v), falling back to one-shot CLI", err)
-			}
-			res, err = r.transcribeWAV(binPath, tok, enc, dec, joi, audioToTranscribe)
-		}
-
+		st, err := r.warmASR.Open()
 		if err != nil {
-			log.Printf("[SherpaRunner] ASR inference error: %v, falling back to simulator", err)
-			return r.simulator.ProcessASRChunk(chunk, isDictation)
+			// Server likely died: restart it in the background.
+			_ = r.warmASR.Close()
+			r.warmASR, r.asrReady = nil, false
+			r.startWarmASRLocked()
+			return nil, err
 		}
-		res.Transcript = strings.ToLower(strings.TrimSpace(res.Transcript))
-		res.IsFinal = true
-		return res, nil
+		r.stream = st
 	}
 
-	// While speaking, stream real partial hypothesis every ~650ms if warm recognizer is resident
-	if r.speechChunks >= 8 && time.Since(r.lastPartial) >= 650*time.Millisecond {
-		r.lastPartial = time.Now()
-		if r.warmASR != nil && r.warmASR.IsWarm() && len(r.turnAudio) >= 16000*3/10 {
-			partialAudio := make([]float32, len(r.turnAudio))
-			copy(partialAudio, r.turnAudio)
-			if partialRes, err := r.warmASR.Transcribe(partialAudio); err == nil && partialRes != nil {
-				txt := strings.ToLower(strings.TrimSpace(partialRes.Transcript))
-				if txt != "" {
-					return &ASRResult{
-						Transcript: txt,
-						Tokens:     partialRes.Tokens,
-						IsFinal:    false,
-					}, nil
-				}
-			}
-		}
-		return nil, nil
+	if err := r.stream.Send(chunk); err != nil {
+		r.stream.Close()
+		r.stream = nil
+		return nil, err
 	}
 
-	return nil, nil
+	res := r.stream.Next()
+	if res != nil && res.IsFinal && !isDictation {
+		// A command turn ends at its first endpoint; the next turn gets a fresh stream.
+		r.stream.Close()
+		r.stream = nil
+	}
+	return res, nil
 }
 
-func (r *SherpaRunner) transcribeWAV(bin, tok, enc, dec, joi string, samples []float32) (*ASRResult, error) {
-	tempWav := filepath.Join(os.TempDir(), fmt.Sprintf("voxlab_asr_%d.wav", time.Now().UnixNano()))
-	defer os.Remove(tempWav)
+// ASRReady reports whether the resident ASR server has loaded its models.
+func (r *SherpaRunner) ASRReady() bool {
+	r.asrMu.Lock()
+	defer r.asrMu.Unlock()
+	return r.asrReady
+}
 
-	wavBytes, err := audio.EncodeWAV(samples, 16000)
-	if err != nil {
-		return nil, fmt.Errorf("failed encoding WAV: %w", err)
+// FlushASR finalizes the active stream, returning any speech not yet endpointed.
+func (r *SherpaRunner) FlushASR() string {
+	r.asrMu.Lock()
+	defer r.asrMu.Unlock()
+	if r.stream == nil {
+		return ""
 	}
-	if err := os.WriteFile(tempWav, wavBytes, 0644); err != nil {
-		return nil, fmt.Errorf("failed writing temp WAV: %w", err)
-	}
-
-	cmd := exec.Command(bin,
-		"--tokens="+tok,
-		"--encoder="+enc,
-		"--decoder="+dec,
-		"--joiner="+joi,
-		"--num-threads=4",
-		tempWav,
-	)
-
-	outBytes, err := cmd.CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("sherpa-onnx execution error (%w): %s", err, string(outBytes))
-	}
-
-	outStr := string(outBytes)
-	var text string
-	var tokens []string
-	jsonFound := false
-
-	lines := strings.Split(outStr, "\n")
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "{") && strings.Contains(trimmed, `"text"`) {
-			var parsed struct {
-				Text   string   `json:"text"`
-				Tokens []string `json:"tokens"`
-			}
-			if err := json.Unmarshal([]byte(trimmed), &parsed); err == nil {
-				text = strings.ToLower(strings.TrimSpace(parsed.Text))
-				tokens = parsed.Tokens
-				jsonFound = true
-				break
-			}
-		}
-	}
-
-	// Only fall back to line inspection if JSON output was completely missing from the binary
-	if !jsonFound && text == "" {
-		for _, line := range lines {
-			trimmed := strings.TrimSpace(line)
-			if len(trimmed) > 0 &&
-				!strings.HasPrefix(trimmed, "OnlineRecognizer") &&
-				!strings.HasPrefix(trimmed, "Start") &&
-				!strings.HasPrefix(trimmed, "Recognizer") &&
-				!strings.HasPrefix(trimmed, "Number of threads") &&
-				!strings.HasPrefix(trimmed, "D:") &&
-				!strings.HasPrefix(trimmed, "C:") &&
-				!strings.HasPrefix(trimmed, "{") &&
-				!strings.Contains(trimmed, ".wav") &&
-				!strings.Contains(trimmed, "voxlab_asr_") &&
-				!strings.Contains(trimmed, `\`) &&
-				!strings.Contains(trimmed, "/") &&
-				!strings.Contains(trimmed, "Elapsed") &&
-				!strings.Contains(trimmed, "RTF") {
-				text = strings.ToLower(trimmed)
-				break
-			}
-		}
-	}
-
-	log.Printf("[SherpaRunner] Real Neural ASR Result: '%s' (%d tokens)", text, len(tokens))
-
-	return &ASRResult{
-		Transcript: text,
-		Tokens:     tokens,
-		Confidence: 0.95,
-	}, nil
+	parts := r.stream.Finish(3 * time.Second)
+	r.stream = nil
+	return strings.Join(parts, " ")
 }
 
 func (r *SherpaRunner) ResetASR() {
-	r.mu.Lock()
-	r.turnAudio = nil
-	r.preRoll = nil
-	r.speechChunks = 0
-	r.silenceChunks = 0
-	r.mu.Unlock()
+	r.asrMu.Lock()
+	if r.stream != nil {
+		r.stream.Close()
+		r.stream = nil
+	}
+	r.asrMu.Unlock()
 	r.simulator.ResetASR()
 }
 
@@ -805,9 +694,16 @@ func (r *SherpaRunner) Close() error {
 		r.warmTTS.Close()
 		r.warmTTS = nil
 	}
+	r.asrMu.Lock()
+	defer r.asrMu.Unlock()
+	r.asrClosed = true
+	if r.stream != nil {
+		r.stream.Close()
+		r.stream = nil
+	}
 	if r.warmASR != nil {
-		r.warmASR.Close()
-		r.warmASR = nil
+		_ = r.warmASR.Close()
+		r.warmASR, r.asrReady = nil, false
 	}
 	return nil
 }

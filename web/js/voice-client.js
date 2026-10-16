@@ -101,6 +101,11 @@ class VoiceClient {
     this.sendAction('activate', { mode: 'dictation', target_id: targetId });
   }
 
+  // Ends dictation, keeping the last phrase that is still being recognized.
+  stopDictation() {
+    this.sendAction('stop');
+  }
+
   cancelTurn() {
     this.sendAction('cancel');
   }
