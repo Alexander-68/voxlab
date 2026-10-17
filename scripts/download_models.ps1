@@ -122,21 +122,29 @@ if (-not $SkipKokoro) {
     }
 }
 
-# 3. Streaming Zipformer ASR Model
-$AsrFolder = Join-Path $ModelsDir "sherpa-onnx-streaming-zipformer-en-2023-06-26"
-$AsrArchive = Join-Path $ModelsDir "sherpa-onnx-streaming-zipformer-en-2023-06-26.tar.bz2"
+# 3. ASR Models: Kroko streaming (first pass, default), Parakeet TDT (second pass),
+#    LibriSpeech Zipformer (fallback, used by tests). Nemotron 560ms is optional (~460 MB, heavier on CPU).
+$AsrModels = @(
+    "sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06",
+    "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8",
+    "sherpa-onnx-streaming-zipformer-en-2023-06-26"
+)
 
 if (-not $SkipAsr) {
-    if (-not (Test-Path $AsrFolder)) {
-        Write-Host "[3/3] Downloading Streaming Zipformer ASR Model..." -ForegroundColor White
-        $AsrUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-2023-06-26.tar.bz2"
-        Invoke-FastDownload -Url $AsrUrl -OutFile $AsrArchive -Description "Streaming Zipformer ASR"
-        Write-Host "Extracting ASR archive..." -ForegroundColor Yellow
-        tar -xjf $AsrArchive -C $ModelsDir
-        Remove-Item $AsrArchive -Force -ErrorAction SilentlyContinue
-        Write-Host "[OK] Streaming Zipformer model installed!" -ForegroundColor Green
-    } else {
-        Write-Host "[3/3] Streaming Zipformer ASR Model already present." -ForegroundColor Yellow
+    foreach ($AsrName in $AsrModels) {
+        $AsrFolder = Join-Path $ModelsDir $AsrName
+        $AsrArchive = Join-Path $ModelsDir "$AsrName.tar.bz2"
+        if (-not (Test-Path $AsrFolder)) {
+            Write-Host "[3/3] Downloading ASR model $AsrName..." -ForegroundColor White
+            $AsrUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/$AsrName.tar.bz2"
+            Invoke-FastDownload -Url $AsrUrl -OutFile $AsrArchive -Description $AsrName
+            Write-Host "Extracting ASR archive..." -ForegroundColor Yellow
+            tar -xjf $AsrArchive -C $ModelsDir
+            Remove-Item $AsrArchive -Force -ErrorAction SilentlyContinue
+            Write-Host "[OK] $AsrName installed!" -ForegroundColor Green
+        } else {
+            Write-Host "[3/3] $AsrName already present." -ForegroundColor Yellow
+        }
     }
 }
 

@@ -24,7 +24,7 @@ func TestGetFreeTCPPort(t *testing.T) {
 // TestWarmASRStreaming feeds speech + pause + speech through one stream and expects
 // the server to endpoint the first utterance on its own and Finish to flush the second.
 func TestWarmASRStreaming(t *testing.T) {
-	tok, enc, dec, joi, modelsExist := findZipformerModelDir("")
+	tok, enc, dec, joi, modelsExist := findTransducerModel(filepath.Join("..", "..", "models", "sherpa-onnx-streaming-zipformer-en-2023-06-26"))
 	_, binExists := findSherpaBin("sherpa-onnx-online-websocket-server")
 	if !modelsExist || !binExists {
 		t.Skip("Sherpa-ONNX streaming Zipformer models or websocket server binary not found")

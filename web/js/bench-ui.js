@@ -56,6 +56,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // ASR Engine Selector
   const asrEngineSelect = document.getElementById('asr-engine-select');
   const asrEngineName = document.getElementById('asr-engine-name');
+  const asrModelSelect = document.getElementById('asr-model-select');
+  const chkSecondPass = document.getElementById('chk-second-pass');
+  const secondPassModel = document.getElementById('second-pass-model');
+  const sherpaModelControls = document.getElementById('sherpa-model-controls');
 
   // Commands Tab
   const btnPttCommand = document.getElementById('btn-ptt-command');
@@ -430,6 +434,10 @@ document.addEventListener('DOMContentLoaded', () => {
       engineStatus.title = `Active ASR Engine: ${label}`;
     }
 
+    if (sherpaModelControls) {
+      sherpaModelControls.style.display = engine === 'sherpa' ? '' : 'none';
+    }
+
     // In browser mode: visibly disable panel "Noise Cancelling & Filters", fix "Audio Capture Source" to web_ui_mic, hide acoustic controls
     if (engine === 'browser') {
       if (audioSourceSelect) {
@@ -518,6 +526,22 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       chkWebrtcNs.disabled = false;
       if (webrtcNsLabel) webrtcNsLabel.textContent = 'Browser WebRTC Noise Suppression (Web Mic)';
+    }
+  }
+
+  function updateAsrModels(info) {
+    if (!info) return;
+    asrModelSelect.innerHTML = '';
+    (info.asr_models || []).forEach((name) => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name.replace(/^sherpa-onnx-/, '');
+      asrModelSelect.appendChild(opt);
+    });
+    asrModelSelect.value = info.asr_model;
+    chkSecondPass.checked = !!info.second_pass;
+    if (info.second_pass_model) {
+      secondPassModel.textContent = info.second_pass_model.replace(/^sherpa-onnx-(nemo-)?/, '');
     }
   }
 
@@ -613,6 +637,9 @@ document.addEventListener('DOMContentLoaded', () => {
       updateEnhancerDisplay(data.enhancer_on, data.enhancer_type, data.enhancer_name);
     }
 
+    if (data.asr_models) {
+      updateAsrModels(data.asr_models);
+    }
     if (data.asr_engine) {
       updateAsrEngineDisplay(data.asr_engine);
     } else if (data.engine_mode && engineStatus) {
@@ -710,6 +737,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   client.on('audio.chunk', (buf) => {
     capture.playRemotePCM(buf);
+  });
+
+  client.on('asr.models_changed', (data) => {
+    updateAsrModels(data);
+  });
+
+  client.on('transcript.refined', (data) => {
+    logEvent('asr.second_pass', `[${data.mode}] "${data.first_pass}" → "${data.transcript}" (${data.latency_ms} ms)`);
   });
 
   client.on('wake_word_detected', (data) => {
@@ -1393,6 +1428,16 @@ document.addEventListener('DOMContentLoaded', () => {
     dictationLiveBox.innerHTML = '<span class="placeholder-text">Dictation stopped.</span>';
     dictationStatusBadge.textContent = 'Idle';
     dictationStatusBadge.className = 'badge badge-subtle';
+  });
+
+  asrModelSelect.addEventListener('change', (e) => {
+    client.setAsrModel(e.target.value);
+    logEvent('asr.model_select', `Streaming model switched to: ${e.target.value} (reloading...)`);
+  });
+
+  chkSecondPass.addEventListener('change', (e) => {
+    client.setSecondPass(e.target.checked);
+    logEvent('asr.second_pass_toggle', `Second pass: ${e.target.checked ? 'ENABLED (loading model...)' : 'DISABLED'}`);
   });
 
   if (asrEngineSelect) {

@@ -8,9 +8,11 @@ import (
 	"math"
 	"net"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/gorilla/websocket"
 )
@@ -71,19 +73,59 @@ func StartWarmASR(tok, enc, dec, joi string, numThreads int, endpointSilenceSec 
 	return &WarmASR{cmd: cmd, port: port}, nil
 }
 
-// WaitReady polls until the server accepts connections (up to 15s for models to load);
-// on timeout it kills the process.
+// WaitReady polls until the server accepts connections; on timeout it kills the process.
 func (w *WarmASR) WaitReady() error {
-	for i := 0; i < 150; i++ {
-		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", w.port), 100*time.Millisecond)
-		if err == nil {
-			conn.Close()
-			return nil
-		}
-		time.Sleep(100 * time.Millisecond)
+	if waitForPort(w.port) {
+		return nil
 	}
 	_ = w.Close()
 	return fmt.Errorf("sherpa-onnx-online-websocket-server failed to bind port %d within timeout", w.port)
+}
+
+// waitForPort polls until a local server accepts connections (up to 30s for large models to load).
+func waitForPort(port int) bool {
+	for i := 0; i < 300; i++ {
+		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 100*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			return true
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return false
+}
+
+// findTransducerModel locates tokens.txt and encoder/decoder/joiner ONNX files in dir,
+// preferring int8 variants. Works for Zipformer, NeMo/Nemotron and Parakeet exports.
+func findTransducerModel(dir string) (tok, enc, dec, joi string, ok bool) {
+	if dir == "" {
+		return "", "", "", "", false
+	}
+	pick := func(part string) string {
+		for _, pat := range []string{part + "*.int8.onnx", part + "*.onnx"} {
+			if m, _ := filepath.Glob(filepath.Join(dir, pat)); len(m) > 0 {
+				return m[0]
+			}
+		}
+		return ""
+	}
+	tok = filepath.Join(dir, "tokens.txt")
+	enc, dec, joi = pick("encoder"), pick("decoder"), pick("joiner")
+	ok = isRegularFile(tok) && enc != "" && dec != "" && joi != ""
+	return tok, enc, dec, joi, ok
+}
+
+// normalizeCase lowercases all-caps output (LibriSpeech Zipformer) and keeps the casing
+// of models that produce real capitalization (Nemotron, Parakeet). Punctuation-only output
+// (punctuating models emit a lone "." on trailing silence) counts as no speech.
+func normalizeCase(text string) string {
+	if !strings.ContainsFunc(text, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }) {
+		return ""
+	}
+	if strings.ToUpper(text) == text {
+		return strings.ToLower(text)
+	}
+	return text
 }
 
 func getFreeTCPPort() (int, error) {
@@ -123,8 +165,8 @@ type ASRStream struct {
 	done chan struct{}
 
 	mu             sync.Mutex
-	finals         []string // endpointed segments not yet taken
-	partial        string   // hypothesis of the segment in progress
+	finals         []ASRResult // endpointed segments not yet taken
+	partial        string      // hypothesis of the segment in progress
 	partialChanged bool
 }
 
@@ -136,16 +178,23 @@ func (s *ASRStream) readLoop() {
 			return
 		}
 		var res struct {
-			Text    string `json:"text"`
-			IsFinal bool   `json:"is_final"`
+			Text       string    `json:"text"`
+			IsFinal    bool      `json:"is_final"`
+			StartTime  float64   `json:"start_time"` // segment start, seconds since stream start
+			Timestamps []float64 `json:"timestamps"` // token times relative to start_time
 		}
 		if json.Unmarshal(msg, &res) != nil {
 			continue
 		}
-		text := strings.ToLower(strings.TrimSpace(res.Text))
+		text := normalizeCase(strings.TrimSpace(res.Text))
 		s.mu.Lock()
 		if res.IsFinal && text != "" {
-			s.finals = append(s.finals, text)
+			seg := ASRResult{IsFinal: true, Transcript: text, Confidence: 0.95}
+			if n := len(res.Timestamps); n > 0 {
+				seg.StartSec = res.StartTime + res.Timestamps[0]
+				seg.EndSec = res.StartTime + res.Timestamps[n-1]
+			}
+			s.finals = append(s.finals, seg)
 			text = ""
 		}
 		if text != s.partial {
@@ -171,9 +220,9 @@ func (s *ASRStream) Next() *ASRResult {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if len(s.finals) > 0 {
-		text := s.finals[0]
+		seg := s.finals[0]
 		s.finals = s.finals[1:]
-		return &ASRResult{IsFinal: true, Transcript: text, Confidence: 0.95}
+		return &seg
 	}
 	if s.partialChanged {
 		s.partialChanged = false
@@ -195,7 +244,10 @@ func (s *ASRStream) Finish(timeout time.Duration) []string {
 	s.Close()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := s.finals
+	var out []string
+	for _, seg := range s.finals {
+		out = append(out, seg.Transcript)
+	}
 	if s.partial != "" {
 		out = append(out, s.partial)
 	}

@@ -744,7 +744,8 @@ func TestServerLiveDictation(t *testing.T) {
 	if !ok || runner.Name() != "sherpa_onnx_native" {
 		t.Skip("sherpa ASR not installed")
 	}
-	for i := 0; i < 200 && !runner.ASRReady(); i++ {
+	// Wait for both passes so the endpointed phrase (timestamp cut) and the flushed tail get refined.
+	for i := 0; i < 300 && !(runner.ASRReady() && runner.ASRModelInfo()["second_pass_loaded"] == true); i++ {
 		time.Sleep(100 * time.Millisecond)
 	}
 	if err := srv.SetASREngineMode("sherpa"); err != nil {

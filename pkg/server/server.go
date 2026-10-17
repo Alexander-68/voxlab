@@ -135,6 +135,24 @@ func NewServer(cfg *config.AppConfig) (*Server, error) {
 		clients:       make(map[*websocket.Conn]*sync.Mutex),
 	}
 
+	// Surface each second-pass correction so the bench shows first-pass vs refined text and its cost.
+	sherpaRunner.OnRefine = func(isDictation bool, firstPass, refined string, latencyMs int64) {
+		mode := "command"
+		if isDictation {
+			mode = "dictation"
+		}
+		log.Printf("[ASR] Second pass (%d ms): %q -> %q", latencyMs, firstPass, refined)
+		s.BroadcastJSON(map[string]interface{}{
+			"event": "transcript.refined",
+			"data": map[string]interface{}{
+				"mode":       mode,
+				"first_pass": firstPass,
+				"transcript": refined,
+				"latency_ms": latencyMs,
+			},
+		})
+	}
+
 	// Listen for state transitions and broadcast them
 	sm.AddListener(func(ev statemachine.StateEvent) {
 		ttsModel, isNeural := s.ttsMgr.ActiveModel()
@@ -330,6 +348,18 @@ func (s *Server) engineDisplayName() string {
 	default:
 		return mode
 	}
+}
+
+// asrModelInfo describes the sherpa first/second-pass model setup (nil without a sherpa runner).
+func (s *Server) asrModelInfo() map[string]interface{} {
+	if r, ok := s.sherpaEngine.(*engine.SherpaRunner); ok {
+		return r.ASRModelInfo()
+	}
+	return nil
+}
+
+func (s *Server) broadcastASRModelInfo() {
+	s.BroadcastJSON(map[string]interface{}{"event": "asr.models_changed", "data": s.asrModelInfo()})
 }
 
 func (s *Server) enhancerModelType() string {
@@ -663,6 +693,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			"enhancer_on":     s.enhancer != nil && s.enhancer.IsEnabled(),
 			"enhancer_type":   s.enhancerModelType(),
 			"enhancer_name":   s.enhancerName(),
+			"asr_models":      s.asrModelInfo(),
 		},
 	})
 	connMu.Unlock()
@@ -749,6 +780,25 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 					if err := s.SetASREngineMode(engName); err != nil {
 						log.Printf("[Error] Failed setting ASR engine %s: %v", engName, err)
 					}
+				}
+
+			case "set_asr_model":
+				name, _ := req["model"].(string)
+				if r, ok := s.sherpaEngine.(*engine.SherpaRunner); ok {
+					if err := r.SetStreamingModel(name); err != nil {
+						log.Printf("[Error] Failed switching streaming ASR model: %v", err)
+					} else {
+						log.Printf("[ASR] Streaming model switched to %s", name)
+					}
+					s.broadcastASRModelInfo()
+				}
+
+			case "set_second_pass":
+				enabled, _ := req["enabled"].(bool)
+				if r, ok := s.sherpaEngine.(*engine.SherpaRunner); ok {
+					r.SetSecondPass(enabled)
+					log.Printf("[ASR] Second pass enabled: %v", enabled)
+					s.broadcastASRModelInfo()
 				}
 
 			case "set_noise_gate":

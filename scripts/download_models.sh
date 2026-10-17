@@ -61,17 +61,19 @@ else
     echo "[2/3] Kokoro TTS Model already present."
 fi
 
-# 3. Streaming Zipformer ASR Model
-ASR_FOLDER="$MODELS_DIR/sherpa-onnx-streaming-zipformer-en-2023-06-26"
-if [ ! -d "$ASR_FOLDER" ]; then
-    echo "[3/3] Downloading Streaming Zipformer ASR Model..."
-    wget -c "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-2023-06-26.tar.bz2" -O "$MODELS_DIR/sherpa-onnx-streaming-zipformer-en-2023-06-26.tar.bz2"
-    tar -xjf "$MODELS_DIR/sherpa-onnx-streaming-zipformer-en-2023-06-26.tar.bz2" -C "$MODELS_DIR"
-    rm -f "$MODELS_DIR/sherpa-onnx-streaming-zipformer-en-2023-06-26.tar.bz2"
-    echo "Streaming Zipformer model installed!"
-else
-    echo "[3/3] Streaming Zipformer ASR Model already present."
-fi
+# 3. ASR Models: Kroko streaming (first pass, default), Parakeet TDT (second pass),
+#    LibriSpeech Zipformer (fallback, used by tests). Nemotron 560ms is optional (~460 MB, heavier on CPU).
+for ASR_NAME in sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06 sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8 sherpa-onnx-streaming-zipformer-en-2023-06-26; do
+    if [ ! -d "$MODELS_DIR/$ASR_NAME" ]; then
+        echo "[3/3] Downloading ASR model $ASR_NAME..."
+        wget -c "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/$ASR_NAME.tar.bz2" -O "$MODELS_DIR/$ASR_NAME.tar.bz2"
+        tar -xjf "$MODELS_DIR/$ASR_NAME.tar.bz2" -C "$MODELS_DIR"
+        rm -f "$MODELS_DIR/$ASR_NAME.tar.bz2"
+        echo "$ASR_NAME installed!"
+    else
+        echo "[3/3] $ASR_NAME already present."
+    fi
+done
 
 echo "=================================================="
 echo " Neural models & Sherpa engine ready for VoxLab!"

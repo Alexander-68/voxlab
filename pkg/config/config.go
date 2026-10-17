@@ -7,14 +7,14 @@ import (
 
 // AudioConfig defines audio format and DSP parameters.
 type AudioConfig struct {
-	SampleRate            int     `json:"sample_rate"`              // 16000 Hz standard for ASR
-	Channels              int     `json:"channels"`                 // 1 (mono)
-	ChunkSamples          int     `json:"chunk_samples"`            // 480 samples = 30ms @ 16kHz
-	NoiseGateThresholdDBFS float64 `json:"noise_gate_threshold_dbfs"` // e.g. -42.0 dBFS
-	HighPassCutoffHz      float64 `json:"high_pass_cutoff_hz"`      // e.g. 80.0 Hz
-	AGCEnabled            bool           `json:"agc_enabled"`
-	TargetRMS             float64        `json:"target_rms"`               // e.g. 0.12 (-18 dBFS)
-	Enhancer              EnhancerConfig `json:"enhancer"`
+	SampleRate             int            `json:"sample_rate"`               // 16000 Hz standard for ASR
+	Channels               int            `json:"channels"`                  // 1 (mono)
+	ChunkSamples           int            `json:"chunk_samples"`             // 480 samples = 30ms @ 16kHz
+	NoiseGateThresholdDBFS float64        `json:"noise_gate_threshold_dbfs"` // e.g. -42.0 dBFS
+	HighPassCutoffHz       float64        `json:"high_pass_cutoff_hz"`       // e.g. 80.0 Hz
+	AGCEnabled             bool           `json:"agc_enabled"`
+	TargetRMS              float64        `json:"target_rms"` // e.g. 0.12 (-18 dBFS)
+	Enhancer               EnhancerConfig `json:"enhancer"`
 }
 
 // EnhancerConfig defines neural speech enhancement / denoising parameters.
@@ -28,10 +28,10 @@ type EnhancerConfig struct {
 
 // KWSConfig defines keyword spotting parameters.
 type KWSConfig struct {
-	Enabled             bool    `json:"enabled"`
-	Keyword             string  `json:"keyword"`              // e.g. "hey voxlab"
-	Threshold           float64 `json:"threshold"`            // e.g. 0.40
-	PreRollDurationSec  float64 `json:"pre_roll_duration_sec"`// e.g. 1.0s circular buffer
+	Enabled            bool    `json:"enabled"`
+	Keyword            string  `json:"keyword"`               // e.g. "hey voxlab"
+	Threshold          float64 `json:"threshold"`             // e.g. 0.40
+	PreRollDurationSec float64 `json:"pre_roll_duration_sec"` // e.g. 1.0s circular buffer
 }
 
 // IntentConfig defines semantic matching and distractor suppression thresholds.
@@ -49,16 +49,18 @@ type DictationConfig struct {
 
 // EngineConfig configures Sherpa-ONNX model paths and binaries.
 type EngineConfig struct {
-	Mode           string `json:"mode"`             // "simulator" or "sherpa"
-	ModelDir       string `json:"model_dir"`        // e.g. "models"
-	SherpaTtsBin   string `json:"sherpa_tts_bin"`   // e.g. "sherpa-onnx-offline-tts"
-	SherpaKwsBin   string `json:"sherpa_kws_bin"`   // e.g. "sherpa-onnx-keyword-spotter"
-	SherpaAsrBin   string `json:"sherpa_asr_bin"`   // e.g. "sherpa-onnx-online-websocket-server"
-	KokoroModelDir  string `json:"kokoro_model_dir"`  // e.g. "models/kokoro-multi-lang-v1_0"
-	KokoroModelFile string `json:"kokoro_model_file,omitempty"` // e.g. "model.fp16.onnx", "model.onnx"
-	ZipformerDir    string `json:"zipformer_dir"`     // e.g. "models/sherpa-onnx-streaming-zipformer-en-2023-06-26"
-	NumThreads      int    `json:"num_threads,omitempty"`     // Number of inference threads (default 4)
-	Provider        string `json:"provider,omitempty"`        // Execution provider: "cpu", "directml", "cuda" (default "cpu")
+	Mode               string `json:"mode"`                        // "simulator" or "sherpa"
+	ModelDir           string `json:"model_dir"`                   // e.g. "models"
+	SherpaTtsBin       string `json:"sherpa_tts_bin"`              // e.g. "sherpa-onnx-offline-tts"
+	SherpaKwsBin       string `json:"sherpa_kws_bin"`              // e.g. "sherpa-onnx-keyword-spotter"
+	SherpaAsrBin       string `json:"sherpa_asr_bin"`              // e.g. "sherpa-onnx-online-websocket-server"
+	KokoroModelDir     string `json:"kokoro_model_dir"`            // e.g. "models/kokoro-multi-lang-v1_0"
+	KokoroModelFile    string `json:"kokoro_model_file,omitempty"` // e.g. "model.fp16.onnx", "model.onnx"
+	StreamingModelDir  string `json:"streaming_model_dir"`         // first-pass streaming transducer, e.g. "models/sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06"
+	SecondPassModelDir string `json:"second_pass_model_dir"`       // offline re-transcription model, e.g. "models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8"
+	SecondPass         bool   `json:"second_pass"`                 // re-transcribe endpointed segments with the second-pass model
+	NumThreads         int    `json:"num_threads,omitempty"`       // Number of inference threads (default 4)
+	Provider           string `json:"provider,omitempty"`          // Execution provider: "cpu", "directml", "cuda" (default "cpu")
 }
 
 // TTSConfig defines text-to-speech parameters.
@@ -74,16 +76,16 @@ const Version = "1.0.261010"
 
 // AppConfig is the root configuration struct.
 type AppConfig struct {
-	Version     string          `json:"version"`
-	Host        string          `json:"host"`
-	Port        int             `json:"port"`
-	StaticDir   string          `json:"static_dir"`
-	Audio       AudioConfig     `json:"audio"`
-	KWS         KWSConfig       `json:"kws"`
-	Intent      IntentConfig    `json:"intent"`
-	Dictation   DictationConfig `json:"dictation"`
-	Engine      EngineConfig    `json:"engine"`
-	TTS         TTSConfig       `json:"tts"`
+	Version   string          `json:"version"`
+	Host      string          `json:"host"`
+	Port      int             `json:"port"`
+	StaticDir string          `json:"static_dir"`
+	Audio     AudioConfig     `json:"audio"`
+	KWS       KWSConfig       `json:"kws"`
+	Intent    IntentConfig    `json:"intent"`
+	Dictation DictationConfig `json:"dictation"`
+	Engine    EngineConfig    `json:"engine"`
+	TTS       TTSConfig       `json:"tts"`
 }
 
 // DefaultConfig returns the default production-ready configuration.
@@ -94,13 +96,13 @@ func DefaultConfig() *AppConfig {
 		Port:      8080,
 		StaticDir: "web",
 		Audio: AudioConfig{
-			SampleRate:            16000,
-			Channels:              1,
-			ChunkSamples:          480, // 30ms
+			SampleRate:             16000,
+			Channels:               1,
+			ChunkSamples:           480, // 30ms
 			NoiseGateThresholdDBFS: -42.0,
-			HighPassCutoffHz:      80.0,
-			AGCEnabled:            true,
-			TargetRMS:             0.12,
+			HighPassCutoffHz:       80.0,
+			AGCEnabled:             true,
+			TargetRMS:              0.12,
 			Enhancer: EnhancerConfig{
 				Enabled:    false,
 				ModelType:  "gtcrn",
@@ -125,15 +127,17 @@ func DefaultConfig() *AppConfig {
 			MaxDurationSec:    30.0,
 		},
 		Engine: EngineConfig{
-			Mode:           "simulator",
-			ModelDir:       "models",
-			SherpaTtsBin:   "sherpa-onnx-offline-tts",
-			SherpaKwsBin:   "sherpa-onnx-keyword-spotter",
-			SherpaAsrBin:   "sherpa-onnx-online-websocket-server",
-			KokoroModelDir: "models/kokoro-multi-lang-v1_0",
-			ZipformerDir:   "models/sherpa-onnx-streaming-zipformer-en-2023-06-26",
-			NumThreads:     4,
-			Provider:       "cpu",
+			Mode:               "simulator",
+			ModelDir:           "models",
+			SherpaTtsBin:       "sherpa-onnx-offline-tts",
+			SherpaKwsBin:       "sherpa-onnx-keyword-spotter",
+			SherpaAsrBin:       "sherpa-onnx-online-websocket-server",
+			KokoroModelDir:     "models/kokoro-multi-lang-v1_0",
+			StreamingModelDir:  "models/sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06",
+			SecondPassModelDir: "models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8",
+			SecondPass:         true,
+			NumThreads:         4,
+			Provider:           "cpu",
 		},
 		TTS: TTSConfig{
 			DefaultVoice: "af",

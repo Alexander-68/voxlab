@@ -126,6 +126,14 @@ class VoiceClient {
     this.sendAction('set_noise_gate', { threshold_dbfs: thresholdDbfs });
   }
 
+  setAsrModel(model) {
+    this.sendAction('set_asr_model', { model: model });
+  }
+
+  setSecondPass(enabled) {
+    this.sendAction('set_second_pass', { enabled: !!enabled });
+  }
+
   setGateHold(holdMs) {
     this.sendAction('set_gate_hold', { hold_ms: holdMs });
   }

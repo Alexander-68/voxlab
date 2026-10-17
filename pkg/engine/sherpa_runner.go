@@ -27,11 +27,21 @@ type SherpaRunner struct {
 	warmTTS   WarmTTS
 	mu        sync.Mutex
 	asrMu     sync.Mutex // guards the ASR fields below; separate from mu so TTS never blocks ASR
-	warmASR   *WarmASR // resident ASR server, set as soon as its process is spawned
-	asrReady  bool     // warmASR finished loading models
-	asrModels bool // zipformer models + server binary are installed
-	asrClosed bool // Close was called; late-starting servers must be killed
+	warmASR   *WarmASR   // resident ASR server, set as soon as its process is spawned
+	asrReady  bool       // warmASR finished loading models
+	asrModels bool       // streaming models + server binary are installed
+	asrClosed bool       // Close was called; late-starting servers must be killed
 	stream    *ASRStream
+	streamDir string // active first-pass (streaming) model directory
+
+	offline      *WarmOffline // resident second-pass (Parakeet) server
+	offlineReady bool
+	secondPass   bool
+	segAudio     []float32 // audio sent to the current stream not yet assigned to a segment
+	segBase      int       // stream sample index of segAudio[0]
+
+	// OnRefine reports each second-pass correction (set by the server before audio flows).
+	OnRefine func(isDictation bool, firstPass, refined string, latencyMs int64)
 }
 
 // NewSherpaRunner creates a new SherpaRunner instance.
@@ -49,13 +59,18 @@ func NewSherpaRunner(cfg *config.AppConfig) *SherpaRunner {
 		cfg:       cfg,
 		simulator: NewSimulatorEngine(),
 	}
-	_, _, _, _, modelsExist := findZipformerModelDir(cfg.Engine.ZipformerDir)
+	fallbacks := []string{cfg.Engine.StreamingModelDir}
+	fallbacks = append(fallbacks, InstalledStreamingModels(cfg.Engine.ModelDir)...)
+	fallbacks = append(fallbacks, filepath.Join("models", "sherpa-onnx-streaming-zipformer-en-2023-06-26"))
+	runner.streamDir = resolveModelDir(fallbacks...)
 	_, binExists := findSherpaBin("sherpa-onnx-online-websocket-server")
-	runner.asrModels = modelsExist && binExists
+	runner.asrModels = runner.streamDir != "" && binExists
+	runner.secondPass = cfg.Engine.SecondPass
 
 	// Eagerly warm up ASR in background so first spoken utterance has zero cold start latency
 	runner.asrMu.Lock()
 	runner.startWarmASRLocked()
+	runner.startOfflineLocked()
 	runner.asrMu.Unlock()
 	return runner
 }
@@ -65,7 +80,7 @@ func (r *SherpaRunner) startWarmASRLocked() {
 	if !r.asrModels || r.asrClosed || r.warmASR != nil {
 		return
 	}
-	tok, enc, dec, joi, _ := findZipformerModelDir(r.cfg.Engine.ZipformerDir)
+	tok, enc, dec, joi, _ := findTransducerModel(r.streamDir)
 	warm, err := StartWarmASR(tok, enc, dec, joi, r.cfg.Engine.NumThreads, float64(r.cfg.Dictation.SilenceEndpointMs)/1000)
 	if err != nil {
 		log.Printf("[SherpaRunner] Warm ASR start failed: %v", err)
@@ -86,6 +101,142 @@ func (r *SherpaRunner) startWarmASRLocked() {
 		}
 		r.asrReady = true
 	}()
+}
+
+// startOfflineLocked spawns the second-pass server in the background when enabled (caller holds asrMu).
+func (r *SherpaRunner) startOfflineLocked() {
+	if !r.secondPass || r.asrClosed || r.offline != nil {
+		return
+	}
+	dir := resolveModelDir(r.cfg.Engine.SecondPassModelDir)
+	if dir == "" {
+		log.Printf("[SherpaRunner] Second-pass model not found (%s); using streaming results only", r.cfg.Engine.SecondPassModelDir)
+		return
+	}
+	tok, enc, dec, joi, _ := findTransducerModel(dir)
+	off, err := StartWarmOffline(tok, enc, dec, joi, r.cfg.Engine.NumThreads)
+	if err != nil {
+		log.Printf("[SherpaRunner] Second-pass ASR start failed: %v", err)
+		return
+	}
+	r.offline = off
+	go func() {
+		err := off.WaitReady()
+		r.asrMu.Lock()
+		defer r.asrMu.Unlock()
+		if r.offline != off {
+			return
+		}
+		if err != nil {
+			log.Printf("[SherpaRunner] Second-pass ASR initialization failed: %v", err)
+			r.offline = nil
+			return
+		}
+		r.offlineReady = true
+	}()
+}
+
+func (r *SherpaRunner) stopOfflineLocked() {
+	if r.offline != nil {
+		_ = r.offline.Close()
+		r.offline, r.offlineReady = nil, false
+	}
+}
+
+// SetSecondPass toggles Parakeet re-transcription of endpointed segments; disabling frees its RAM.
+func (r *SherpaRunner) SetSecondPass(enabled bool) {
+	r.asrMu.Lock()
+	defer r.asrMu.Unlock()
+	r.secondPass = enabled
+	r.cfg.Engine.SecondPass = enabled
+	if enabled {
+		r.startOfflineLocked()
+	} else {
+		r.stopOfflineLocked()
+	}
+}
+
+// SetStreamingModel restarts the resident first-pass server with another installed model directory.
+func (r *SherpaRunner) SetStreamingModel(name string) error {
+	dir := ""
+	for _, m := range InstalledStreamingModels(r.cfg.Engine.ModelDir) {
+		if filepath.Base(m) == name {
+			dir = m
+		}
+	}
+	if dir == "" {
+		return fmt.Errorf("streaming model %q not installed", name)
+	}
+	r.asrMu.Lock()
+	defer r.asrMu.Unlock()
+	if r.stream != nil {
+		r.stream.Close()
+		r.stream = nil
+	}
+	if r.warmASR != nil {
+		_ = r.warmASR.Close()
+		r.warmASR, r.asrReady = nil, false
+	}
+	r.streamDir = dir
+	r.cfg.Engine.StreamingModelDir = dir
+	_, binExists := findSherpaBin("sherpa-onnx-online-websocket-server")
+	r.asrModels = binExists
+	r.startWarmASRLocked()
+	return nil
+}
+
+// ASRModelInfo reports the active streaming model, installed alternatives and second-pass state.
+func (r *SherpaRunner) ASRModelInfo() map[string]interface{} {
+	r.asrMu.Lock()
+	defer r.asrMu.Unlock()
+	var names []string
+	for _, m := range InstalledStreamingModels(r.cfg.Engine.ModelDir) {
+		names = append(names, filepath.Base(m))
+	}
+	return map[string]interface{}{
+		"asr_model":          filepath.Base(r.streamDir),
+		"asr_models":         names,
+		"second_pass":        r.secondPass,
+		"second_pass_model":  filepath.Base(r.cfg.Engine.SecondPassModelDir),
+		"second_pass_loaded": r.offlineReady,
+	}
+}
+
+// cutSegmentLocked removes the audio of an endpointed segment from segAudio and returns it.
+// Token timestamps bound the speech; pads cover onsets before the first token and the last word's tail.
+func (r *SherpaRunner) cutSegmentLocked(res *ASRResult) []float32 {
+	sr := float64(r.cfg.Audio.SampleRate)
+	from, to := 0, len(r.segAudio)
+	if res.EndSec > 0 {
+		from = max(0, min(to, int((res.StartSec-0.6)*sr)-r.segBase))
+		to = max(from, min(to, int((res.EndSec+0.5)*sr)-r.segBase))
+	}
+	seg := r.segAudio[from:to]
+	r.segAudio = append([]float32(nil), r.segAudio[to:]...)
+	r.segBase += to
+	return seg
+}
+
+// refineLocked replaces res.Transcript with the second-pass result for seg, if available.
+func (r *SherpaRunner) refineLocked(res *ASRResult, seg []float32, isDictation bool) {
+	if !r.secondPass || !r.offlineReady || len(seg) == 0 {
+		return
+	}
+	t0 := time.Now()
+	text, err := r.offline.Transcribe(seg, r.cfg.Audio.SampleRate)
+	if err != nil {
+		log.Printf("[SherpaRunner] Second pass failed, keeping streaming result: %v", err)
+		return
+	}
+	if text == "" {
+		return // streaming model heard words the offline model did not; keep them rather than lose speech
+	}
+	ms := time.Since(t0).Milliseconds()
+	first := res.Transcript
+	res.Transcript = text
+	if r.OnRefine != nil {
+		r.OnRefine(isDictation, first, text, ms)
+	}
 }
 
 func (r *SherpaRunner) Name() string {
@@ -129,6 +280,7 @@ func (r *SherpaRunner) ProcessASRChunk(chunk []float32, isDictation bool) (*ASRR
 			return nil, err
 		}
 		r.stream = st
+		r.segAudio, r.segBase = nil, 0
 	}
 
 	if err := r.stream.Send(chunk); err != nil {
@@ -136,8 +288,12 @@ func (r *SherpaRunner) ProcessASRChunk(chunk []float32, isDictation bool) (*ASRR
 		r.stream = nil
 		return nil, err
 	}
+	r.segAudio = append(r.segAudio, chunk...)
 
 	res := r.stream.Next()
+	if res != nil && res.IsFinal {
+		r.refineLocked(res, r.cutSegmentLocked(res), isDictation)
+	}
 	if res != nil && res.IsFinal && !isDictation {
 		// A command turn ends at its first endpoint; the next turn gets a fresh stream.
 		r.stream.Close()
@@ -162,7 +318,12 @@ func (r *SherpaRunner) FlushASR() string {
 	}
 	parts := r.stream.Finish(3 * time.Second)
 	r.stream = nil
-	return strings.Join(parts, " ")
+	res := &ASRResult{IsFinal: true, Transcript: strings.Join(parts, " ")}
+	if res.Transcript != "" {
+		r.refineLocked(res, r.segAudio, true)
+	}
+	r.segAudio, r.segBase = nil, 0
+	return res.Transcript
 }
 
 func (r *SherpaRunner) ResetASR() {
@@ -175,35 +336,33 @@ func (r *SherpaRunner) ResetASR() {
 	r.simulator.ResetASR()
 }
 
-// findZipformerModelDir searches for streaming Zipformer model components.
-func findZipformerModelDir(configured string) (tokens, encoder, decoder, joiner string, exists bool) {
-	candidates := []string{
-		configured,
-		filepath.Join("models", "sherpa-onnx-streaming-zipformer-en-2023-06-26"),
-		filepath.Join("..", "models", "sherpa-onnx-streaming-zipformer-en-2023-06-26"),
-		filepath.Join("..", "..", "models", "sherpa-onnx-streaming-zipformer-en-2023-06-26"),
-	}
+// resolveModelDir returns the first candidate directory (also tried relative to parent dirs,
+// so tests running inside pkg/ find the repo models) that holds a complete transducer model.
+func resolveModelDir(candidates ...string) string {
 	for _, c := range candidates {
-		if fi, err := os.Stat(c); err == nil && fi.IsDir() {
-			tok := filepath.Join(c, "tokens.txt")
-			enc := filepath.Join(c, "encoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx")
-			if _, err := os.Stat(enc); os.IsNotExist(err) {
-				enc = filepath.Join(c, "encoder-epoch-99-avg-1-chunk-16-left-128.onnx")
-			}
-			dec := filepath.Join(c, "decoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx")
-			if _, err := os.Stat(dec); os.IsNotExist(err) {
-				dec = filepath.Join(c, "decoder-epoch-99-avg-1-chunk-16-left-128.onnx")
-			}
-			joi := filepath.Join(c, "joiner-epoch-99-avg-1-chunk-16-left-128.int8.onnx")
-			if _, err := os.Stat(joi); os.IsNotExist(err) {
-				joi = filepath.Join(c, "joiner-epoch-99-avg-1-chunk-16-left-128.onnx")
-			}
-			if isRegularFile(tok) && isRegularFile(enc) && isRegularFile(dec) && isRegularFile(joi) {
-				return tok, enc, dec, joi, true
+		if c == "" {
+			continue
+		}
+		for _, base := range []string{"", "..", filepath.Join("..", "..")} {
+			dir := filepath.Join(base, c)
+			if _, _, _, _, ok := findTransducerModel(dir); ok {
+				return dir
 			}
 		}
 	}
-	return "", "", "", "", false
+	return ""
+}
+
+// InstalledStreamingModels lists streaming transducer model directories under modelsRoot.
+func InstalledStreamingModels(modelsRoot string) []string {
+	matches, _ := filepath.Glob(filepath.Join(modelsRoot, "*streaming*"))
+	var out []string
+	for _, m := range matches {
+		if _, _, _, _, ok := findTransducerModel(m); ok {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 func isRegularFile(p string) bool {
@@ -705,6 +864,7 @@ func (r *SherpaRunner) Close() error {
 		_ = r.warmASR.Close()
 		r.warmASR, r.asrReady = nil, false
 	}
+	r.stopOfflineLocked()
 	return nil
 }
 

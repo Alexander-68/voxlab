@@ -78,7 +78,7 @@
 
 4. **Dual-Purpose Speech Processing**:
    - **Purpose 1: Voice Commands**:
-     - Fast streaming speech recognition (Sherpa-ONNX Zipformer).
+     - Two-pass speech recognition: streaming Kroko Zipformer (live partials, endpointing) + Parakeet TDT 0.6B second pass (punctuated, more accurate final text per phrase). Streaming model is switchable in the UI (Kroko / Nemotron 560ms / LibriSpeech Zipformer).
      - Semantic Intent Router with cosine / token scoring against a configurable JSON catalog (`data/commands.json`).
      - Distractor suppression (rejects conversational chatter quietly).
      - Negation detection (e.g. *"do not stop recording"* is rejected).
@@ -107,7 +107,7 @@
 
 7. **Dual Engine Mode**:
    - **Simulator Mode (Default)**: Zero-dependency Go engine with realistic latencies, simulated ASR partials, and synthetic audio for instant development and testing.
-   - **Sherpa-ONNX Mode**: Executes persistent, resident in-memory daemon (`sherpa-onnx-online-websocket-server`) with 4-thread neural Zipformer models for sub-second recognition latency.
+   - **Sherpa-ONNX Mode**: Executes persistent, resident in-memory daemon (`sherpa-onnx-online-websocket-server`) with a 4-thread streaming model for live partials, plus a resident `sherpa-onnx-offline-websocket-server` (Parakeet TDT) that re-transcribes each endpointed phrase (~0.1 s per second of speech on CPU).
 
 ---
 

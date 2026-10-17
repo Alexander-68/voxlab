@@ -194,10 +194,18 @@
               <span class="helper-text" style="font-size: 11px;">Active: <strong id="asr-engine-name" style="color: var(--cyan);">Sherpa-ONNX</strong></span>
             </div>
             <select id="asr-engine-select" class="form-control">
-              <option value="sherpa">🟣 Sherpa-ONNX (Offline Neural Streaming Zipformer)</option>
+              <option value="sherpa">🟣 Sherpa-ONNX (Offline Neural Streaming)</option>
               <option value="browser">🌐 Browser Web Speech API (Built-in SpeechRecognition)</option>
               <option value="sim">🧪 Testbench Simulator (Mock Voice Engine)</option>
             </select>
+            <div id="sherpa-model-controls" class="mt-1">
+              <label for="asr-model-select" class="helper-text" style="font-size: 11px;">Streaming model (first pass: live partials, endpointing)</label>
+              <select id="asr-model-select" class="form-control"></select>
+              <label class="toggle-item mt-1">
+                <input type="checkbox" id="chk-second-pass">
+                <span>Second pass: re-transcribe each phrase with <strong id="second-pass-model">Parakeet</strong></span>
+              </label>
+            </div>
           </div>
 
           <!-- Commands Tab Content -->

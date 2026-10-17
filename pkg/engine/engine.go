@@ -6,6 +6,8 @@ type ASRResult struct {
 	Transcript string   `json:"transcript"`
 	Tokens     []string `json:"tokens,omitempty"`
 	Confidence float64  `json:"confidence,omitempty"`
+	StartSec   float64  `json:"-"` // first/last token time within the ASR stream (0 = unknown)
+	EndSec     float64  `json:"-"`
 }
 
 // TTSRequest holds parameters for Kokoro text-to-speech synthesis.
@@ -50,4 +52,3 @@ type SpeechEngine interface {
 	SetTTSModel(modelName string) error
 	InstalledTTSModels() []string
 }
-
