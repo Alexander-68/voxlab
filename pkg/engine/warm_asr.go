@@ -96,7 +96,7 @@ func waitForPort(port int) bool {
 }
 
 // findTransducerModel locates tokens.txt and encoder/decoder/joiner ONNX files in dir,
-// preferring int8 variants. Works for Zipformer, NeMo/Nemotron and Parakeet exports.
+// preferring int8 variants. Works for Kroko, NeMo/Nemotron and Parakeet exports.
 func findTransducerModel(dir string) (tok, enc, dec, joi string, ok bool) {
 	if dir == "" {
 		return "", "", "", "", false
@@ -115,15 +115,11 @@ func findTransducerModel(dir string) (tok, enc, dec, joi string, ok bool) {
 	return tok, enc, dec, joi, ok
 }
 
-// normalizeCase lowercases all-caps output (LibriSpeech Zipformer) and keeps the casing
-// of models that produce real capitalization (Nemotron, Parakeet). Punctuation-only output
-// (punctuating models emit a lone "." on trailing silence) counts as no speech.
+// normalizeCase drops punctuation-only output (punctuating models emit a lone "." on
+// trailing silence) as no speech; casing is kept so acronyms like "CHF" survive.
 func normalizeCase(text string) string {
 	if !strings.ContainsFunc(text, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }) {
 		return ""
-	}
-	if strings.ToUpper(text) == text {
-		return strings.ToLower(text)
 	}
 	return text
 }

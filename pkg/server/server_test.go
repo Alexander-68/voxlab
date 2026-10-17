@@ -731,9 +731,9 @@ func TestServerSpeechEnhancerWebSocket(t *testing.T) {
 // TestServerLiveDictation streams real speech as the web mic: the first phrase must be
 // endpointed by the pause, the second (no pause) must survive pressing Stop.
 func TestServerLiveDictation(t *testing.T) {
-	wavData, err := os.ReadFile("../../models/sherpa-onnx-streaming-zipformer-en-2023-06-26/test_wavs/0.wav")
+	wavData, err := os.ReadFile("../../models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/test_wavs/0.wav")
 	if err != nil {
-		t.Skip("zipformer test wav not available")
+		t.Skip("parakeet test wav not available")
 	}
 	speech, _, err := audio.DecodeWAV(bytes.NewReader(wavData))
 	if err != nil {
@@ -802,9 +802,20 @@ func TestServerLiveDictation(t *testing.T) {
 	_ = conn.WriteJSON(map[string]interface{}{"action": "activate", "mode": "dictation", "target_id": "t1"})
 	time.Sleep(100 * time.Millisecond)
 	send(speech)
-	send(make([]float32, 16000*2))
-	first := waitDraft()
-	if !strings.Contains(first, "yellow lamps") {
+	// Like a live mic, keep sending silence until the endpointed phrase arrives: results are
+	// collected when the next chunk is processed.
+	var first string
+	deadline := time.After(8 * time.Second)
+	for first == "" {
+		select {
+		case first = <-drafts:
+		case <-deadline:
+			t.Fatal("timed out waiting for annotation.draft")
+		default:
+			send(make([]float32, 1600))
+		}
+	}
+	if !strings.Contains(first, "portrait") {
 		t.Fatalf("first phrase not endpointed correctly: %q", first)
 	}
 
@@ -814,7 +825,7 @@ func TestServerLiveDictation(t *testing.T) {
 	wmu.Unlock()
 	final := waitDraft()
 	t.Logf("draft: %q", final)
-	if strings.Count(final, "yellow lamps") != 2 {
+	if strings.Count(final, "portrait") != 2 {
 		t.Fatalf("second phrase lost on stop: %q", final)
 	}
 	for i := 0; i < 50 && srv.stateMachine.Current() != statemachine.StateIdle; i++ {

@@ -10,26 +10,23 @@
 
 ---
 
-### 2. Build Hotwords (Contextual Biasing) for Sherpa-ONNX
-- [ ] **Create Hotwords Catalog (`data/hotwords.txt`)**:
-  - Add domain keywords, brand terms, and technical phrases prone to phonetic misrecognition:
-    ```text
-    SHERPA
-    VOXLAB
-    API
-    WEB SPEECH
-    GOOD EVENING
-    HOW ARE YOU TODAY
-    ```
-- [ ] **Integrate Hotwords into Sherpa Runner & Daemon**:
-  - Connect `--hotwords-file=data/hotwords.txt` and `--hotwords-score=2.0` (configurable 1.5–2.5).
-  - Enable `--decoding-method=modified_beam_search`.
-  - Wire configuration options into [`pkg/config/config.go`](file:///C:/Alex/voxlab/pkg/config/config.go), [`pkg/engine/sherpa_runner.go`](file:///C:/Alex/voxlab/pkg/engine/sherpa_runner.go), and [`pkg/engine/warm_asr.go`](file:///C:/Alex/voxlab/pkg/engine/warm_asr.go).
-- [ ] **Evaluate Accuracy Improvements**:
-  - Test phonetic disambiguation:
-    - *"scarpa"* / *"shtirpa"* $\rightarrow$ **"sherpa"**
-    - *"web a pia"* $\rightarrow$ **"Web API"**
-  - Add UI controls or config setting to inspect and reload active hotwords at runtime.
+### 2. Domain Term Correction (medical annotation) — planned
+Goal: medical terms (drugs, conditions, acronyms) appear correctly spelled in dictation.
+
+**Decision (2026-10-17): list-based post-correction of the final text, not sherpa hotwords.**
+- Sherpa hotwords (`--hotwords-file`, `modified_beam_search`) were tested on Parakeet TDT v2: score ≤6 had no effect,
+  score 10 forced the term but corrupted the rest of the phrase. Parakeet ships no `bpe.vocab`, so hotwords
+  need a generated one. Biasing the Kroko first pass is pointless: the second pass overwrites its text.
+- MedASR (medical-trained model) was considered and rejected.
+
+**Plan**
+- [ ] Term list `data/terms.txt` (user provides): one term per line in the desired spelling (`metoprolol`, `AFib`, `CHF`),
+      optional known mishearings: `a fib => AFib`.
+- [ ] After the second pass, match words/n-grams of the final text against the list (explicit mishearings first,
+      then fuzzy spelling/phonetic similarity with a conservative threshold) and replace.
+- [ ] Log each correction in the event log (`raw -> corrected`), like `transcript.refined`.
+- [ ] Reload the list at runtime without a restart.
+- [ ] Measure on recorded real dictation with the user's terms (false corrections matter more than missed ones).
 
 ---
 

@@ -24,12 +24,12 @@ func TestGetFreeTCPPort(t *testing.T) {
 // TestWarmASRStreaming feeds speech + pause + speech through one stream and expects
 // the server to endpoint the first utterance on its own and Finish to flush the second.
 func TestWarmASRStreaming(t *testing.T) {
-	tok, enc, dec, joi, modelsExist := findTransducerModel(filepath.Join("..", "..", "models", "sherpa-onnx-streaming-zipformer-en-2023-06-26"))
+	tok, enc, dec, joi, modelsExist := findTransducerModel(filepath.Join("..", "..", "models", "sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06"))
 	_, binExists := findSherpaBin("sherpa-onnx-online-websocket-server")
 	if !modelsExist || !binExists {
-		t.Skip("Sherpa-ONNX streaming Zipformer models or websocket server binary not found")
+		t.Skip("Sherpa-ONNX streaming models or websocket server binary not found")
 	}
-	wavData, err := os.ReadFile(filepath.Join("..", "..", "models", "sherpa-onnx-streaming-zipformer-en-2023-06-26", "test_wavs", "0.wav"))
+	wavData, err := os.ReadFile(filepath.Join("..", "..", "models", "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8", "test_wavs", "0.wav"))
 	if err != nil {
 		t.Skip("test wav 0.wav not available")
 	}
@@ -75,7 +75,7 @@ func TestWarmASRStreaming(t *testing.T) {
 		t.Fatalf("expected 2 segments (server endpoint + flush), got %d: %q", len(finals), finals)
 	}
 	for _, f := range finals {
-		if !strings.Contains(f, "yellow lamps") {
+		if !strings.Contains(f, "portrait") {
 			t.Errorf("unexpected transcript %q", f)
 		}
 	}

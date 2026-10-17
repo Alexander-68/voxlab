@@ -55,9 +55,9 @@ func main() {
 	} else if cfg.Engine.Mode == "simulator" {
 		// Auto-detect if sherpa tools and models are installed on disk
 		binMatch, _ := filepath.Glob("bin/sherpa-onnx*")
-		modelMatch, _ := filepath.Glob("models/sherpa-onnx-streaming-zipformer*")
+		modelMatch, _ := filepath.Glob("models/sherpa-onnx-*streaming*")
 		if len(binMatch) > 0 && len(modelMatch) > 0 {
-			log.Printf("[VoxLab] Detected installed Sherpa-ONNX binaries and Zipformer model: Auto-activating 'sherpa' neural engine!")
+			log.Printf("[VoxLab] Detected installed Sherpa-ONNX binaries and streaming ASR model: Auto-activating 'sherpa' neural engine!")
 			cfg.Engine.Mode = "sherpa"
 		}
 	}

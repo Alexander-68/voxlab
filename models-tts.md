@@ -26,11 +26,11 @@ models/
 │   ├── model.onnx                             # Standard weights (~345 MB)
 │   └── voices.bin, tokens.txt, espeak-ng-data/
 │
-└── sherpa-onnx-streaming-zipformer-en-2023-06-26/  # Real-Time Streaming ASR
-    ├── encoder-*.onnx / .int8.onnx            # Streaming acoustic encoder
-    ├── decoder-*.onnx / .int8.onnx            # Autoregressive predictor
-    ├── joiner-*.onnx / .int8.onnx             # Transducer joint network
-    └── tokens.txt, bpe.model                  # BPE subword vocabulary
+├── sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06/  # First-pass streaming ASR (live partials)
+│   └── encoder.onnx, decoder.onnx, joiner.onnx, tokens.txt
+│
+└── sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/  # Second-pass offline ASR (final text per phrase)
+    └── encoder.int8.onnx, decoder.int8.onnx, joiner.int8.onnx, tokens.txt
 ```
 
 *(Note: If a legacy standalone `models/kokoro-int8-multi-lang-v1_1/` directory is present, VoxLab also discovers it for full backward compatibility).*
@@ -52,14 +52,9 @@ VoxLab leverages [Sherpa-ONNX](https://github.com/k2-fsa/sherpa-onnx) for local,
 | `models/kokoro-multi-lang-v1_0` | `kokoro-multi-lang-v1_0 (FP16)` | **FP16** | `model.fp16.onnx` | 54 voices | **~163 MB** |
 | `models/kokoro-en-v0_19` | `kokoro-en-v0_19` | **FP32** | `model.onnx` | 11 voices | ~345 MB |
 
-### Zipformer ASR (Automatic Speech Recognition)
-- **Model Path**: `models/sherpa-onnx-streaming-zipformer-en-2023-06-26`
-- **Architecture**: Streaming transducer with chunk size $16$ (30 ms per chunk), left context $128$.
-- **Components**:
-  - Acoustic Encoder: `encoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx` (or `.onnx`)
-  - Decoder Predictor: `decoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx` (or `.onnx`)
-  - Joiner Transducer: `joiner-epoch-99-avg-1-chunk-16-left-128.int8.onnx` (or `.onnx`)
-  - Subword Token Vocabulary: `tokens.txt` and `bpe.model`
+### Two-pass ASR (Automatic Speech Recognition)
+- **First pass**: `models/sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06` — streaming Kroko Zipformer transducer (RTF ~0.05, cased and punctuated). Live partials and endpointing. Optional alternative: any other `models/*streaming*` transducer (e.g. Nemotron 560 ms), switchable in the UI.
+- **Second pass**: `models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8` — offline Parakeet TDT 0.6B v2 (RTF ~0.07). Re-transcribes each endpointed phrase; its text replaces the first pass.
 
 ---
 
@@ -227,7 +222,7 @@ VoxLab provides download scripts to retrieve pre-packaged Sherpa-ONNX models:
 
 ### On Windows (PowerShell)
 ```powershell
-# Automatically download default Kokoro and Zipformer models
+# Automatically download default Kokoro and ASR (Kroko + Parakeet) models
 .\scripts\download_models.ps1
 
 # Or specify a particular Kokoro version:

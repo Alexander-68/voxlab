@@ -61,9 +61,9 @@ else
     echo "[2/3] Kokoro TTS Model already present."
 fi
 
-# 3. ASR Models: Kroko streaming (first pass, default), Parakeet TDT (second pass),
-#    LibriSpeech Zipformer (fallback, used by tests). Nemotron 560ms is optional (~460 MB, heavier on CPU).
-for ASR_NAME in sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06 sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8 sherpa-onnx-streaming-zipformer-en-2023-06-26; do
+# 3. ASR Models: Kroko streaming (first pass, default), Parakeet TDT (second pass).
+#    Nemotron 560ms is optional (~460 MB, heavier on CPU).
+for ASR_NAME in sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06 sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8; do
     if [ ! -d "$MODELS_DIR/$ASR_NAME" ]; then
         echo "[3/3] Downloading ASR model $ASR_NAME..."
         wget -c "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/$ASR_NAME.tar.bz2" -O "$MODELS_DIR/$ASR_NAME.tar.bz2"

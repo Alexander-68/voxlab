@@ -33,7 +33,7 @@
  │         ├──────────────────────────────┬───────────────────────────────┤
  │         ▼                              ▼                               │
  │  [Purpose A: Voice Commands]    [Purpose B: Voice Dictations]          │
- │  - Streaming Zipformer ASR      - Streaming continuous transcription   │
+ │  - Kroko+Parakeet ASR           - Streaming continuous transcription   │
  │  - Semantic Intent Router       - Silence endpointing (800ms)          │
  │  - Distractor / Chatter Filter  - Isolated Annotation Draft Editor     │
  │  - State Machine Policy checks  - No command execution allowed        │
@@ -78,7 +78,7 @@
 
 4. **Dual-Purpose Speech Processing**:
    - **Purpose 1: Voice Commands**:
-     - Two-pass speech recognition: streaming Kroko Zipformer (live partials, endpointing) + Parakeet TDT 0.6B second pass (punctuated, more accurate final text per phrase). Streaming model is switchable in the UI (Kroko / Nemotron 560ms / LibriSpeech Zipformer).
+     - Two-pass speech recognition: streaming Kroko Zipformer (live partials, endpointing) + Parakeet TDT 0.6B second pass (punctuated, more accurate final text per phrase). Streaming model is switchable in the UI (Kroko / Nemotron 560ms).
      - Semantic Intent Router with cosine / token scoring against a configurable JSON catalog (`data/commands.json`).
      - Distractor suppression (rejects conversational chatter quietly).
      - Negation detection (e.g. *"do not stop recording"* is rejected).

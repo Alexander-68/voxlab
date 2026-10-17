@@ -61,7 +61,6 @@ func NewSherpaRunner(cfg *config.AppConfig) *SherpaRunner {
 	}
 	fallbacks := []string{cfg.Engine.StreamingModelDir}
 	fallbacks = append(fallbacks, InstalledStreamingModels(cfg.Engine.ModelDir)...)
-	fallbacks = append(fallbacks, filepath.Join("models", "sherpa-onnx-streaming-zipformer-en-2023-06-26"))
 	runner.streamDir = resolveModelDir(fallbacks...)
 	_, binExists := findSherpaBin("sherpa-onnx-online-websocket-server")
 	runner.asrModels = runner.streamDir != "" && binExists

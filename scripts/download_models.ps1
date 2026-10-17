@@ -122,12 +122,11 @@ if (-not $SkipKokoro) {
     }
 }
 
-# 3. ASR Models: Kroko streaming (first pass, default), Parakeet TDT (second pass),
-#    LibriSpeech Zipformer (fallback, used by tests). Nemotron 560ms is optional (~460 MB, heavier on CPU).
+# 3. ASR Models: Kroko streaming (first pass, default), Parakeet TDT (second pass).
+#    Nemotron 560ms is optional (~460 MB, heavier on CPU).
 $AsrModels = @(
     "sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06",
-    "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8",
-    "sherpa-onnx-streaming-zipformer-en-2023-06-26"
+    "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8"
 )
 
 if (-not $SkipAsr) {

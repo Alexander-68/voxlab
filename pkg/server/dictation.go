@@ -41,12 +41,6 @@ func formatDictationPhraseInternal(rawText string, isContinuation bool) string {
 		return ""
 	}
 
-	// 0. Lowercase all-caps recognizer output (LibriSpeech Zipformer); keep real casing from
-	// punctuating models (Kroko, Parakeet) so names and "I" survive
-	if strings.ToUpper(text) == text {
-		text = strings.ToLower(text)
-	}
-
 	// 1. Convert spoken keywords to punctuation symbols
 	text = rePeriod.ReplaceAllString(text, ".")
 	text = reComma.ReplaceAllString(text, ",")

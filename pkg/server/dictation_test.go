@@ -26,11 +26,6 @@ func TestFormatDictationPhrase(t *testing.T) {
 			expected: "Patient is doing well.",
 		},
 		{
-			name:     "ALL CAPS neural ASR input brought to lower and punctuated",
-			input:    "HOW IS THE WEATHER",
-			expected: "How is the weather.",
-		},
-		{
 			name:     "Spoken period - no duplicate period",
 			input:    "patient is doing well period",
 			expected: "Patient is doing well.",
@@ -116,14 +111,14 @@ func TestAppendDictationPhrase(t *testing.T) {
 	draft := ""
 
 	// Turn 1: no punctuation spoken -> auto period on pause
-	draft = AppendDictationPhrase(draft, "PATIENT PRESENTED WITH MILD FEVER")
+	draft = AppendDictationPhrase(draft, "patient presented with mild fever")
 	expected1 := "Patient presented with mild fever."
 	if draft != expected1 {
 		t.Fatalf("Turn 1 failed: got %q, expected %q", draft, expected1)
 	}
 
 	// Turn 2: spoken comma and period
-	draft = AppendDictationPhrase(draft, "TEMPERATURE 38 DEGREES COMMA PULSE 85 PERIOD")
+	draft = AppendDictationPhrase(draft, "temperature 38 degrees comma pulse 85 period")
 	expected2 := "Patient presented with mild fever. Temperature 38 degrees, pulse 85."
 	if draft != expected2 {
 		t.Fatalf("Turn 2 failed: got %q, expected %q", draft, expected2)
