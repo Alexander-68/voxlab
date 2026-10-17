@@ -9,14 +9,16 @@ import (
 
 // DSPProcessor manages real-time filtering, gating, and level measurements.
 type DSPProcessor struct {
-	mu           sync.Mutex
-	sampleRate   float64
-	cutoffHz     float64
+	mu              sync.Mutex
+	sampleRate      float64
+	cutoffHz        float64
 	highpassEnabled bool
 	alpha           float64
 	prevInput       float64
 	prevOutput      float64
 	gateDBFS        float64
+	gateGain        float64 // current gate gain, ramped per sample to avoid clicks
+	gateHoldLeft    int     // samples the gate stays open after the level drops below threshold
 	agcEnabled      bool
 	targetRMS       float64
 	currentGain     float64
@@ -40,8 +42,17 @@ func NewDSPProcessor(sampleRate int, cutoffHz float64, gateDBFS float64, agcEnab
 		agcEnabled:      agcEnabled,
 		targetRMS:       targetRMS,
 		currentGain:     1.0,
+		gateGain:        1.0,
 	}
 }
+
+// Gate behaves like a studio gate rather than a per-chunk switch: it stays open for gateHold
+// after the last loud chunk (so syllable gaps and word tails are kept) and, when closed,
+// attenuates to gateFloor instead of zeroing (so soft onsets like "s"/"h" still reach ASR).
+const (
+	gateHoldSec = 0.3
+	gateFloor   = 0.1 // -20 dB
+)
 
 // SetHighPassEnabled enables or disables the 80Hz de-rumble high-pass filter.
 func (p *DSPProcessor) SetHighPassEnabled(enabled bool) {
@@ -182,13 +193,29 @@ func (p *DSPProcessor) ProcessChunk(samples []float32) (processed []float32, rms
 	// Step 2: Measure energy
 	rms, dbfs = CalculateRMS(out)
 
-	// Step 3: Noise gate check
+	// Step 3: Noise gate with hold and floor
 	// When threshold is set to leftmost position (<= -60 dBFS), gating is completely OFF
-	if p.gateDBFS > -60.0 && dbfs < p.gateDBFS {
-		// Silence below noise floor
+	open := p.gateDBFS <= -60.0 || dbfs >= p.gateDBFS
+	held := false
+	if open {
+		p.gateHoldLeft = int(gateHoldSec * p.sampleRate)
+	} else if p.gateHoldLeft > 0 {
+		p.gateHoldLeft -= len(out)
+		open, held = true, true
+	}
+	target := 1.0
+	if !open {
+		target = gateFloor
+	}
+	if target != 1.0 || p.gateGain != 1.0 {
+		step := (target - p.gateGain) / float64(len(out))
 		for i := range out {
-			out[i] = 0.0
+			p.gateGain += step
+			out[i] = float32(float64(out[i]) * p.gateGain)
 		}
+		p.gateGain = target
+	}
+	if !open {
 		return out, rms, dbfs, false
 	}
 
@@ -202,8 +229,10 @@ func (p *DSPProcessor) ProcessChunk(samples []float32) (processed []float32, rms
 			targetGain = 0.2
 		}
 
-		// Smooth gain changes (one-pole filter on gain)
-		p.currentGain = 0.9*p.currentGain + 0.1*targetGain
+		// Smooth gain changes (one-pole filter on gain); frozen during gate hold so pauses don't pump noise up
+		if !held {
+			p.currentGain = 0.9*p.currentGain + 0.1*targetGain
+		}
 
 		for i, v := range out {
 			amplified := float64(v) * p.currentGain

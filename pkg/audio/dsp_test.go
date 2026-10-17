@@ -56,30 +56,39 @@ func TestRingBuffer(t *testing.T) {
 func TestDSPNoiseGateAndEcho(t *testing.T) {
 	dsp := NewDSPProcessor(16000, 80.0, -40.0, false, 0.1)
 
-	// Low amplitude noise (-50 dBFS)
-	lowChunk := make([]float32, 480)
-	for i := range lowChunk {
-		lowChunk[i] = 0.001
+	sine := func(amp float64) []float32 {
+		c := make([]float32, 480)
+		for i := range c {
+			c[i] = float32(amp * math.Sin(2.0*math.Pi*440.0*float64(i)/16000.0))
+		}
+		return c
 	}
+	lowChunk := sine(0.003)  // ~-53 dBFS
+	speechChunk := sine(0.1) // ~-23 dBFS
 
-	out, _, dbfs, passed := dsp.ProcessChunk(lowChunk)
-	if passed {
+	// Fresh gate, quiet input: closed, attenuated to the floor (not zeroed) once the ramp settles
+	if _, _, dbfs, passed := dsp.ProcessChunk(lowChunk); passed {
 		t.Errorf("expected low noise chunk to be gated, but passed with dbfs: %f", dbfs)
 	}
-	for i, v := range out {
-		if v != 0 {
-			t.Errorf("expected gated sample to be 0 at %d, got %f", i, v)
-		}
+	outLow, _, _, _ := dsp.ProcessChunk(lowChunk)
+	inRMS, _ := CalculateRMS(lowChunk)
+	outRMS, _ := CalculateRMS(outLow)
+	if outRMS == 0 || outRMS > inRMS*gateFloor*1.2 {
+		t.Errorf("expected gated chunk attenuated to ~%.2fx, got %.3fx", gateFloor, outRMS/inRMS)
 	}
 
-	// Speech amplitude chunk (-20 dBFS)
-	speechChunk := make([]float32, 480)
-	for i := range speechChunk {
-		speechChunk[i] = float32(0.1 * math.Sin(2.0*math.Pi*440.0*float64(i)/16000.0))
-	}
-	_, _, _, passedSpeech := dsp.ProcessChunk(speechChunk)
-	if !passedSpeech {
+	if _, _, _, passedSpeech := dsp.ProcessChunk(speechChunk); !passedSpeech {
 		t.Errorf("expected speech chunk to pass noise gate")
+	}
+
+	// Hold: quiet chunks right after speech stay open for ~300ms (10 chunks), then close
+	for i := 0; i < 10; i++ {
+		if _, _, _, passed := dsp.ProcessChunk(lowChunk); !passed {
+			t.Fatalf("expected gate held open on quiet chunk %d after speech", i)
+		}
+	}
+	if _, _, _, passed := dsp.ProcessChunk(lowChunk); passed {
+		t.Errorf("expected gate to close after hold expired")
 	}
 
 	// Test half-duplex echo mute
@@ -175,4 +184,3 @@ func TestDSPHighPassAndAGC(t *testing.T) {
 		t.Errorf("expected gain to be 1.0 when AGC is disabled")
 	}
 }
-
