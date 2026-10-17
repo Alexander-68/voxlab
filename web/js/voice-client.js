@@ -126,6 +126,14 @@ class VoiceClient {
     this.sendAction('set_noise_gate', { threshold_dbfs: thresholdDbfs });
   }
 
+  setGateHold(holdMs) {
+    this.sendAction('set_gate_hold', { hold_ms: holdMs });
+  }
+
+  setGateFloor(floorDb) {
+    this.sendAction('set_gate_floor', { floor_db: floorDb });
+  }
+
   setKwsThreshold(threshold) {
     this.sendAction('set_kws_threshold', { threshold: threshold });
   }

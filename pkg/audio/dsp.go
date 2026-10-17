@@ -19,6 +19,8 @@ type DSPProcessor struct {
 	gateDBFS        float64
 	gateGain        float64 // current gate gain, ramped per sample to avoid clicks
 	gateHoldLeft    int     // samples the gate stays open after the level drops below threshold
+	gateHoldSec     float64 // hold time after the last loud chunk
+	gateFloor       float64 // linear gain applied while closed (0.1 = -20 dB)
 	agcEnabled      bool
 	targetRMS       float64
 	currentGain     float64
@@ -43,16 +45,35 @@ func NewDSPProcessor(sampleRate int, cutoffHz float64, gateDBFS float64, agcEnab
 		targetRMS:       targetRMS,
 		currentGain:     1.0,
 		gateGain:        1.0,
+		gateHoldSec:     0.3,
+		gateFloor:       0.1,
 	}
 }
 
-// Gate behaves like a studio gate rather than a per-chunk switch: it stays open for gateHold
+// Gate behaves like a studio gate rather than a per-chunk switch: it stays open for the hold time
 // after the last loud chunk (so syllable gaps and word tails are kept) and, when closed,
-// attenuates to gateFloor instead of zeroing (so soft onsets like "s"/"h" still reach ASR).
-const (
-	gateHoldSec = 0.3
-	gateFloor   = 0.1 // -20 dB
-)
+// attenuates to the floor instead of zeroing (so soft onsets like "s"/"h" still reach ASR).
+
+// GateOffDBFS is the leftmost threshold position; at or below it the gate is completely OFF.
+const GateOffDBFS = -80.0
+
+// SetGateHold sets how long the gate stays open after the level drops below threshold.
+func (p *DSPProcessor) SetGateHold(ms float64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.gateHoldSec = math.Max(0, ms) / 1000.0
+}
+
+// SetGateFloor sets the attenuation applied while the gate is closed, in dB (<= 0; -60 or lower mutes fully).
+func (p *DSPProcessor) SetGateFloor(db float64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if db <= -60 {
+		p.gateFloor = 0
+	} else {
+		p.gateFloor = math.Pow(10, math.Min(0, db)/20)
+	}
+}
 
 // SetHighPassEnabled enables or disables the 80Hz de-rumble high-pass filter.
 func (p *DSPProcessor) SetHighPassEnabled(enabled bool) {
@@ -94,11 +115,11 @@ func (p *DSPProcessor) GateThreshold() float64 {
 }
 
 // IsGateEnabled returns true if noise floor gating is active.
-// When gateDBFS <= -60.0 dBFS (the leftmost slider position), gating is completely disabled.
+// When gateDBFS <= GateOffDBFS (the leftmost slider position), gating is completely disabled.
 func (p *DSPProcessor) IsGateEnabled() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.gateDBFS > -60.0
+	return p.gateDBFS > GateOffDBFS
 }
 
 // SetAGCEnabled toggles automatic gain control.
@@ -194,18 +215,18 @@ func (p *DSPProcessor) ProcessChunk(samples []float32) (processed []float32, rms
 	rms, dbfs = CalculateRMS(out)
 
 	// Step 3: Noise gate with hold and floor
-	// When threshold is set to leftmost position (<= -60 dBFS), gating is completely OFF
-	open := p.gateDBFS <= -60.0 || dbfs >= p.gateDBFS
+	// When threshold is set to leftmost position (<= GateOffDBFS), gating is completely OFF
+	open := p.gateDBFS <= GateOffDBFS || dbfs >= p.gateDBFS
 	held := false
 	if open {
-		p.gateHoldLeft = int(gateHoldSec * p.sampleRate)
+		p.gateHoldLeft = int(p.gateHoldSec * p.sampleRate)
 	} else if p.gateHoldLeft > 0 {
 		p.gateHoldLeft -= len(out)
 		open, held = true, true
 	}
 	target := 1.0
 	if !open {
-		target = gateFloor
+		target = p.gateFloor
 	}
 	if target != 1.0 || p.gateGain != 1.0 {
 		step := (target - p.gateGain) / float64(len(out))

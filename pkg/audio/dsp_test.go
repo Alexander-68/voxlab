@@ -73,8 +73,8 @@ func TestDSPNoiseGateAndEcho(t *testing.T) {
 	outLow, _, _, _ := dsp.ProcessChunk(lowChunk)
 	inRMS, _ := CalculateRMS(lowChunk)
 	outRMS, _ := CalculateRMS(outLow)
-	if outRMS == 0 || outRMS > inRMS*gateFloor*1.2 {
-		t.Errorf("expected gated chunk attenuated to ~%.2fx, got %.3fx", gateFloor, outRMS/inRMS)
+	if outRMS == 0 || outRMS > inRMS*dsp.gateFloor*1.2 {
+		t.Errorf("expected gated chunk attenuated to ~%.2fx, got %.3fx", dsp.gateFloor, outRMS/inRMS)
 	}
 
 	if _, _, _, passedSpeech := dsp.ProcessChunk(speechChunk); !passedSpeech {
@@ -98,11 +98,11 @@ func TestDSPNoiseGateAndEcho(t *testing.T) {
 		t.Errorf("expected chunk to be muted during echo mute")
 	}
 
-	// Test threshold <= -60 dBFS completely turns gate OFF
+	// Test threshold <= GateOffDBFS completely turns gate OFF
 	dsp.SetEchoMuted(false)
-	dsp.SetGateThreshold(-60.0)
+	dsp.SetGateThreshold(GateOffDBFS)
 	if dsp.IsGateEnabled() {
-		t.Errorf("expected gate to be disabled when threshold <= -60.0 dBFS")
+		t.Errorf("expected gate to be disabled when threshold <= GateOffDBFS")
 	}
 	outNoise, _, _, passedOff := dsp.ProcessChunk(lowChunk)
 	if !passedOff {
@@ -140,7 +140,7 @@ func TestWAVEncodeDecode(t *testing.T) {
 }
 
 func TestDSPHighPassAndAGC(t *testing.T) {
-	dsp := NewDSPProcessor(16000, 80.0, -60.0, true, 0.2)
+	dsp := NewDSPProcessor(16000, 80.0, GateOffDBFS, true, 0.2)
 
 	if !dsp.IsHighPassEnabled() {
 		t.Errorf("expected highpass to be enabled by default")

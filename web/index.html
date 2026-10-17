@@ -94,7 +94,21 @@
                 <label for="noise-gate-slider">Noise Floor Gate</label>
                 <span id="noise-gate-val">-42 dBFS</span>
               </div>
-              <input type="range" id="noise-gate-slider" min="-60" max="-20" value="-42" step="1">
+              <input type="range" id="noise-gate-slider" min="-80" max="-20" value="-42" step="1">
+            </div>
+            <div class="slider-group">
+              <div class="slider-header">
+                <label for="gate-hold-slider">Gate Hold</label>
+                <span id="gate-hold-val">300 ms</span>
+              </div>
+              <input type="range" id="gate-hold-slider" min="0" max="1000" value="300" step="10">
+            </div>
+            <div class="slider-group">
+              <div class="slider-header">
+                <label for="gate-floor-slider">Gate Floor (closed attenuation)</label>
+                <span id="gate-floor-val">-20 dB</span>
+              </div>
+              <input type="range" id="gate-floor-slider" min="-60" max="0" value="-20" step="1">
             </div>
 
             <div class="toggle-list">

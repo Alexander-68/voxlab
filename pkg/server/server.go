@@ -761,6 +761,18 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 
+			case "set_gate_hold":
+				if ms, ok := req["hold_ms"].(float64); ok {
+					s.dsp.SetGateHold(ms)
+					log.Printf("[DSP] Noise gate hold set to %.0f ms", ms)
+				}
+
+			case "set_gate_floor":
+				if db, ok := req["floor_db"].(float64); ok {
+					s.dsp.SetGateFloor(db)
+					log.Printf("[DSP] Noise gate floor set to %.0f dB", db)
+				}
+
 			case "set_kws_threshold":
 				if th, ok := req["threshold"].(float64); ok {
 					s.cfg.KWS.Threshold = th

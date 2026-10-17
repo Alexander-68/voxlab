@@ -21,6 +21,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const liveScopeStatus = document.getElementById('live-scope-status');
   const noiseGateSlider = document.getElementById('noise-gate-slider');
   const noiseGateVal = document.getElementById('noise-gate-val');
+  const gateHoldSlider = document.getElementById('gate-hold-slider');
+  const gateHoldVal = document.getElementById('gate-hold-val');
+  const gateFloorSlider = document.getElementById('gate-floor-slider');
+  const gateFloorVal = document.getElementById('gate-floor-val');
   const chkHighpass = document.getElementById('chk-highpass');
   const chkAgc = document.getElementById('chk-agc');
   const agcVal = document.getElementById('agc-val');
@@ -646,8 +650,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const dbfs = Math.round(data.dbfs);
       meterDbfs.textContent = `${dbfs} dBFS`;
 
-      // Calculate meter width: -60 dBFS = 0%, 0 dBFS = 100%
-      const norm = Math.max(0, Math.min(100, ((dbfs + 60) / 60) * 100));
+      // Calculate meter width: -80 dBFS = 0%, 0 dBFS = 100% (matches gate threshold range)
+      const norm = Math.max(0, Math.min(100, ((dbfs + 80) / 80) * 100));
       vuBar.style.width = `${norm}%`;
     }
 
@@ -1135,13 +1139,25 @@ document.addEventListener('DOMContentLoaded', () => {
   // Sliders
   noiseGateSlider.addEventListener('input', (e) => {
     const val = parseFloat(e.target.value);
-    if (val <= -60) {
+    if (val <= -80) {
       noiseGateVal.textContent = 'OFF';
-      client.setNoiseGate(-60);
+      client.setNoiseGate(-80);
     } else {
       noiseGateVal.textContent = `${val} dBFS`;
       client.setNoiseGate(val);
     }
+  });
+
+  gateHoldSlider.addEventListener('input', (e) => {
+    const ms = parseInt(e.target.value, 10);
+    gateHoldVal.textContent = `${ms} ms`;
+    client.setGateHold(ms);
+  });
+
+  gateFloorSlider.addEventListener('input', (e) => {
+    const db = parseInt(e.target.value, 10);
+    gateFloorVal.textContent = db <= -60 ? 'MUTE' : `${db} dB`;
+    client.setGateFloor(db);
   });
 
   kwsThreshSlider.addEventListener('input', (e) => {
