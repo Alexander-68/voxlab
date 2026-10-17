@@ -139,16 +139,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Local continuous 60 FPS meter update when Web UI mic is active
-  capture.onMeter = (rms, localDbfs) => {
-    if (!scopeEnabled) return;
-    if (capture.isRecording && (!audioSourceSelect || audioSourceSelect.value === 'web_ui_mic')) {
-      meterDbfs.textContent = `${localDbfs} dBFS`;
-      const norm = Math.max(0, Math.min(100, ((localDbfs + 60) / 60) * 100));
-      vuBar.style.width = `${norm}%`;
-    }
-  };
-
   // --- Dictation Punctuation & Formatting Helpers ---
   function formatDictationPhrase(rawText, isContinuation = false) {
     if (!rawText) return '';
@@ -652,7 +642,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   client.on('audio.meter', (data) => {
     // Only update meter from server if scope is enabled and not driven locally by Web Audio mic
-    if (scopeEnabled && (!capture.isRecording || data.source !== 'web_ui_mic')) {
+    if (scopeEnabled) {
       const dbfs = Math.round(data.dbfs);
       meterDbfs.textContent = `${dbfs} dBFS`;
 
@@ -684,9 +674,9 @@ document.addEventListener('DOMContentLoaded', () => {
       gateIndicator.textContent = 'NOISE GATED';
     }
 
-    // Feed remote waveform into continuous visualizer only when scope is enabled
-    if (scopeEnabled && data.wave && data.wave.length > 0 && (!capture.isRecording || data.source !== 'web_ui_mic')) {
-      capture.pushRemoteWave(data.wave, data.passed_gate);
+    // Feed post-DSP waveform (what ASR hears) into the visualizer for every source
+    if (scopeEnabled && data.clean_wave && data.clean_wave.length > 0) {
+      capture.pushRemoteWave(data.clean_wave, data.passed_gate);
     }
   });
 
@@ -1255,9 +1245,9 @@ document.addEventListener('DOMContentLoaded', () => {
     logEvent('dsp.agc', `Software AGC: ${e.target.checked ? 'ENABLED' : 'DISABLED'}`);
   });
 
-  chkWebrtcNs.addEventListener('change', (e) => {
-    capture.setWebRtcNoiseSuppression(e.target.checked);
-    logEvent('dsp.webrtc_ns', `WebRTC Noise Suppression: ${e.target.checked ? 'ENABLED' : 'DISABLED'}`);
+  chkWebrtcNs.addEventListener('change', async (e) => {
+    const applied = await capture.setWebRtcNoiseSuppression(e.target.checked);
+    logEvent('dsp.webrtc_ns', `WebRTC Noise Suppression: ${e.target.checked ? 'ENABLED' : 'DISABLED'} (browser reports: ${applied})`);
   });
 
   if (chkMonitor) {

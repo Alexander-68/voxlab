@@ -9,7 +9,6 @@ class AudioCapture {
     this.mediaStream = null;
     this.sourceNode = null;
     this.processorNode = null;
-    this.analyserNode = null;
     this.isRecording = false;
 
     this.sampleRate = 16000;
@@ -18,7 +17,6 @@ class AudioCapture {
     // Visualizer settings
     this.canvas = null;
     this.canvasCtx = null;
-    this.animId = null;
     this.remoteAnimId = null;
     this.isRemote = false;
     this.remoteBuffer = new Float32Array(256);
@@ -33,19 +31,13 @@ class AudioCapture {
   setScopeEnabled(enabled) {
     this.scopeEnabled = !!enabled;
     if (!this.scopeEnabled) {
-      if (this.animId) {
-        cancelAnimationFrame(this.animId);
-        this.animId = null;
-      }
       if (this.remoteAnimId) {
         cancelAnimationFrame(this.remoteAnimId);
         this.remoteAnimId = null;
       }
       this.drawDisabledVisualizer();
     } else {
-      if (this.isRecording) {
-        this.startVisualizer();
-      } else if (this.isRemote) {
+      if (this.isRecording || this.isRemote) {
         this.startRemoteVisualizer();
       } else {
         this.clearVisualizer();
@@ -105,13 +97,10 @@ class AudioCapture {
       });
 
       this.sourceNode = this.audioCtx.createMediaStreamSource(this.mediaStream);
-      this.analyserNode = this.audioCtx.createAnalyser();
-      this.analyserNode.fftSize = 512;
-      this.sourceNode.connect(this.analyserNode);
 
       // Create ScriptProcessor for raw PCM chunking
       this.processorNode = this.audioCtx.createScriptProcessor(512, 1, 1);
-      this.analyserNode.connect(this.processorNode);
+      this.sourceNode.connect(this.processorNode);
       this.processorNode.connect(this.audioCtx.destination);
 
       let bufferAccumulator = [];
@@ -119,16 +108,8 @@ class AudioCapture {
       this.processorNode.onaudioprocess = (e) => {
         if (!this.isRecording) return;
         const inputData = e.inputBuffer.getChannelData(0);
-
-        // Optional headphone monitoring for audio testing
-        const outData = e.outputBuffer.getChannelData(0);
-        if (this.isMonitoring) {
-          for (let i = 0; i < inputData.length; i++) {
-            outData[i] = inputData[i];
-          }
-        } else {
-          outData.fill(0);
-        }
+        // Output stays silent: monitor and scope come from the server's post-DSP stream, same as Go-mic sources
+        e.outputBuffer.getChannelData(0).fill(0);
 
         for (let i = 0; i < inputData.length; i++) {
           bufferAccumulator.push(inputData[i]);
@@ -150,8 +131,9 @@ class AudioCapture {
         }
       };
 
+      this.options = options;
       this.isRecording = true;
-      this.startVisualizer();
+      this.startRemoteVisualizer();
       return true;
     } catch (err) {
       console.error('[AudioCapture] Mic access error:', err);
@@ -161,9 +143,9 @@ class AudioCapture {
 
   stop() {
     this.isRecording = false;
-    if (this.animId) {
-      cancelAnimationFrame(this.animId);
-      this.animId = null;
+    if (!this.isRemote && this.remoteAnimId) {
+      cancelAnimationFrame(this.remoteAnimId);
+      this.remoteAnimId = null;
     }
     if (this.processorNode) {
       this.processorNode.disconnect();
@@ -186,14 +168,15 @@ class AudioCapture {
     }
   }
 
-  setWebRtcNoiseSuppression(enabled) {
-    if (this.mediaStream) {
-      this.mediaStream.getAudioTracks().forEach((track) => {
-        track.applyConstraints({ noiseSuppression: enabled }).catch((err) => {
-          console.warn('[AudioCapture] Could not update noiseSuppression constraint:', err);
-        });
-      });
-    }
+  // Chrome ignores noiseSuppression changes via applyConstraints on a live track,
+  // so reopen the mic with the new constraint. Resolves to the setting the browser actually applied.
+  async setWebRtcNoiseSuppression(enabled) {
+    if (!this.isRecording) return enabled;
+    const options = { ...this.options, noiseSuppression: enabled };
+    this.stop();
+    await this.start(options);
+    const track = this.mediaStream.getAudioTracks()[0];
+    return track ? track.getSettings().noiseSuppression : undefined;
   }
 
   setMonitoring(enabled) {
@@ -216,83 +199,6 @@ class AudioCapture {
         this.monitorCtx.suspend().catch(() => {});
       }
     }
-  }
-
-  startVisualizer() {
-    if (!this.canvas || !this.analyserNode) return;
-    if (this.animId) {
-      cancelAnimationFrame(this.animId);
-      this.animId = null;
-    }
-    if (!this.scopeEnabled) {
-      this.drawDisabledVisualizer();
-      return;
-    }
-
-    const bufferLength = this.analyserNode.frequencyBinCount;
-    const timeData = new Uint8Array(bufferLength);
-    const freqData = new Uint8Array(bufferLength);
-
-    const draw = () => {
-      this.animId = requestAnimationFrame(draw);
-      this.analyserNode.getByteTimeDomainData(timeData);
-      this.analyserNode.getByteFrequencyData(freqData);
-
-      // Real-time audio level measurement for continuous non-interrupted dBFS metering
-      let sumSquares = 0;
-      for (let i = 0; i < bufferLength; i++) {
-        const s = (timeData[i] - 128) / 128.0;
-        sumSquares += s * s;
-      }
-      const rms = Math.sqrt(sumSquares / bufferLength);
-      const dbfs = rms <= 1e-5 ? -100 : Math.round(20 * Math.log10(rms));
-      if (this.onMeter) {
-        this.onMeter(rms, dbfs);
-      }
-
-      const ctx = this.canvasCtx;
-      const width = this.canvas.width;
-      const height = this.canvas.height;
-
-      // Dark background with slight decay
-      ctx.fillStyle = '#06090d';
-      ctx.fillRect(0, 0, width, height);
-
-      // Frequency spectrum bars (bottom half)
-      const barWidth = (width / bufferLength) * 2.5;
-      let barX = 0;
-      for (let i = 0; i < bufferLength; i++) {
-        const barHeight = (freqData[i] / 255) * (height / 2);
-        ctx.fillStyle = 'rgba(6, 182, 212, 0.35)';
-        ctx.fillRect(barX, height - barHeight, barWidth, barHeight);
-        barX += barWidth + 1;
-      }
-
-      // Time-domain oscilloscope wave (center)
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = '#38bdf8';
-      ctx.beginPath();
-
-      const sliceWidth = width / bufferLength;
-      let x = 0;
-
-      for (let i = 0; i < bufferLength; i++) {
-        const v = timeData[i] / 128.0;
-        const y = (v * height) / 2;
-
-        if (i === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
-        }
-        x += sliceWidth;
-      }
-
-      ctx.lineTo(width, height / 2);
-      ctx.stroke();
-    };
-
-    draw();
   }
 
   setRemoteMode(enabled) {

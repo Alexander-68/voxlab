@@ -394,9 +394,9 @@ func (s *Server) processIncomingAudio(rawChunk []float32) {
 	// Step 1: Preprocessing & Noise Gating
 	cleanChunk, rms, dbfs, passedGate := s.dsp.ProcessChunk(enhancedChunk)
 
-	// Stream clean audio chunk to clients for live headphone monitoring if remote input active
+	// Stream clean audio chunk to clients for live headphone monitoring (all sources, so the monitor always plays what ASR hears)
 	currSource := s.currentSource()
-	if currSource != "web_ui_mic" && s.IsMonitorEnabled() {
+	if s.IsMonitorEnabled() {
 		pcmBytes := audio.Float32ToBytesPCM(cleanChunk)
 		s.BroadcastBinary(pcmBytes)
 	}
