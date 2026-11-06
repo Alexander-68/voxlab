@@ -56,10 +56,12 @@ type EngineConfig struct {
 	SherpaAsrBin       string `json:"sherpa_asr_bin"`              // e.g. "sherpa-onnx-online-websocket-server"
 	KokoroModelDir     string `json:"kokoro_model_dir"`            // e.g. "models/kokoro-multi-lang-v1_0"
 	KokoroModelFile    string `json:"kokoro_model_file,omitempty"` // e.g. "model.fp16.onnx", "model.onnx"
-	StreamingModelDir  string `json:"streaming_model_dir"`         // first-pass streaming transducer, e.g. "models/sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06"
-	SecondPassModelDir string `json:"second_pass_model_dir"`       // offline re-transcription model, e.g. "models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8"
-	SecondPass         bool   `json:"second_pass"`                 // re-transcribe endpointed segments with the second-pass model
-	NumThreads         int    `json:"num_threads,omitempty"`       // Number of inference threads (default 4)
+	StreamingModelDir   string `json:"streaming_model_dir"`          // first-pass streaming transducer, e.g. "models/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11"
+	SecondPassModelDir  string `json:"second_pass_model_dir"`        // offline re-transcription model, e.g. "models/sherpa-onnx-nemo-parakeet-tdt-0.6b-ultra-int8"
+	SecondPass          bool   `json:"second_pass"`                  // re-transcribe endpointed segments with the second-pass model (backward compat)
+	SecondPassCommand   bool   `json:"second_pass_command"`          // enable second pass for command mode (default: false)
+	SecondPassDictation bool   `json:"second_pass_dictation"`        // enable second pass for dictation mode (default: true)
+	NumThreads          int    `json:"num_threads,omitempty"`        // Number of inference threads (default 4)
 	Provider           string `json:"provider,omitempty"`          // Execution provider: "cpu", "directml", "cuda" (default "cpu")
 }
 
@@ -132,11 +134,13 @@ func DefaultConfig() *AppConfig {
 			SherpaTtsBin:       "sherpa-onnx-offline-tts",
 			SherpaKwsBin:       "sherpa-onnx-keyword-spotter",
 			SherpaAsrBin:       "sherpa-onnx-online-websocket-server",
-			KokoroModelDir:     "models/kokoro-multi-lang-v1_0",
-			StreamingModelDir:  "models/sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06",
-			SecondPassModelDir: "models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8",
-			SecondPass:         true,
-			NumThreads:         4,
+			KokoroModelDir:      "models/kokoro-multi-lang-v1_0",
+			StreamingModelDir:   "models/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11",
+			SecondPassModelDir:  "models/sherpa-onnx-nemo-parakeet-tdt-0.6b-ultra-int8",
+			SecondPass:          true,
+			SecondPassCommand:   false,
+			SecondPassDictation: true,
+			NumThreads:          4,
 			Provider:           "cpu",
 		},
 		TTS: TTSConfig{

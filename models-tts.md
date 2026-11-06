@@ -26,10 +26,16 @@ models/
 │   ├── model.onnx                             # Standard weights (~345 MB)
 │   └── voices.bin, tokens.txt, espeak-ng-data/
 │
-├── sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06/  # First-pass streaming ASR (live partials)
+├── sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11/  # First-pass streaming ASR (Default)
+│   └── encoder.int8.onnx, decoder.int8.onnx, joiner.int8.onnx, tokens.txt
+│
+├── sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06/  # First-pass streaming ASR (Lightweight alt)
 │   └── encoder.onnx, decoder.onnx, joiner.onnx, tokens.txt
 │
-└── sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/  # Second-pass offline ASR (final text per phrase)
+├── sherpa-onnx-nemo-parakeet-tdt-0.6b-ultra-int8/       # Second-pass offline ASR (Moondream Ultra)
+│   └── encoder.int8.onnx, decoder.int8.onnx, joiner.int8.onnx, tokens.txt
+│
+└── sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/          # Second-pass offline ASR (v2 legacy)
     └── encoder.int8.onnx, decoder.int8.onnx, joiner.int8.onnx, tokens.txt
 ```
 
@@ -52,9 +58,17 @@ VoxLab leverages [Sherpa-ONNX](https://github.com/k2-fsa/sherpa-onnx) for local,
 | `models/kokoro-multi-lang-v1_0` | `kokoro-multi-lang-v1_0 (FP16)` | **FP16** | `model.fp16.onnx` | 54 voices | **~163 MB** |
 | `models/kokoro-en-v0_19` | `kokoro-en-v0_19` | **FP32** | `model.onnx` | 11 voices | ~345 MB |
 
-### Two-pass ASR (Automatic Speech Recognition)
-- **First pass**: `models/sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06` — streaming Kroko Zipformer transducer (RTF ~0.05, cased and punctuated). Live partials and endpointing. Optional alternative: any other `models/*streaming*` transducer (e.g. Nemotron 560 ms), switchable in the UI.
-- **Second pass**: `models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8` — offline Parakeet TDT 0.6B v2 (RTF ~0.07). Re-transcribes each endpointed phrase; its text replaces the first pass.
+### Speech Recognition (ASR) Pipeline
+- **First-Pass Streaming Transducers**:
+  - `models/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11` *(Default)*: 600M FastConformer RNN-T, multilingual (40+ languages), 560ms chunk window, native punctuation and capitalization.
+  - `models/sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06` *(Lightweight alternative)*: 65.7M streaming Zipformer transducer (RTF ~0.05). Low-footprint baseline for embedded/kiosk targets.
+  - Switchable at runtime via Web UI dropdown without server restarts.
+- **Second-Pass Offline Refinement**:
+  - `models/sherpa-onnx-nemo-parakeet-tdt-0.6b-ultra-int8` *(Default)*: 600M FastConformer TDT post-trained by Moondream (*Parakeet Ultra*). Provides bidirectional full-utterance attention, robust noise resistance, and refined sentence punctuation.
+  - `models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8`: Legacy NeMo Parakeet v2 baseline.
+- **Mode-Specific Second-Pass Policy**:
+  - **Voice Commands**: Second pass is **disabled by default** (`second_pass_command: false`) for instant 0ms command execution upon silence, but can be enabled in the Web UI.
+  - **Voice Dictation**: Second pass is **enabled by default** (`second_pass_dictation: true`) to ensure maximum transcription fidelity and proper sentence casing.
 
 ---
 

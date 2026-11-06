@@ -201,10 +201,16 @@
             <div id="sherpa-model-controls" class="mt-1">
               <label for="asr-model-select" class="helper-text" style="font-size: 11px;">Streaming model (first pass: live partials, endpointing)</label>
               <select id="asr-model-select" class="form-control"></select>
-              <label class="toggle-item mt-1">
-                <input type="checkbox" id="chk-second-pass">
-                <span>Second pass: re-transcribe each phrase with <strong id="second-pass-model">Parakeet</strong></span>
-              </label>
+              <div class="second-pass-toggles mt-2" style="display: flex; flex-direction: column; gap: 6px;">
+                <label class="toggle-item">
+                  <input type="checkbox" id="chk-second-pass-command">
+                  <span>Second pass for <strong>Command mode</strong>: refine with <strong class="second-pass-model-name" id="second-pass-model">Parakeet Ultra</strong></span>
+                </label>
+                <label class="toggle-item">
+                  <input type="checkbox" id="chk-second-pass-dictation" checked>
+                  <span>Second pass for <strong>Dictation mode</strong>: refine with <strong class="second-pass-model-name">Parakeet Ultra</strong></span>
+                </label>
+              </div>
             </div>
           </div>
 

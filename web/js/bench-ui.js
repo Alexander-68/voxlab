@@ -57,8 +57,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const asrEngineSelect = document.getElementById('asr-engine-select');
   const asrEngineName = document.getElementById('asr-engine-name');
   const asrModelSelect = document.getElementById('asr-model-select');
-  const chkSecondPass = document.getElementById('chk-second-pass');
+  const chkSecondPassCommand = document.getElementById('chk-second-pass-command');
+  const chkSecondPassDictation = document.getElementById('chk-second-pass-dictation');
   const secondPassModel = document.getElementById('second-pass-model');
+  const secondPassModelNames = document.querySelectorAll('.second-pass-model-name');
   const sherpaModelControls = document.getElementById('sherpa-model-controls');
 
   // Commands Tab
@@ -539,9 +541,18 @@ document.addEventListener('DOMContentLoaded', () => {
       asrModelSelect.appendChild(opt);
     });
     asrModelSelect.value = info.asr_model;
-    chkSecondPass.checked = !!info.second_pass;
+    if (chkSecondPassCommand) {
+      chkSecondPassCommand.checked = !!info.second_pass_command;
+    }
+    if (chkSecondPassDictation) {
+      chkSecondPassDictation.checked = info.second_pass_dictation !== undefined ? !!info.second_pass_dictation : true;
+    }
     if (info.second_pass_model) {
-      secondPassModel.textContent = info.second_pass_model.replace(/^sherpa-onnx-(nemo-)?/, '');
+      const label = info.second_pass_model.replace(/^sherpa-onnx-(nemo-)?/, '');
+      if (secondPassModel) secondPassModel.textContent = label;
+      secondPassModelNames.forEach((el) => {
+        el.textContent = label;
+      });
     }
   }
 
@@ -1435,10 +1446,19 @@ document.addEventListener('DOMContentLoaded', () => {
     logEvent('asr.model_select', `Streaming model switched to: ${e.target.value} (reloading...)`);
   });
 
-  chkSecondPass.addEventListener('change', (e) => {
-    client.setSecondPass(e.target.checked);
-    logEvent('asr.second_pass_toggle', `Second pass: ${e.target.checked ? 'ENABLED (loading model...)' : 'DISABLED'}`);
-  });
+  if (chkSecondPassCommand) {
+    chkSecondPassCommand.addEventListener('change', (e) => {
+      client.setSecondPass(e.target.checked, 'command');
+      logEvent('asr.second_pass_toggle', `Command second pass: ${e.target.checked ? 'ENABLED (loading model...)' : 'DISABLED'}`);
+    });
+  }
+
+  if (chkSecondPassDictation) {
+    chkSecondPassDictation.addEventListener('change', (e) => {
+      client.setSecondPass(e.target.checked, 'dictation');
+      logEvent('asr.second_pass_toggle', `Dictation second pass: ${e.target.checked ? 'ENABLED (loading model...)' : 'DISABLED'}`);
+    });
+  }
 
   if (asrEngineSelect) {
     asrEngineSelect.addEventListener('change', (e) => {

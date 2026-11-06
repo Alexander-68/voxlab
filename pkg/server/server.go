@@ -794,10 +794,20 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				}
 
 			case "set_second_pass":
+				mode, _ := req["mode"].(string)
 				enabled, _ := req["enabled"].(bool)
 				if r, ok := s.sherpaEngine.(*engine.SherpaRunner); ok {
-					r.SetSecondPass(enabled)
-					log.Printf("[ASR] Second pass enabled: %v", enabled)
+					switch mode {
+					case "command":
+						r.SetSecondPassCommand(enabled)
+						log.Printf("[ASR] Second pass for commands: %v", enabled)
+					case "dictation":
+						r.SetSecondPassDictation(enabled)
+						log.Printf("[ASR] Second pass for dictation: %v", enabled)
+					default:
+						r.SetSecondPass(enabled)
+						log.Printf("[ASR] Second pass global: %v", enabled)
+					}
 					s.broadcastASRModelInfo()
 				}
 

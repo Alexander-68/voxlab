@@ -34,10 +34,12 @@ type SherpaRunner struct {
 	stream    *ASRStream
 	streamDir string // active first-pass (streaming) model directory
 
-	offline      *WarmOffline // resident second-pass (Parakeet) server
-	offlineReady bool
-	secondPass   bool
-	segAudio     []float32 // audio sent to the current stream not yet assigned to a segment
+	offline             *WarmOffline // resident second-pass (Parakeet) server
+	offlineReady        bool
+	secondPass          bool
+	secondPassCommand   bool
+	secondPassDictation bool
+	segAudio            []float32 // audio sent to the current stream not yet assigned to a segment
 	segBase      int       // stream sample index of segAudio[0]
 
 	// OnRefine reports each second-pass correction (set by the server before audio flows).
@@ -64,7 +66,9 @@ func NewSherpaRunner(cfg *config.AppConfig) *SherpaRunner {
 	runner.streamDir = resolveModelDir(fallbacks...)
 	_, binExists := findSherpaBin("sherpa-onnx-online-websocket-server")
 	runner.asrModels = runner.streamDir != "" && binExists
-	runner.secondPass = cfg.Engine.SecondPass
+	runner.secondPassCommand = cfg.Engine.SecondPassCommand
+	runner.secondPassDictation = cfg.Engine.SecondPassDictation
+	runner.secondPass = runner.secondPassCommand || runner.secondPassDictation || cfg.Engine.SecondPass
 
 	// Eagerly warm up ASR in background so first spoken utterance has zero cold start latency
 	runner.asrMu.Lock()
@@ -104,10 +108,11 @@ func (r *SherpaRunner) startWarmASRLocked() {
 
 // startOfflineLocked spawns the second-pass server in the background when enabled (caller holds asrMu).
 func (r *SherpaRunner) startOfflineLocked() {
-	if !r.secondPass || r.asrClosed || r.offline != nil {
+	needed := r.secondPass || r.secondPassCommand || r.secondPassDictation
+	if !needed || r.asrClosed || r.offline != nil {
 		return
 	}
-	dir := resolveModelDir(r.cfg.Engine.SecondPassModelDir)
+	dir := resolveModelDir(r.cfg.Engine.SecondPassModelDir, "models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8")
 	if dir == "" {
 		log.Printf("[SherpaRunner] Second-pass model not found (%s); using streaming results only", r.cfg.Engine.SecondPassModelDir)
 		return
@@ -142,17 +147,48 @@ func (r *SherpaRunner) stopOfflineLocked() {
 	}
 }
 
-// SetSecondPass toggles Parakeet re-transcription of endpointed segments; disabling frees its RAM.
-func (r *SherpaRunner) SetSecondPass(enabled bool) {
-	r.asrMu.Lock()
-	defer r.asrMu.Unlock()
-	r.secondPass = enabled
-	r.cfg.Engine.SecondPass = enabled
-	if enabled {
+func (r *SherpaRunner) updateOfflineServerLocked() {
+	needed := r.secondPass || r.secondPassCommand || r.secondPassDictation
+	if needed {
 		r.startOfflineLocked()
 	} else {
 		r.stopOfflineLocked()
 	}
+}
+
+// SetSecondPass toggles Parakeet re-transcription globally; disabling frees its RAM.
+func (r *SherpaRunner) SetSecondPass(enabled bool) {
+	r.asrMu.Lock()
+	defer r.asrMu.Unlock()
+	r.secondPass = enabled
+	r.secondPassCommand = enabled
+	r.secondPassDictation = enabled
+	r.cfg.Engine.SecondPass = enabled
+	r.cfg.Engine.SecondPassCommand = enabled
+	r.cfg.Engine.SecondPassDictation = enabled
+	r.updateOfflineServerLocked()
+}
+
+// SetSecondPassCommand toggles second-pass refinement specifically for command mode.
+func (r *SherpaRunner) SetSecondPassCommand(enabled bool) {
+	r.asrMu.Lock()
+	defer r.asrMu.Unlock()
+	r.secondPassCommand = enabled
+	r.cfg.Engine.SecondPassCommand = enabled
+	r.secondPass = r.secondPassCommand || r.secondPassDictation
+	r.cfg.Engine.SecondPass = r.secondPass
+	r.updateOfflineServerLocked()
+}
+
+// SetSecondPassDictation toggles second-pass refinement specifically for dictation mode.
+func (r *SherpaRunner) SetSecondPassDictation(enabled bool) {
+	r.asrMu.Lock()
+	defer r.asrMu.Unlock()
+	r.secondPassDictation = enabled
+	r.cfg.Engine.SecondPassDictation = enabled
+	r.secondPass = r.secondPassCommand || r.secondPassDictation
+	r.cfg.Engine.SecondPass = r.secondPass
+	r.updateOfflineServerLocked()
 }
 
 // SetStreamingModel restarts the resident first-pass server with another installed model directory.
@@ -193,11 +229,13 @@ func (r *SherpaRunner) ASRModelInfo() map[string]interface{} {
 		names = append(names, filepath.Base(m))
 	}
 	return map[string]interface{}{
-		"asr_model":          filepath.Base(r.streamDir),
-		"asr_models":         names,
-		"second_pass":        r.secondPass,
-		"second_pass_model":  filepath.Base(r.cfg.Engine.SecondPassModelDir),
-		"second_pass_loaded": r.offlineReady,
+		"asr_model":             filepath.Base(r.streamDir),
+		"asr_models":            names,
+		"second_pass":           r.secondPass,
+		"second_pass_command":   r.secondPassCommand,
+		"second_pass_dictation": r.secondPassDictation,
+		"second_pass_model":     filepath.Base(r.cfg.Engine.SecondPassModelDir),
+		"second_pass_loaded":    r.offlineReady,
 	}
 }
 
@@ -218,7 +256,8 @@ func (r *SherpaRunner) cutSegmentLocked(res *ASRResult) []float32 {
 
 // refineLocked replaces res.Transcript with the second-pass result for seg, if available.
 func (r *SherpaRunner) refineLocked(res *ASRResult, seg []float32, isDictation bool) {
-	if !r.secondPass || !r.offlineReady || len(seg) == 0 {
+	enabled := (isDictation && r.secondPassDictation) || (!isDictation && r.secondPassCommand)
+	if !enabled || !r.offlineReady || len(seg) == 0 {
 		return
 	}
 	t0 := time.Now()

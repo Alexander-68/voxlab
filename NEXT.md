@@ -30,8 +30,10 @@ Goal: medical terms (drugs, conditions, acronyms) appear correctly spelled in di
 
 ---
 
-## Current Status (End of Session 2026-10-10)
-- **Engine**: Resident in-memory streaming daemon (`sherpa-onnx-online-websocket-server`) running on 4 inference threads.
+## Current Status (Session 2026-11-07)
+- **ASR Streaming Engine**: Upgraded to **Nemotron 3.5** (`nemotron-3.5-asr-streaming-0.6b-560ms-int8`), supporting 40+ multilingual languages and native PnC. Kroko Zipformer retained for lightweight embedded profiling with live UI switching.
+- **ASR Second-Pass Engine**: Upgraded to **Parakeet Ultra** (`nemo-parakeet-tdt-0.6b-ultra-int8`).
+- **Second-Pass Mode Policy**: Independent controls for Command mode (disabled by default for instant 0ms execution) and Dictation mode (enabled by default for full-utterance refinement).
+- **Engine**: Resident in-memory streaming daemon (`sherpa-onnx-online-websocket-server`) and offline second pass (`sherpa-onnx-offline-websocket-server`) running on 4 inference threads.
 - **Audio Pipeline**: Real-time Go audio loop decoupled from ASR worker thread; continuous 30Hz metering.
-- **Visualizer**: Optional Live Oscilloscope & Audio Meter toggle on frontend reduces CPU load to 0% when disabled.
-- **Tests**: All repository unit and integration tests passing (`go test ./...`).
+- **Tests**: All repository unit and integration tests passing (`go test ./pkg/...`).

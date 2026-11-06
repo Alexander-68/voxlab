@@ -130,8 +130,8 @@ class VoiceClient {
     this.sendAction('set_asr_model', { model: model });
   }
 
-  setSecondPass(enabled) {
-    this.sendAction('set_second_pass', { enabled: !!enabled });
+  setSecondPass(enabled, mode) {
+    this.sendAction('set_second_pass', { enabled: !!enabled, mode: mode || '' });
   }
 
   setGateHold(holdMs) {

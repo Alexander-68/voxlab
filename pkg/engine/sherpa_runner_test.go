@@ -271,3 +271,38 @@ func TestKokoroINT8Model(t *testing.T) {
 		t.Errorf("expected duration > 0.8s, got %.2fs", res.DurationSec)
 	}
 }
+
+func TestSecondPassPerMode(t *testing.T) {
+	cfg := config.DefaultConfig()
+	if cfg.Engine.SecondPassCommand {
+		t.Errorf("expected SecondPassCommand default to be false, got true")
+	}
+	if !cfg.Engine.SecondPassDictation {
+		t.Errorf("expected SecondPassDictation default to be true, got false")
+	}
+
+	runner := NewSherpaRunner(cfg)
+	t.Cleanup(func() { _ = runner.Close() })
+
+	info := runner.ASRModelInfo()
+	if cmd, ok := info["second_pass_command"].(bool); !ok || cmd != false {
+		t.Errorf("expected second_pass_command false, got %v", info["second_pass_command"])
+	}
+	if dict, ok := info["second_pass_dictation"].(bool); !ok || dict != true {
+		t.Errorf("expected second_pass_dictation true, got %v", info["second_pass_dictation"])
+	}
+
+	// Toggle command mode second pass
+	runner.SetSecondPassCommand(true)
+	info = runner.ASRModelInfo()
+	if cmd, _ := info["second_pass_command"].(bool); !cmd {
+		t.Errorf("expected second_pass_command true after toggle")
+	}
+
+	// Toggle dictation mode second pass
+	runner.SetSecondPassDictation(false)
+	info = runner.ASRModelInfo()
+	if dict, _ := info["second_pass_dictation"].(bool); dict {
+		t.Errorf("expected second_pass_dictation false after toggle")
+	}
+}

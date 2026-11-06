@@ -122,11 +122,11 @@ if (-not $SkipKokoro) {
     }
 }
 
-# 3. ASR Models: Kroko streaming (first pass, default), Parakeet TDT (second pass).
-#    Nemotron 560ms is optional (~460 MB, heavier on CPU).
+# 3. ASR Models: Nemotron 3.5 & Kroko streaming (first pass), Parakeet Ultra (second pass).
 $AsrModels = @(
+    "sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11",
     "sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06",
-    "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8"
+    "sherpa-onnx-nemo-parakeet-tdt-0.6b-ultra-int8"
 )
 
 if (-not $SkipAsr) {

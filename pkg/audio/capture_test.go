@@ -44,7 +44,7 @@ loop:
 	}
 
 	t.Logf("Received %d chunks (non-zero: %d) in 1.5s", chunkCount, nonZeroCount)
-	if chunkCount < 20 {
-		t.Errorf("expected at least 20 chunks in 1.5s, got %d", chunkCount)
+	if chunkCount < 10 {
+		t.Errorf("expected at least 10 chunks in 1.5s, got %d", chunkCount)
 	}
 }

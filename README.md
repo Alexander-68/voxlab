@@ -78,15 +78,18 @@
 
 4. **Dual-Purpose Speech Processing**:
    - **Purpose 1: Voice Commands**:
-     - Two-pass speech recognition: streaming Kroko Zipformer (live partials, endpointing) + Parakeet TDT 0.6B second pass (punctuated, more accurate final text per phrase). Streaming model is switchable in the UI (Kroko / Nemotron 560ms).
+     - Two-pass speech recognition: streaming Nemotron-3.5 560ms / Kroko Zipformer (live partials, responsive endpointing) + optional Parakeet Ultra 0.6B second pass (punctuated, higher accuracy).
+     - **Second Pass UI Control (Command Mode)**: Disabled by default for minimum latency (<150ms command execution directly from streaming tokens), but toggleable via UI checkbox.
+     - Streaming model switchable at runtime in the UI (Nemotron-3.5 560ms default / Kroko).
      - Semantic Intent Router with cosine / token scoring against a configurable JSON catalog (`data/commands.json`).
      - Distractor suppression (rejects conversational chatter quietly).
      - Negation detection (e.g. *"do not stop recording"* is rejected).
      - Multi-turn confirmation state machine (`IDLE` $\to$ `COMMAND_LISTEN` $\to$ `PROCESS` $\to$ `CONFIRM` $\to$ `IDLE`).
      - 600ms responsive silence endpointing.
    - **Purpose 2: Voice Dictations**:
-     - **Live Partial Speech Streaming**: Each listening session holds one live stream to the resident recognizer; interim hypotheses arrive every ~330ms.
-     - **Natural Pause Endpointing & Auto-Punctuation**: The recognizer endpoints phrases itself on a ~720ms pause (`dictation.silence_endpoint_ms`), so gate/AGC settings do not affect endpointing; Stop Dictation flushes the phrase in progress. Phrases completed on pause automatically receive sentence termination (`.`) and subsequent phrases are automatically capitalized. Spoken punctuation keywords (`period`, `comma`, `question mark`, etc.) are recognized.
+     - **Live Partial Speech Streaming**: Each listening session holds one live stream to the resident recognizer; interim hypotheses arrive every ~330ms (Nemotron-3.5 560ms default or Kroko).
+     - **Natural Pause Endpointing & Two-Pass Refinement**: Recognizer endpoints phrases on natural speech pauses (~720ms `dictation.silence_endpoint_ms`).
+     - **Second Pass UI Control (Dictation Mode)**: Enabled by default. Resident **Parakeet Ultra (INT8)** re-transcribes completed phrases in the background, adding sentence punctuation (`.`), proper casing, and enhanced vocabulary. Can be toggled in the UI.
      - **Noise & Keyboard Clack Drop**: When typing noise or background sound triggers VAD without intelligible speech, the test bench cleanly resets back to listening state without hanging.
      - **Leading Syllable Pre-roll**: 360ms circular buffer preserves initial consonants and word onsets.
      - Strictly isolated from command execution: words spoken during dictation can never accidentally trigger system commands.
@@ -107,7 +110,7 @@
 
 7. **Dual Engine Mode**:
    - **Simulator Mode (Default)**: Zero-dependency Go engine with realistic latencies, simulated ASR partials, and synthetic audio for instant development and testing.
-   - **Sherpa-ONNX Mode**: Executes persistent, resident in-memory daemon (`sherpa-onnx-online-websocket-server`) with a 4-thread streaming model for live partials, plus a resident `sherpa-onnx-offline-websocket-server` (Parakeet TDT) that re-transcribes each endpointed phrase (~0.1 s per second of speech on CPU).
+   - **Sherpa-ONNX Mode**: Executes persistent, resident in-memory daemon (`sherpa-onnx-online-websocket-server`) with a 4-thread streaming model for live partials, plus a resident `sherpa-onnx-offline-websocket-server` (Parakeet Ultra) that re-transcribes each endpointed phrase (~0.1 s per second of speech on CPU).
 
 ---
 
@@ -115,13 +118,16 @@
 
 VoxLab auto-discovers all installed Kokoro models located in `models/`:
 
-| Model Identifier | Precision | Weights File | Voices | Footprint |
+| Model Identifier | Precision | Weights File | Description / Notes | Footprint |
 | :--- | :--- | :--- | :--- | :--- |
 | `kokoro-multi-lang-v1_1` | FP32 | `model.onnx` | 103 voices | ~325 MB |
 | `kokoro-multi-lang-v1_1 (INT8)` | **INT8** | `model.int8.onnx` | 103 voices | ~114 MB |
 | `kokoro-multi-lang-v1_0` | FP32 | `model.onnx` | 54 voices | ~325 MB |
 | `kokoro-multi-lang-v1_0 (FP16)` | **FP16** | `model.fp16.onnx` | 54 voices | ~163 MB |
 | `kokoro-en-v0_19` | FP32 | `model.onnx` | 11 voices | ~345 MB |
+| `nemotron-3.5-asr-streaming-0.6b` | **INT8** | `encoder.int8.onnx` | 1st Pass Streaming (Default, 40+ langs, 560ms chunk) | ~475 MB |
+| `streaming-zipformer-en-kroko` | FP32 | `encoder.onnx` | 1st Pass Streaming (Lightweight, ~65M params) | ~120 MB |
+| `nemo-parakeet-tdt-0.6b-ultra` | **INT8** | `encoder.int8.onnx` | 2nd Pass Offline Refinement (Moondream Ultra) | ~487 MB |
 
 Model weight variants (`model.int8.onnx`, `model.fp16.onnx`) can be co-located within the same model folder, sharing lexicons and voice embeddings. VoxLab automatically exposes them with their respective suffix (`(INT8)`, `(FP16)`) in the Web UI, REST API (`/api/voices`, `/api/models`), and WebSocket actions.
 
@@ -217,6 +223,8 @@ The VoxLab host daemon communicates with web clients over WebSocket (`ws://local
 - `{"action": "confirm", "approved": true}`: Confirm pending action.
 - `{"action": "speak", "payload": {"text": "Hello", "voice": "af_heart", "speed": 1.0}}`: Request Kokoro TTS.
 - `{"action": "set_source", "source": "web_ui_mic" | "host_native_mic" | "wav_file_injection"}`: Switch audio source.
+- `{"action": "set_asr_model", "model": "sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11" | "sherpa-onnx-streaming-zipformer-en-20M-2023-02-17"}`: Switch streaming ASR model dynamically.
+- `{"action": "set_second_pass", "mode": "command" | "dictation", "enabled": true | false}`: Toggle offline second-pass refinement per mode.
 - `{"action": "inject_text", "text": "open settings", "mode": "command"}`: Inject text for zero-mic testing.
 - Binary Frames: 16kHz Float32 or Int16 mono PCM audio frames from the browser microphone.
 
