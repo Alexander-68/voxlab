@@ -14,6 +14,7 @@ type AudioConfig struct {
 	HighPassCutoffHz       float64        `json:"high_pass_cutoff_hz"`       // e.g. 80.0 Hz
 	AGCEnabled             bool           `json:"agc_enabled"`
 	TargetRMS              float64        `json:"target_rms"` // e.g. 0.12 (-18 dBFS)
+	InputLanguage          string         `json:"input_language"` // e.g. "en-US", "auto" (default "en-US")
 	Enhancer               EnhancerConfig `json:"enhancer"`
 }
 
@@ -105,6 +106,7 @@ func DefaultConfig() *AppConfig {
 			HighPassCutoffHz:       80.0,
 			AGCEnabled:             true,
 			TargetRMS:              0.12,
+			InputLanguage:          "en-US",
 			Enhancer: EnhancerConfig{
 				Enabled:    false,
 				ModelType:  "gtcrn",

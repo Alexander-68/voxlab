@@ -63,6 +63,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const secondPassModelNames = document.querySelectorAll('.second-pass-model-name');
   const sherpaModelControls = document.getElementById('sherpa-model-controls');
 
+  // Voice Input Language Selector
+  const asrLangSelect = document.getElementById('asr-lang-select');
+  const asrLangLabel = document.getElementById('asr-lang-label');
+  let activeInputLanguage = localStorage.getItem('voxlab_input_language') || 'en-US';
+
   // Commands Tab
   const btnPttCommand = document.getElementById('btn-ptt-command');
   const commandTranscriptBox = document.getElementById('command-transcript-box');
@@ -226,7 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
       browserRecognizer.continuous = false;
       browserRecognizer.interimResults = true;
       browserRecognizer.maxAlternatives = 1;
-      browserRecognizer.lang = 'en-US';
+      browserRecognizer.lang = (activeInputLanguage === 'auto') ? 'en-US' : activeInputLanguage;
 
       browserRecognizer.onstart = () => {
         isBrowserRecognizing = true;
@@ -1477,6 +1482,46 @@ document.addEventListener('DOMContentLoaded', () => {
       logEvent('asr.engine_select', `ASR Engine switched to: ${mode}`);
     });
   }
+
+  // Voice Input Language Selector
+  if (asrLangSelect) {
+    asrLangSelect.value = activeInputLanguage;
+    const updateLangLabel = () => {
+      if (asrLangLabel && asrLangSelect.selectedOptions.length > 0) {
+        const text = asrLangSelect.selectedOptions[0].text;
+        const shortName = text.split('(')[0].replace(/^[^\w\s]+/, '').trim();
+        asrLangLabel.textContent = shortName;
+      }
+    };
+    updateLangLabel();
+
+    asrLangSelect.addEventListener('change', () => {
+      activeInputLanguage = asrLangSelect.value;
+      localStorage.setItem('voxlab_input_language', activeInputLanguage);
+      updateLangLabel();
+      client.setInputLanguage(activeInputLanguage);
+      if (browserRecognizer) {
+        browserRecognizer.lang = (activeInputLanguage === 'auto') ? 'en-US' : activeInputLanguage;
+      }
+      logEvent('asr.language_changed', `Voice input language set to: ${activeInputLanguage}`);
+    });
+  }
+
+  client.on('audio.language_changed', (data) => {
+    if (data && data.language) {
+      activeInputLanguage = data.language;
+      localStorage.setItem('voxlab_input_language', data.language);
+      if (asrLangSelect) asrLangSelect.value = data.language;
+      if (asrLangLabel && asrLangSelect && asrLangSelect.selectedOptions.length > 0) {
+        const text = asrLangSelect.selectedOptions[0].text;
+        const shortName = text.split('(')[0].replace(/^[^\w\s]+/, '').trim();
+        asrLangLabel.textContent = shortName;
+      }
+      if (browserRecognizer) {
+        browserRecognizer.lang = (data.language === 'auto') ? 'en-US' : data.language;
+      }
+    }
+  });
 
   btnSaveDraft.addEventListener('click', () => {
     alert('Annotation draft approved and persisted to procedure log!');

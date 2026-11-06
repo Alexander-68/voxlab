@@ -134,6 +134,10 @@ class VoiceClient {
     this.sendAction('set_second_pass', { enabled: !!enabled, mode: mode || '' });
   }
 
+  setInputLanguage(lang) {
+    this.sendAction('set_language', { language: lang });
+  }
+
   setGateHold(holdMs) {
     this.sendAction('set_gate_hold', { hold_ms: holdMs });
   }

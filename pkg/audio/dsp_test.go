@@ -184,3 +184,32 @@ func TestDSPHighPassAndAGC(t *testing.T) {
 		t.Errorf("expected gain to be 1.0 when AGC is disabled")
 	}
 }
+
+func TestResample(t *testing.T) {
+	// 1 second of 440Hz sine wave at 24000 Hz
+	inRate := 24000
+	outRate := 16000
+	dur := 1.0
+	inSamples := make([]float32, int(float64(inRate)*dur))
+	for i := range inSamples {
+		inSamples[i] = float32(math.Sin(2.0 * math.Pi * 440.0 * float64(i) / float64(inRate)))
+	}
+
+	res := Resample(inSamples, inRate, outRate)
+	expectedLen := int(float64(outRate) * dur)
+	if len(res) != expectedLen {
+		t.Fatalf("expected resampled length %d, got %d", expectedLen, len(res))
+	}
+
+	// Verify identity resampling (same rate)
+	same := Resample(inSamples, inRate, inRate)
+	if len(same) != len(inSamples) {
+		t.Errorf("expected same length for identical rates")
+	}
+
+	// Verify empty slice
+	empty := Resample(nil, inRate, outRate)
+	if empty != nil {
+		t.Errorf("expected nil for empty slice")
+	}
+}

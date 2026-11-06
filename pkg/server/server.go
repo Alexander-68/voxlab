@@ -65,6 +65,9 @@ type Server struct {
 	dictationDraft  string
 	dictationTarget string
 
+	inputLangMu   sync.RWMutex
+	inputLanguage string
+
 	meterMu       sync.Mutex
 	lastMeterTime time.Time
 }
@@ -130,6 +133,7 @@ func NewServer(cfg *config.AppConfig) (*Server, error) {
 		activeSource:  "web_ui_mic",
 		audioInChan:   make(chan []float32, 200),
 		asrChan:       make(chan asrWorkItem, 200),
+		inputLanguage: cfg.Audio.InputLanguage,
 		ctx:           ctx,
 		cancel:        cancel,
 		clients:       make(map[*websocket.Conn]*sync.Mutex),
@@ -179,14 +183,16 @@ func NewServer(cfg *config.AppConfig) (*Server, error) {
 	return s, nil
 }
 
-// Start begins listening and serving HTTP & WebSocket requests.
-func (s *Server) Start() error {
-	// Start audio processing loop and decoupled ASR loop
+// StartBackgroundLoops starts the decoupled audio and ASR processing goroutines (used in tests and evaluation).
+func (s *Server) StartBackgroundLoops() {
 	go s.audioPipelineLoop(s.ctx)
 	go s.asrPipelineLoop(s.ctx)
-
-	// Connect default web mic source
 	_ = s.webMicSource.Start(s.ctx, s.audioInChan)
+}
+
+// Start begins listening and serving HTTP & WebSocket requests.
+func (s *Server) Start() error {
+	s.StartBackgroundLoops()
 
 	mux := http.NewServeMux()
 
@@ -656,6 +662,11 @@ func (s *Server) handleFinalCommandTranscript(transcript string) {
 	}
 }
 
+// HandleWebSocket exposes WebSocket handling for integration and evaluation harnesses.
+func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+	s.handleWebSocket(w, r)
+}
+
 // handleWebSocket manages client connections and control messaging.
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -729,6 +740,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 					s.currentEngine().ResetASR()
 					s.stateMachine.StartDictation(target)
 				} else {
+					s.currentEngine().ResetASR()
 					s.stateMachine.StartCommand()
 				}
 
@@ -837,6 +849,19 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				if th, ok := req["threshold"].(float64); ok {
 					s.cfg.KWS.Threshold = th
 					log.Printf("[KWS] Wake-word threshold set to %.2f", th)
+				}
+
+			case "set_language":
+				lang, _ := req["language"].(string)
+				if lang != "" {
+					s.SetInputLanguage(lang)
+					log.Printf("[ASR] Input language set to: %s", lang)
+					s.BroadcastJSON(map[string]interface{}{
+						"event": "audio.language_changed",
+						"data": map[string]interface{}{
+							"language": lang,
+						},
+					})
 				}
 
 			case "set_kws_enable":
@@ -1069,6 +1094,38 @@ func (s *Server) IsMonitorEnabled() bool {
 	s.monitorMu.RLock()
 	defer s.monitorMu.RUnlock()
 	return s.monitorEnabled
+}
+
+// InputLanguage returns the active voice input language code.
+func (s *Server) InputLanguage() string {
+	s.inputLangMu.RLock()
+	defer s.inputLangMu.RUnlock()
+	if s.inputLanguage == "" {
+		return "en-US"
+	}
+	return s.inputLanguage
+}
+
+// SetInputLanguage updates the active voice input language code.
+func (s *Server) SetInputLanguage(lang string) {
+	s.inputLangMu.Lock()
+	defer s.inputLangMu.Unlock()
+	s.inputLanguage = lang
+	s.cfg.Audio.InputLanguage = lang
+}
+
+// SherpaEngine returns the Sherpa-ONNX speech engine instance.
+func (s *Server) SherpaEngine() engine.SpeechEngine {
+	s.engineMu.RLock()
+	defer s.engineMu.RUnlock()
+	return s.sherpaEngine
+}
+
+// ActiveEngine returns the currently active speech engine instance.
+func (s *Server) ActiveEngine() engine.SpeechEngine {
+	s.engineMu.RLock()
+	defer s.engineMu.RUnlock()
+	return s.engine
 }
 
 // BroadcastJSON sends a JSON event to all connected WebSocket clients.

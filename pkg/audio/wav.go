@@ -179,3 +179,28 @@ func GenerateChime(sampleRate int, freq1, freq2 float64, durationSec float64) []
 	}
 	return out
 }
+
+// Resample converts mono float32 audio samples between sample rates using linear interpolation.
+func Resample(samples []float32, fromRate, toRate int) []float32 {
+	if fromRate == toRate || len(samples) == 0 || fromRate <= 0 || toRate <= 0 {
+		return samples
+	}
+	outLen := int(math.Round(float64(len(samples)) * float64(toRate) / float64(fromRate)))
+	if outLen == 0 {
+		return nil
+	}
+	out := make([]float32, outLen)
+	ratio := float64(fromRate) / float64(toRate)
+	n := len(samples)
+	for i := 0; i < outLen; i++ {
+		srcPos := float64(i) * ratio
+		srcIdx := int(srcPos)
+		frac := float32(srcPos - float64(srcIdx))
+		if srcIdx+1 < n {
+			out[i] = samples[srcIdx]*(1.0-frac) + samples[srcIdx+1]*frac
+		} else if srcIdx < n {
+			out[i] = samples[srcIdx]
+		}
+	}
+	return out
+}

@@ -107,16 +107,7 @@ func (s *WavFileSource) Start(ctx context.Context, out chan<- []float32) error {
 
 	// Resample if needed
 	if wavRate != s.sampleRate && wavRate > 0 {
-		resampled := make([]float32, int(float64(len(samples))*float64(s.sampleRate)/float64(wavRate)))
-		ratio := float64(len(samples)) / float64(len(resampled))
-		for i := range resampled {
-			srcIdx := int(float64(i) * ratio)
-			if srcIdx >= len(samples) {
-				srcIdx = len(samples) - 1
-			}
-			resampled[i] = samples[srcIdx]
-		}
-		samples = resampled
+		samples = Resample(samples, wavRate, s.sampleRate)
 	}
 
 	subCtx, cancel := context.WithCancel(ctx)

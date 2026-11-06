@@ -34,6 +34,8 @@ Goal: medical terms (drugs, conditions, acronyms) appear correctly spelled in di
 - **ASR Streaming Engine**: Upgraded to **Nemotron 3.5** (`nemotron-3.5-asr-streaming-0.6b-560ms-int8`), supporting 40+ multilingual languages and native PnC. Kroko Zipformer retained for lightweight embedded profiling with live UI switching.
 - **ASR Second-Pass Engine**: Upgraded to **Parakeet Ultra** (`nemo-parakeet-tdt-0.6b-ultra-int8`).
 - **Second-Pass Mode Policy**: Independent controls for Command mode (disabled by default for instant 0ms execution) and Dictation mode (enabled by default for full-utterance refinement).
+- **Voice Input Language Selector**: Dynamic language selector (`auto`, `en-US`, `en-GB`, `es-ES`, `fr-FR`, `de-DE`, `it-IT`, `pt-BR`, `ja-JP`, `zh-CN`, `hi-IN`) wired to both Browser `SpeechRecognition.lang` and server ASR pipelines.
+- **Synthetic Round-Trip Acoustic Evaluation**: Implemented Tier-1 smoke test suite (`pkg/evaluation`) with 5 golden test cases testing Kokoro TTS audio round-trip against Nemotron-3.5 streaming, Parakeet Ultra 2nd pass, Intent Router, negation detection, and noise-floor gating.
 - **Engine**: Resident in-memory streaming daemon (`sherpa-onnx-online-websocket-server`) and offline second pass (`sherpa-onnx-offline-websocket-server`) running on 4 inference threads.
-- **Audio Pipeline**: Real-time Go audio loop decoupled from ASR worker thread; continuous 30Hz metering.
-- **Tests**: All repository unit and integration tests passing (`go test ./pkg/...`).
+- **Audio Pipeline**: Real-time Go audio loop decoupled from ASR worker thread; continuous 30Hz metering; high-quality linear resampler.
+- **Tests**: 100% of repository tests passing (`go test ./pkg/...`), including the new `pkg/evaluation` suite.

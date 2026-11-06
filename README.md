@@ -209,6 +209,7 @@ Tests cover:
 - Intent Matcher (exact match, aliases, slot extraction, distractor rejection, negation detection)
 - State Machine (all voice lifecycle state transitions)
 - Server Integration (REST endpoints `/api/config`, `/api/catalog`, `/api/voices`, `/api/tts`, and full WebSocket handshake & action handling)
+- Synthetic Round-Trip Acoustic Evaluation (Tier-1 smoke suite with Kokoro TTS audio, Nemotron-3.5 streaming, Parakeet Ultra 2nd pass, Intent Router, and noise gating)
 
 ---
 
@@ -225,12 +226,14 @@ The VoxLab host daemon communicates with web clients over WebSocket (`ws://local
 - `{"action": "set_source", "source": "web_ui_mic" | "host_native_mic" | "wav_file_injection"}`: Switch audio source.
 - `{"action": "set_asr_model", "model": "sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11" | "sherpa-onnx-streaming-zipformer-en-20M-2023-02-17"}`: Switch streaming ASR model dynamically.
 - `{"action": "set_second_pass", "mode": "command" | "dictation", "enabled": true | false}`: Toggle offline second-pass refinement per mode.
+- `{"action": "set_language", "language": "en-US" | "en-GB" | "es-ES" | "auto"}`: Select voice input language.
 - `{"action": "inject_text", "text": "open settings", "mode": "command"}`: Inject text for zero-mic testing.
 - Binary Frames: 16kHz Float32 or Int16 mono PCM audio frames from the browser microphone.
 
 ### Server $\to$ Client Events (JSON)
 - `voice.state`: Emitted on state transitions (`IDLE`, `COMMAND_LISTEN`, `PROCESS`, `CONFIRM`, `ANNOTATION_LISTEN`, `REVIEW`, `SPEAKING`).
 - `audio.meter`: Real-time audio metrics (`rms`, `dbfs`, `passed_gate`, `echo_muted`).
+- `audio.language_changed`: Active voice input language notification (`language`).
 - `wake_word_detected`: Wake-word detected (`phrase`, `confidence`).
 - `transcript.partial`: Streaming hypothesis (`transcript`, `tokens`).
 - `transcript.final`: Finalized ASR transcript.

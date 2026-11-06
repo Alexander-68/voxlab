@@ -214,6 +214,27 @@
             </div>
           </div>
 
+          <!-- Voice Input Language Selection -->
+          <div class="form-group mb-3">
+            <div class="slider-header mb-1">
+              <label for="asr-lang-select">Voice Input Language</label>
+              <span class="helper-text" style="font-size: 11px;">Active: <strong id="asr-lang-label" style="color: var(--cyan);">English (US)</strong></span>
+            </div>
+            <select id="asr-lang-select" class="form-control">
+              <option value="auto">🌐 Auto-Detect / Multilingual (Nemotron 40+ langs)</option>
+              <option value="en-US" selected>🇺🇸 English (US)</option>
+              <option value="en-GB">🇬🇧 English (UK)</option>
+              <option value="es-ES">🇪🇸 Spanish (Español)</option>
+              <option value="fr-FR">🇫🇷 French (Français)</option>
+              <option value="de-DE">🇩🇪 German (Deutsch)</option>
+              <option value="it-IT">🇮🇹 Italian (Italiano)</option>
+              <option value="pt-BR">🇧🇷 Portuguese (Português - Brasil)</option>
+              <option value="ja-JP">🇯🇵 Japanese (日本語)</option>
+              <option value="zh-CN">🇨🇳 Chinese (Mandarin / 普通话)</option>
+              <option value="hi-IN">🇮🇳 Hindi (हिन्दी)</option>
+            </select>
+          </div>
+
           <!-- Commands Tab Content -->
           <div id="tab-content-commands" class="tab-content active">
             <!-- Quick Command Injection (Zero-Mic Bench Test) -->

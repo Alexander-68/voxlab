@@ -1,0 +1,56 @@
+{
+  "version": "1.0",
+  "tier": "tier-1-smoke",
+  "items": [
+    {
+      "id": "T1_CMD_SETTINGS",
+      "description": "Command: Open Settings (US Female voice)",
+      "mode": "command",
+      "text": "open settings",
+      "voice": "af_heart",
+      "expected": "NAV_SETTINGS",
+      "wav_file": "t1_cmd_settings.wav",
+      "duration_sec": 2.4944375
+    },
+    {
+      "id": "T1_CMD_START_REC",
+      "description": "Command: Start Recording (US Male voice)",
+      "mode": "command",
+      "text": "start recording",
+      "voice": "am_adam",
+      "expected": "START_RECORDING",
+      "wav_file": "t1_cmd_start_recording.wav",
+      "duration_sec": 2.4940625
+    },
+    {
+      "id": "T1_CMD_NEGATION",
+      "description": "Command: Negation Rejection (US Female voice)",
+      "mode": "command",
+      "text": "do not stop recording",
+      "voice": "af_heart",
+      "expected": "REJECT:NEGATION_DETECTED",
+      "wav_file": "t1_cmd_negation.wav",
+      "duration_sec": 2.8771875
+    },
+    {
+      "id": "T1_DICT_BENCH",
+      "description": "Dictation: Technical phrase (British Female voice)",
+      "mode": "dictation",
+      "text": "The voice pipeline test bench is operational and ready.",
+      "voice": "bf_emma",
+      "expected": "pipeline test bench",
+      "wav_file": "t1_dict_bench.wav",
+      "duration_sec": 4.5905625
+    },
+    {
+      "id": "T1_NOISE_GATE",
+      "description": "Acoustic Noise: Low-level typing/room chatter below gate threshold",
+      "mode": "command",
+      "text": "",
+      "voice": "synthetic",
+      "expected": "DROPPED_BY_GATE",
+      "wav_file": "t1_noise_below_gate.wav",
+      "duration_sec": 2
+    }
+  ]
+}
