@@ -3,6 +3,8 @@ package evaluation
 import (
 	"testing"
 	"time"
+
+	"voxlab/pkg/audio"
 )
 
 func TestScoreDictation(t *testing.T) {
@@ -61,6 +63,12 @@ func TestScoreDictation(t *testing.T) {
 			wantPass: false,
 		},
 		{
+			name:     "written numbers and units are not errors",
+			item:     EvalItem{Text: "Administer two milligrams of midazolam.", AltText: "Administer 2 mg of midazolam."},
+			draft:    "Administer 2 mg of midazolam.",
+			wantPass: true,
+		},
+		{
 			name:     "default limit allows the same draft",
 			item:     EvalItem{Text: "one two three four five"},
 			draft:    "one two three four six",
@@ -84,5 +92,26 @@ func TestSpeechEndIgnoresTrailingSilence(t *testing.T) {
 	}
 	if got := speechEnd(samples); got < 960*time.Millisecond || got > 1050*time.Millisecond {
 		t.Fatalf("speech end = %v, want about 1s", got)
+	}
+}
+
+func TestUntestedKPIsAreNotPerfect(t *testing.T) {
+	r := ComputeSuiteReport("t", []ItemResult{{Class: "ACCEPT", Mode: ModeCommand, Passed: true}}, time.Second)
+	if r.IntentAccuracy == nil || *r.IntentAccuracy != 1 {
+		t.Fatalf("intent accuracy = %v, want 1", r.IntentAccuracy)
+	}
+	if r.GatePrecision != nil || r.RejectionAccuracy != nil {
+		t.Fatalf("no gate or rejection items, got %v and %v", r.GatePrecision, r.RejectionAccuracy)
+	}
+}
+
+func TestScaleToDBFS(t *testing.T) {
+	samples := make([]float32, sampleRate)
+	for i := range chunkSamples { // one loud chunk among silence
+		samples[i] = 0.5
+	}
+	scaleToDBFS(samples, -48)
+	if _, dbfs := audio.CalculateRMS(samples[:chunkSamples]); dbfs < -48.1 || dbfs > -47.9 {
+		t.Fatalf("loudest chunk at %.2f dBFS, want -48", dbfs)
 	}
 }

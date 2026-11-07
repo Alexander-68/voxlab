@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,6 +26,8 @@ type BaseUtterance struct {
 	Gender       string
 	Category     string
 	Expected     string
+	Lang         string // engine.TTSRequest.Lang
+	AltText      string // EvalItem.AltText
 }
 
 // MatrixVariation defines a perturbation variant derived from a base utterance.
@@ -152,6 +155,7 @@ func DefaultBaseUtterances() []BaseUtterance {
 			Description:  "Dictation: Patient Vitals (US Male)",
 			Mode:         ModeDictation,
 			Text:         "Patient vital signs are stable with blood pressure one twenty over eighty.",
+			AltText:      "Patient vital signs are stable with blood pressure 120 over 80.",
 			Voice:        "am_michael",
 			SpeakingRate: 1.0,
 			Accent:       "en-US",
@@ -176,6 +180,7 @@ func DefaultBaseUtterances() []BaseUtterance {
 			Description:  "Dictation: Medication Dosage (UK Female, 0.9x)",
 			Mode:         ModeDictation,
 			Text:         "Administer two milligrams of midazolam intravenously.",
+			AltText:      "Administer 2 mg of midazolam intravenously.",
 			Voice:        "bf_isabella",
 			SpeakingRate: 0.9,
 			Accent:       "en-GB",
@@ -225,6 +230,7 @@ func DefaultBaseUtterances() []BaseUtterance {
 			Mode:         ModeCommand,
 			Text:         "open settings",
 			Voice:        "ef_dora",
+			Lang:         "en", // English read with a Spanish voice, the point of this item
 			SpeakingRate: 1.0,
 			Accent:       "es",
 			Gender:       "female",
@@ -262,6 +268,7 @@ func DefaultBaseUtterances() []BaseUtterance {
 			Description:  "Dictation: Medication Dosage (Spanish Male Santa)",
 			Mode:         ModeDictation,
 			Text:         "Administrar dos miligramos de midazolam por vía intravenosa.",
+			AltText:      "Administrar 2 mg de midazolam por vía intravenosa.",
 			Voice:        "em_santa",
 			SpeakingRate: 1.0,
 			Accent:       "es-ES",
@@ -312,6 +319,7 @@ func DefaultBaseUtterances() []BaseUtterance {
 			Description:  "Dictation: Medication Dosage (Portuguese Male Santa)",
 			Mode:         ModeDictation,
 			Text:         "Administrar dois miligramas de midazolam por via intravenosa.",
+			AltText:      "Administrar 2 mg de midazolam por via intravenosa.",
 			Voice:        "pm_santa",
 			SpeakingRate: 1.0,
 			Accent:       "pt-BR",
@@ -362,6 +370,7 @@ func DefaultBaseUtterances() []BaseUtterance {
 			Description:  "Dictation: Medication Dosage (French Female)",
 			Mode:         ModeDictation,
 			Text:         "Administrer deux milligrammes de midazolam par voie intraveineuse.",
+			AltText:      "Administrer 2 mg de midazolam par voie intraveineuse.",
 			Voice:        "ff_siwis",
 			SpeakingRate: 1.0,
 			Accent:       "fr-FR",
@@ -412,6 +421,7 @@ func DefaultBaseUtterances() []BaseUtterance {
 			Description:  "Dictation: Medication Dosage (Italian Female)",
 			Mode:         ModeDictation,
 			Text:         "Somministrare due milligrammi di midazolam per via endovenosa.",
+			AltText:      "Somministrare 2 mg di midazolam per via endovenosa.",
 			Voice:        "if_sara",
 			SpeakingRate: 1.0,
 			Accent:       "it-IT",
@@ -463,6 +473,7 @@ func DefaultBaseUtterances() []BaseUtterance {
 			Description:  "Dictation: Medication Dosage (Mandarin Female Xiaoni)",
 			Mode:         ModeDictation,
 			Text:         "静脉推注咪达唑仑两毫克，密切观察患者镇静状态。",
+			AltText:      "静脉推注咪达唑仑2毫克，密切观察患者镇静状态。",
 			Voice:        "zf_xiaoni",
 			SpeakingRate: 1.0,
 			Accent:       "zh-CN",
@@ -701,6 +712,56 @@ func BuildTier2MatrixDefinitions() ([]BaseUtterance, map[string][]MatrixVariatio
 	return bases, variations
 }
 
+// scaleToDBFS sets the level of the loudest 30 ms chunk, which is what the noise gate reacts to.
+func scaleToDBFS(samples []float32, dbfs float64) {
+	var peak float64
+	for i := 0; i < len(samples); i += chunkSamples {
+		rms, _ := audio.CalculateRMS(samples[i:min(i+chunkSamples, len(samples))])
+		peak = max(peak, rms)
+	}
+	gain := float32(math.Pow(10, dbfs/20) / peak)
+	for i := range samples {
+		samples[i] *= gain
+	}
+}
+
+// LoadOrSynthesizeClip returns the 16 kHz clip at path, synthesizing and saving it first if missing.
+// Existing clips are kept, so regenerating one means deleting it.
+func LoadOrSynthesizeClip(path string, runner engine.SpeechEngine, req engine.TTSRequest) ([]float32, error) {
+	if wavData, err := os.ReadFile(path); err == nil {
+		if s, rate, err := audio.DecodeWAV(bytes.NewReader(wavData)); err == nil && len(s) > 0 {
+			if rate != 16000 {
+				s = audio.Resample(s, rate, 16000)
+			}
+			return s, nil
+		}
+	}
+	if runner == nil {
+		return nil, fmt.Errorf("speech runner required to synthesize %s", path)
+	}
+	log.Printf("   -> Synthesizing %s voice=%s rate=%.1f: %q", filepath.Base(path), req.Voice, req.Speed, req.Text)
+	res, err := runner.Synthesize(req)
+	if err != nil {
+		return nil, fmt.Errorf("synthesis failed: %w", err)
+	}
+
+	resampled := audio.Resample(res.AudioSamples, 24000, 16000)
+	samples := make([]float32, 16000*200/1000) // 200 ms lead
+	samples = append(samples, resampled...)
+	samples = append(samples, make([]float32, 16000)...) // 1 s trail
+
+	wavBytes, err := audio.EncodeWAV(samples, 16000)
+	if err != nil {
+		return nil, fmt.Errorf("failed encoding %s: %w", path, err)
+	}
+	if err := os.WriteFile(path, wavBytes, 0644); err != nil {
+		return nil, fmt.Errorf("failed writing %s: %w", path, err)
+	}
+	// Decode what was written, so perturbations match a later run that loads this clip from disk.
+	samples, _, err = audio.DecodeWAV(bytes.NewReader(wavBytes))
+	return samples, err
+}
+
 // GenerateTier2Corpus synthesizes base audio clips and creates the full acoustic degradation matrix.
 func GenerateTier2Corpus(outDir string, runner engine.SpeechEngine) (*EvalManifest, error) {
 	if err := os.MkdirAll(outDir, 0755); err != nil {
@@ -721,47 +782,15 @@ func GenerateTier2Corpus(outDir string, runner engine.SpeechEngine) (*EvalManife
 	log.Printf("[Tier2 Generator] Synthesizing %d base utterances across Kokoro voices...", len(bases))
 	for _, b := range bases {
 		baseWavFilename := fmt.Sprintf("base_%s.wav", strings.ToLower(b.BaseID))
-		baseWavPath := filepath.Join(outDir, baseWavFilename)
-
-		var samples16k []float32
-		// If base WAV exists on disk, reuse it to avoid re-synthesis overhead
-		if wavData, err := os.ReadFile(baseWavPath); err == nil {
-			if s, rate, err := audio.DecodeWAV(bytes.NewReader(wavData)); err == nil && len(s) > 0 {
-				if rate != 16000 {
-					s = audio.Resample(s, rate, 16000)
-				}
-				samples16k = s
-			}
-		}
-
-		if len(samples16k) == 0 {
-			if runner == nil {
-				return nil, fmt.Errorf("speech runner required to synthesize base utterance %s", b.BaseID)
-			}
-			log.Printf("   -> Synthesizing base [%s] voice=%s rate=%.1f: %q", b.BaseID, b.Voice, b.SpeakingRate, b.Text)
-			res, err := runner.Synthesize(engine.TTSRequest{
-				Text:       b.Text,
-				Voice:      b.Voice,
-				Speed:      b.SpeakingRate,
-				SampleRate: 24000,
-			})
-			if err != nil {
-				return nil, fmt.Errorf("synthesis failed for %s: %w", b.BaseID, err)
-			}
-
-			resampled := audio.Resample(res.AudioSamples, 24000, 16000)
-			leadSilence := make([]float32, 16000*200/1000)   // 200ms
-			trailSilence := make([]float32, 16000*1000/1000) // 1000ms
-			samples16k = append(leadSilence, resampled...)
-			samples16k = append(samples16k, trailSilence...)
-
-			wavBytes, err := audio.EncodeWAV(samples16k, 16000)
-			if err != nil {
-				return nil, fmt.Errorf("failed encoding base wav %s: %w", b.BaseID, err)
-			}
-			if err := os.WriteFile(baseWavPath, wavBytes, 0644); err != nil {
-				return nil, fmt.Errorf("failed writing base wav %s: %w", b.BaseID, err)
-			}
+		samples16k, err := LoadOrSynthesizeClip(filepath.Join(outDir, baseWavFilename), runner, engine.TTSRequest{
+			Text:       b.Text,
+			Voice:      b.Voice,
+			Speed:      b.SpeakingRate,
+			SampleRate: 24000,
+			Lang:       b.Lang,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("base utterance %s: %w", b.BaseID, err)
 		}
 
 		baseSamples[b.BaseID] = samples16k
@@ -773,6 +802,7 @@ func GenerateTier2Corpus(outDir string, runner engine.SpeechEngine) (*EvalManife
 			Description:  fmt.Sprintf("[Clean] %s", b.Description),
 			Mode:         b.Mode,
 			Text:         b.Text,
+			AltText:      b.AltText,
 			Voice:        b.Voice,
 			SpeakingRate: b.SpeakingRate,
 			Accent:       b.Accent,
@@ -817,6 +847,7 @@ func GenerateTier2Corpus(outDir string, runner engine.SpeechEngine) (*EvalManife
 				Description:  fmt.Sprintf("[%s] %s (%s)", v.Description, b.Description, b.Voice),
 				Mode:         b.Mode,
 				Text:         b.Text,
+				AltText:      b.AltText,
 				Voice:        b.Voice,
 				SpeakingRate: b.SpeakingRate,
 				Accent:       b.Accent,
@@ -833,9 +864,7 @@ func GenerateTier2Corpus(outDir string, runner engine.SpeechEngine) (*EvalManife
 	// Step 3: Add sub-gate ambient noise clips (DROPPED_BY_GATE)
 	// Sub-gate 1: Ambient room hiss (-48 dBFS)
 	hissSamples := audio.GenerateWhiteNoise(16000*2, 777)
-	for i := range hissSamples {
-		hissSamples[i] *= 0.003 // ~ -48 dBFS
-	}
+	scaleToDBFS(hissSamples, -48)
 	hissBytes, _ := audio.EncodeWAV(hissSamples, 16000)
 	hissPath := filepath.Join(outDir, "t2_subgate_hiss.wav")
 	_ = os.WriteFile(hissPath, hissBytes, 0644)
@@ -852,11 +881,9 @@ func GenerateTier2Corpus(outDir string, runner engine.SpeechEngine) (*EvalManife
 		DurationSec: 2.0,
 	})
 
-	// Sub-gate 2: Light keyboard clicks below -42 dBFS gate
+	// Sub-gate 2: Light keyboard clicks, loudest 30 ms at -46 dBFS, below the -42 dBFS gate
 	clicksSamples := audio.GenerateTypingNoise(16000*2, 16000, 888)
-	for i := range clicksSamples {
-		clicksSamples[i] *= 0.012 // Low peak amp
-	}
+	scaleToDBFS(clicksSamples, -46)
 	clicksBytes, _ := audio.EncodeWAV(clicksSamples, 16000)
 	clicksPath := filepath.Join(outDir, "t2_subgate_clicks.wav")
 	_ = os.WriteFile(clicksPath, clicksBytes, 0644)

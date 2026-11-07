@@ -96,8 +96,8 @@ func TestTier2DeepAcousticMatrix(t *testing.T) {
 		t.Fatalf("Tier-2 evaluation failed with error: %v", err)
 	}
 
-	t.Logf("=== Tier-2 Deep Acoustic Matrix Finished: %d/%d Passed (PassRate=%.1f%%, AvgWER=%.2f, IntentAcc=%.1f%%) ===",
-		report.Passed, report.TotalCases, report.PassRate*100.0, report.AvgWER, report.IntentAccuracy*100.0)
+	t.Logf("=== Tier-2 Deep Acoustic Matrix Finished: %d/%d Passed (PassRate=%.1f%%, AvgWER=%.2f) ===",
+		report.Passed, report.TotalCases, report.PassRate*100.0, report.AvgWER)
 
 	if report.PassRate < 0.80 {
 		t.Fatalf("Tier-2 pass rate below acceptable threshold: got %.1f%%", report.PassRate*100.0)

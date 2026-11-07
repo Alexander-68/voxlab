@@ -1,0 +1,217 @@
+{
+  "tier": "tier-1-smoke",
+  "config": {
+    "engine": "sherpa",
+    "asr_model": "sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11",
+    "second_pass_model": "sherpa-onnx-nemo-parakeet-tdt-0.6b-ultra-int8",
+    "second_pass_command": false,
+    "second_pass_dictation": true,
+    "feed": "realtime",
+    "gate_dbfs": -42,
+    "gate_enabled": true,
+    "agc": true,
+    "highpass": true,
+    "enhancer": "GTCRN Neural Denoiser",
+    "input_language": "en-US",
+    "commit": "c208fa9ba35e93b35f2248f53f10ced743e56490-dirty"
+  },
+  "dropped_chunks": 0,
+  "total_cases": 5,
+  "passed": 5,
+  "failed": 0,
+  "pass_rate": 1,
+  "avg_wer": 0,
+  "avg_cer": 0,
+  "intent_accuracy": 1,
+  "rejection_accuracy": 1,
+  "gate_precision": 1,
+  "duration": 17411786000,
+  "latency_stats": {
+    "ttft": {
+      "min_ms": 755,
+      "max_ms": 1382,
+      "avg_ms": 1210.3,
+      "p50_ms": 1374,
+      "p90_ms": 1382,
+      "p95_ms": 1382,
+      "p99_ms": 1382
+    },
+    "endpoint_delay": {
+      "min_ms": 780,
+      "max_ms": 1231,
+      "avg_ms": 1080.3,
+      "p50_ms": 1230,
+      "p90_ms": 1231,
+      "p95_ms": 1231,
+      "p99_ms": 1231
+    },
+    "second_pass": {
+      "min_ms": 247,
+      "max_ms": 247,
+      "avg_ms": 247,
+      "p50_ms": 247,
+      "p90_ms": 247,
+      "p95_ms": 247,
+      "p99_ms": 247
+    },
+    "total_duration": {
+      "min_ms": 2483,
+      "max_ms": 6362,
+      "avg_ms": 3481.8,
+      "p50_ms": 2517,
+      "p90_ms": 6362,
+      "p95_ms": 6362,
+      "p99_ms": 6362
+    }
+  },
+  "snr_curve": [
+    {
+      "label": "Clean",
+      "count": 5,
+      "passed": 5,
+      "pass_rate": 1,
+      "avg_wer": 0,
+      "avg_cer": 0,
+      "intent_accuracy": 1,
+      "avg_latency_ms": 3481.8
+    }
+  ],
+  "voice_breakdown": {
+    "af_heart": {
+      "key": "af_heart",
+      "count": 2,
+      "passed": 2,
+      "pass_rate": 1,
+      "avg_wer": 0,
+      "avg_cer": 0
+    },
+    "am_adam": {
+      "key": "am_adam",
+      "count": 1,
+      "passed": 1,
+      "pass_rate": 1,
+      "avg_wer": 0,
+      "avg_cer": 0
+    },
+    "bf_emma": {
+      "key": "bf_emma",
+      "count": 1,
+      "passed": 1,
+      "pass_rate": 1,
+      "avg_wer": 0,
+      "avg_cer": 0
+    },
+    "synthetic": {
+      "key": "synthetic",
+      "count": 1,
+      "passed": 1,
+      "pass_rate": 1,
+      "avg_wer": 0,
+      "avg_cer": 0
+    }
+  },
+  "rate_breakdown": {},
+  "noise_breakdown": {
+    "clean": {
+      "key": "clean",
+      "count": 5,
+      "passed": 5,
+      "pass_rate": 1,
+      "avg_wer": 0,
+      "avg_cer": 0
+    }
+  },
+  "results": [
+    {
+      "id": "T1_CMD_SETTINGS",
+      "description": "Command: Open Settings (US Female voice)",
+      "mode": "command",
+      "voice": "af_heart",
+      "wav_file": "t1_cmd_settings.wav",
+      "passed": true,
+      "transcript": "Open settings",
+      "intent_id": "NAV_SETTINGS",
+      "confidence": 1,
+      "class": "ACCEPT",
+      "decision": "ACCEPT",
+      "wer": 0,
+      "cer": 0,
+      "duration": 2515969800,
+      "ttft": 1382684800,
+      "endpoint_delay": 1230650500,
+      "second_pass_latency": 0
+    },
+    {
+      "id": "T1_CMD_START_REC",
+      "description": "Command: Start Recording (US Male voice)",
+      "mode": "command",
+      "voice": "am_adam",
+      "wav_file": "t1_cmd_start_recording.wav",
+      "passed": true,
+      "transcript": "Start recording",
+      "intent_id": "START_RECORDING",
+      "confidence": 1,
+      "class": "ACCEPT",
+      "decision": "ACCEPT",
+      "wer": 0,
+      "cer": 0,
+      "duration": 2517551800,
+      "ttft": 1330903500,
+      "endpoint_delay": 1231053100,
+      "second_pass_latency": 0
+    },
+    {
+      "id": "T1_CMD_NEGATION",
+      "description": "Command: Negation Rejection (US Female voice)",
+      "mode": "command",
+      "voice": "af_heart",
+      "wav_file": "t1_cmd_negation.wav",
+      "passed": true,
+      "transcript": "Do not stop recording",
+      "class": "REJECT",
+      "decision": "REJECT",
+      "reason": "NEGATION_DETECTED",
+      "wer": 0,
+      "cer": 0,
+      "duration": 2483091700,
+      "ttft": 1374410800,
+      "endpoint_delay": 780626600,
+      "second_pass_latency": 0
+    },
+    {
+      "id": "T1_DICT_BENCH",
+      "description": "Dictation: Technical phrase (British Female voice)",
+      "mode": "dictation",
+      "voice": "bf_emma",
+      "wav_file": "t1_dict_bench.wav",
+      "passed": true,
+      "transcript": "The Voice Pipeline test bench is operational and ready.",
+      "class": "ACCEPT",
+      "decision": "ACCEPT",
+      "wer": 0,
+      "cer": 0,
+      "duration": 6362071200,
+      "ttft": 755115300,
+      "endpoint_delay": 0,
+      "second_pass_latency": 247000000,
+      "key_term_hit": true
+    },
+    {
+      "id": "T1_NOISE_GATE",
+      "description": "Acoustic Noise: Low-level typing/room chatter below gate threshold",
+      "mode": "command",
+      "voice": "synthetic",
+      "wav_file": "t1_noise_below_gate.wav",
+      "passed": true,
+      "transcript": "",
+      "class": "SILENCE",
+      "decision": "SILENCE",
+      "wer": 0,
+      "cer": 0,
+      "duration": 3532228100,
+      "ttft": 0,
+      "endpoint_delay": 0,
+      "second_pass_latency": 0
+    }
+  ]
+}

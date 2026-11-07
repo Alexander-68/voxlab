@@ -17,7 +17,10 @@ import (
 	"voxlab/pkg/server"
 )
 
-func main() {
+func main() { os.Exit(run()) }
+
+// run returns the exit code, so deferred cleanup stops the ASR daemons on every path.
+func run() int {
 	tierFlag := flag.String("tier", "2", "Evaluation tier to benchmark: '1' (smoke) or '2' (deep acoustic matrix)")
 	manifestFlag := flag.String("manifest", "", "Custom path to manifest.json (overrides default tier directory)")
 	quickFlag := flag.Bool("quick", false, "Quick run: limit to first 12 cases for fast turnaround")
@@ -60,7 +63,8 @@ func main() {
 
 	srv, err := server.NewServer(cfg)
 	if err != nil {
-		log.Fatalf("[Fatal] Failed initializing VoxLab server: %v", err)
+		log.Printf("[Fatal] Failed initializing VoxLab server: %v", err)
+		return 1
 	}
 	defer func() { _ = srv.Stop(context.Background()) }()
 
@@ -72,10 +76,12 @@ func main() {
 			time.Sleep(100 * time.Millisecond)
 		}
 		if !runner.ASRReady() {
-			log.Fatalf("Sherpa warm ASR not ready within timeout")
+			log.Print("Sherpa warm ASR not ready within timeout")
+			return 1
 		}
 		if err := srv.SetASREngineMode("sherpa"); err != nil {
-			log.Fatalf("failed setting ASR engine mode to sherpa: %v", err)
+			log.Printf("failed setting ASR engine mode to sherpa: %v", err)
+			return 1
 		}
 		fmt.Println(" [READY]")
 	} else {
@@ -120,8 +126,8 @@ func main() {
 			verdict, res.WER, fmt.Sprintf("%dms", res.Duration.Milliseconds()), outcome)
 	})
 
-	if err != nil && err != context.Canceled {
-		fmt.Printf("\n[Notice] Benchmark completed with note: %v\n", err)
+	if err != nil {
+		fmt.Printf("\n[Error] Benchmark did not finish: %v\n", err)
 	}
 
 	// 2. Render ASCII Reporting Tables
@@ -130,12 +136,27 @@ func main() {
 	// 3. Save report JSON
 	outPath := *outFlag
 	if outPath == "" {
-		outPath = filepath.Join("data", fmt.Sprintf("eval_report_tier%s.json", tier))
+		outPath = filepath.Join("data", fmt.Sprintf("eval_report_%s.json", manifest.Tier)) // the name the server reads
 	}
-	reportJSON, _ := json.MarshalIndent(report, "", "  ")
-	if err := os.WriteFile(outPath, reportJSON, 0644); err == nil {
-		fmt.Printf("\nFull JSON evaluation report saved to: %s\n\n", outPath)
+	reportJSON, saveErr := json.MarshalIndent(report, "", "  ")
+	if saveErr == nil {
+		saveErr = os.WriteFile(outPath, reportJSON, 0644)
 	}
+	if saveErr != nil {
+		fmt.Printf("\n[Error] Could not save report to %s: %v\n", outPath, saveErr)
+		return 1
+	}
+	fmt.Printf("\nFull JSON evaluation report saved to: %s\n\n", outPath)
+
+	minPass := 0.80 // same bar as the Tier 2 test
+	if tier == "1" {
+		minPass = 1.0
+	}
+	if err != nil || report.PassRate < minPass {
+		fmt.Printf("[FAIL] Pass rate %.1f%%, required %.0f%%\n", report.PassRate*100, minPass*100)
+		return 1
+	}
+	return 0
 }
 
 func printReportSummary(r *evaluation.SuiteReport) {
@@ -144,7 +165,7 @@ func printReportSummary(r *evaluation.SuiteReport) {
 	fmt.Println("=========================================================================================")
 	fmt.Printf(" Total Tests:       %-4d | Passed:            %-4d | Failed:        %d\n", r.TotalCases, r.Passed, r.Failed)
 	fmt.Printf(" Pass Rate:         %5.1f%% | Mean WER:          %5.2f | Mean CER:      %5.2f\n", r.PassRate*100.0, r.AvgWER, r.AvgCER)
-	fmt.Printf(" Intent Accuracy:   %5.1f%% | Rejection Prec:    %5.1f%% | Gate Prec:     %5.1f%%\n", r.IntentAccuracy*100.0, r.RejectionAccuracy*100.0, r.GatePrecision*100.0)
+	fmt.Printf(" Intent Accuracy:   %6s | Rejection Prec:    %6s | Gate Prec:     %6s\n", pct(r.IntentAccuracy), pct(r.RejectionAccuracy), pct(r.GatePrecision))
 	fmt.Printf(" Total Elapsed:     %v\n", r.Duration.Round(time.Millisecond))
 
 	// SNR Degradation Ladder Table
@@ -205,4 +226,11 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen-3] + "..."
+}
+
+func pct(v *float64) string {
+	if v == nil {
+		return "n/a"
+	}
+	return fmt.Sprintf("%.1f%%", *v*100.0)
 }

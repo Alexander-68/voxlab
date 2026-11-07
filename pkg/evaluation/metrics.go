@@ -77,9 +77,9 @@ type SuiteReport struct {
 	PassRate          float64                   `json:"pass_rate"`
 	AvgWER            float64                   `json:"avg_wer"`
 	AvgCER            float64                   `json:"avg_cer"`
-	IntentAccuracy    float64                   `json:"intent_accuracy"`
-	RejectionAccuracy float64                   `json:"rejection_accuracy"`
-	GatePrecision     float64                   `json:"gate_precision"`
+	IntentAccuracy    *float64                  `json:"intent_accuracy"`    // null: no such items in this run
+	RejectionAccuracy *float64                  `json:"rejection_accuracy"` // null: no such items in this run
+	GatePrecision     *float64                  `json:"gate_precision"`     // null: no such items in this run
 	Duration          time.Duration             `json:"duration"`
 	LatencyStats      LatencyStatistics         `json:"latency_stats"`
 	SNRCurve          []SNRCurvePoint           `json:"snr_curve"`
@@ -212,24 +212,24 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 		}
 
 		// WER / CER
-		if res.Decision == "ACCEPT" {
+		if res.Class == "ACCEPT" {
 			totalWER += res.WER
 			totalCER += res.CER
 			werCount++
 		}
 
 		// Category counts
-		if res.Mode == ModeCommand && res.Decision == "ACCEPT" {
+		if res.Mode == ModeCommand && res.Class == "ACCEPT" {
 			validCmdCount++
 			if res.Passed {
 				validCmdPassed++
 			}
-		} else if res.Decision == "REJECT" {
+		} else if res.Class == "REJECT" {
 			adversarialCount++
 			if res.Passed {
 				adversarialPassed++
 			}
-		} else if res.Decision == "SILENCE" {
+		} else if res.Class == "SILENCE" {
 			gateCount++
 			if res.Passed {
 				gatePassed++
@@ -247,12 +247,12 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 		if res.Passed {
 			sEntry.passed++
 		}
-		if res.Decision == "ACCEPT" {
+		if res.Class == "ACCEPT" {
 			sEntry.werSum += res.WER
 			sEntry.cerSum += res.CER
 			sEntry.werCount++
 		}
-		if res.Mode == ModeCommand && res.Decision == "ACCEPT" {
+		if res.Mode == ModeCommand && res.Class == "ACCEPT" {
 			sEntry.cmdCount++
 			if res.Passed {
 				sEntry.cmdPass++
@@ -271,7 +271,7 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 			if res.Passed {
 				vEntry.passed++
 			}
-			if res.Decision == "ACCEPT" {
+			if res.Class == "ACCEPT" {
 				vEntry.werSum += res.WER
 				vEntry.cerSum += res.CER
 				vEntry.werCount++
@@ -290,7 +290,7 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 			if res.Passed {
 				rEntry.passed++
 			}
-			if res.Decision == "ACCEPT" {
+			if res.Class == "ACCEPT" {
 				rEntry.werSum += res.WER
 				rEntry.cerSum += res.CER
 				rEntry.werCount++
@@ -311,7 +311,7 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 		if res.Passed {
 			nEntry.passed++
 		}
-		if res.Decision == "ACCEPT" {
+		if res.Class == "ACCEPT" {
 			nEntry.werSum += res.WER
 			nEntry.cerSum += res.CER
 			nEntry.werCount++
@@ -323,21 +323,9 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 		report.AvgWER = totalWER / float64(werCount)
 		report.AvgCER = totalCER / float64(werCount)
 	}
-	if validCmdCount > 0 {
-		report.IntentAccuracy = float64(validCmdPassed) / float64(validCmdCount)
-	} else {
-		report.IntentAccuracy = 1.0
-	}
-	if adversarialCount > 0 {
-		report.RejectionAccuracy = float64(adversarialPassed) / float64(adversarialCount)
-	} else {
-		report.RejectionAccuracy = 1.0
-	}
-	if gateCount > 0 {
-		report.GatePrecision = float64(gatePassed) / float64(gateCount)
-	} else {
-		report.GatePrecision = 1.0
-	}
+	report.IntentAccuracy = passRatio(validCmdPassed, validCmdCount)
+	report.RejectionAccuracy = passRatio(adversarialPassed, adversarialCount)
+	report.GatePrecision = passRatio(gatePassed, gateCount)
 
 	// Latency percentiles
 	report.LatencyStats = LatencyStatistics{
@@ -433,4 +421,13 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 	}
 
 	return report
+}
+
+// passRatio is passed/count, or nil with no data, so an untested KPI cannot read as perfect.
+func passRatio(passed, count int) *float64 {
+	if count == 0 {
+		return nil
+	}
+	r := float64(passed) / float64(count)
+	return &r
 }

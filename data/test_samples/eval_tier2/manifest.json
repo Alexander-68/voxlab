@@ -133,6 +133,7 @@
       "description": "[Clean] Dictation: Patient Vitals (US Male)",
       "mode": "dictation",
       "text": "Patient vital signs are stable with blood pressure one twenty over eighty.",
+      "alt_text": "Patient vital signs are stable with blood pressure 120 over 80.",
       "voice": "am_michael",
       "speaking_rate": 1,
       "noise_type": "clean",
@@ -161,6 +162,7 @@
       "description": "[Clean] Dictation: Medication Dosage (UK Female, 0.9x)",
       "mode": "dictation",
       "text": "Administer two milligrams of midazolam intravenously.",
+      "alt_text": "Administer 2 mg of midazolam intravenously.",
       "voice": "bf_isabella",
       "speaking_rate": 0.9,
       "noise_type": "clean",
@@ -238,7 +240,7 @@
       "category": "dictation",
       "expected": "signos vitales",
       "wav_file": "base_dict_es_vitals_ef.wav",
-      "duration_sec": 5.7720625
+      "duration_sec": 5.670875
     },
     {
       "id": "T2_CLEAN_DICT_ES_INCISION_AM",
@@ -252,13 +254,14 @@
       "category": "dictation",
       "expected": "sitio de la incisión",
       "wav_file": "base_dict_es_incision_am.wav",
-      "duration_sec": 5.908125
+      "duration_sec": 5.6459375
     },
     {
       "id": "T2_CLEAN_DICT_ES_MED_ES",
       "description": "[Clean] Dictation: Medication Dosage (Spanish Male Santa)",
       "mode": "dictation",
       "text": "Administrar dos miligramos de midazolam por vía intravenosa.",
+      "alt_text": "Administrar 2 mg de midazolam por vía intravenosa.",
       "voice": "em_santa",
       "speaking_rate": 1,
       "noise_type": "clean",
@@ -266,7 +269,7 @@
       "category": "dictation",
       "expected": "midazolam",
       "wav_file": "base_dict_es_med_es.wav",
-      "duration_sec": 5.3155625
+      "duration_sec": 4.96025
     },
     {
       "id": "T2_CLEAN_DICT_ES_BENCH_EF",
@@ -280,7 +283,7 @@
       "category": "dictation",
       "expected": "banco de pruebas",
       "wav_file": "base_dict_es_bench_ef.wav",
-      "duration_sec": 5.221
+      "duration_sec": 4.8209375
     },
     {
       "id": "T2_CLEAN_DICT_PT_VITALS_PF",
@@ -294,7 +297,7 @@
       "category": "dictation",
       "expected": "sinais vitais",
       "wav_file": "base_dict_pt_vitals_pf.wav",
-      "duration_sec": 6.1071875
+      "duration_sec": 5.5346875
     },
     {
       "id": "T2_CLEAN_DICT_PT_INCISION_PM",
@@ -308,13 +311,14 @@
       "category": "dictation",
       "expected": "incisão cirúrgica",
       "wav_file": "base_dict_pt_incision_pm.wav",
-      "duration_sec": 5.3853125
+      "duration_sec": 5.3689375
     },
     {
       "id": "T2_CLEAN_DICT_PT_MED_PS",
       "description": "[Clean] Dictation: Medication Dosage (Portuguese Male Santa)",
       "mode": "dictation",
       "text": "Administrar dois miligramas de midazolam por via intravenosa.",
+      "alt_text": "Administrar 2 mg de midazolam por via intravenosa.",
       "voice": "pm_santa",
       "speaking_rate": 1,
       "noise_type": "clean",
@@ -322,7 +326,7 @@
       "category": "dictation",
       "expected": "midazolam",
       "wav_file": "base_dict_pt_med_ps.wav",
-      "duration_sec": 5.4568125
+      "duration_sec": 5.1693125
     },
     {
       "id": "T2_CLEAN_DICT_PT_STATUS_PF",
@@ -336,7 +340,7 @@
       "category": "dictation",
       "expected": "processamento de voz",
       "wav_file": "base_dict_pt_status_pf.wav",
-      "duration_sec": 5.0184375
+      "duration_sec": 4.85525
     },
     {
       "id": "T2_CLEAN_DICT_FR_VITALS_FF",
@@ -350,7 +354,7 @@
       "category": "dictation",
       "expected": "constantes vitales",
       "wav_file": "base_dict_fr_vitals_ff.wav",
-      "duration_sec": 7.658125
+      "duration_sec": 5.966875
     },
     {
       "id": "T2_CLEAN_DICT_FR_INCISION_FF",
@@ -364,13 +368,14 @@
       "category": "dictation",
       "expected": "site incisionnel",
       "wav_file": "base_dict_fr_incision_ff.wav",
-      "duration_sec": 6.725125
+      "duration_sec": 5.677125
     },
     {
       "id": "T2_CLEAN_DICT_FR_MED_FF",
       "description": "[Clean] Dictation: Medication Dosage (French Female)",
       "mode": "dictation",
       "text": "Administrer deux milligrammes de midazolam par voie intraveineuse.",
+      "alt_text": "Administrer 2 mg de midazolam par voie intraveineuse.",
       "voice": "ff_siwis",
       "speaking_rate": 1,
       "noise_type": "clean",
@@ -378,7 +383,7 @@
       "category": "dictation",
       "expected": "midazolam",
       "wav_file": "base_dict_fr_med_ff.wav",
-      "duration_sec": 5.5655625
+      "duration_sec": 5.3174375
     },
     {
       "id": "T2_CLEAN_DICT_FR_BENCH_FF",
@@ -392,7 +397,7 @@
       "category": "dictation",
       "expected": "banc d'essai",
       "wav_file": "base_dict_fr_bench_ff.wav",
-      "duration_sec": 5.9268125
+      "duration_sec": 4.9021875
     },
     {
       "id": "T2_CLEAN_DICT_IT_VITALS_IF",
@@ -406,7 +411,7 @@
       "category": "dictation",
       "expected": "parametri vitali",
       "wav_file": "base_dict_it_vitals_if.wav",
-      "duration_sec": 6.2393125
+      "duration_sec": 6.044375
     },
     {
       "id": "T2_CLEAN_DICT_IT_INCISION_IM",
@@ -420,13 +425,14 @@
       "category": "dictation",
       "expected": "ferita chirurgica",
       "wav_file": "base_dict_it_incision_im.wav",
-      "duration_sec": 6.6125625
+      "duration_sec": 5.9266875
     },
     {
       "id": "T2_CLEAN_DICT_IT_MED_IF",
       "description": "[Clean] Dictation: Medication Dosage (Italian Female)",
       "mode": "dictation",
       "text": "Somministrare due milligrammi di midazolam per via endovenosa.",
+      "alt_text": "Somministrare 2 mg di midazolam per via endovenosa.",
       "voice": "if_sara",
       "speaking_rate": 1,
       "noise_type": "clean",
@@ -434,7 +440,7 @@
       "category": "dictation",
       "expected": "midazolam",
       "wav_file": "base_dict_it_med_if.wav",
-      "duration_sec": 5.0768125
+      "duration_sec": 5.083
     },
     {
       "id": "T2_CLEAN_DICT_IT_BENCH_IM",
@@ -448,7 +454,7 @@
       "category": "dictation",
       "expected": "riconoscimento vocale",
       "wav_file": "base_dict_it_bench_im.wav",
-      "duration_sec": 5.5050625
+      "duration_sec": 4.98125
     },
     {
       "id": "T2_CLEAN_DICT_ZH_VITALS_XB",
@@ -483,6 +489,7 @@
       "description": "[Clean] Dictation: Medication Dosage (Mandarin Female Xiaoni)",
       "mode": "dictation",
       "text": "静脉推注咪达唑仑两毫克，密切观察患者镇静状态。",
+      "alt_text": "静脉推注咪达唑仑2毫克，密切观察患者镇静状态。",
       "voice": "zf_xiaoni",
       "speaking_rate": 1,
       "noise_type": "clean",
@@ -1146,6 +1153,7 @@
       "description": "[White Noise SNR +20 dB] Dictation: Patient Vitals (US Male) (am_michael)",
       "mode": "dictation",
       "text": "Patient vital signs are stable with blood pressure one twenty over eighty.",
+      "alt_text": "Patient vital signs are stable with blood pressure 120 over 80.",
       "voice": "am_michael",
       "speaking_rate": 1,
       "snr_db": 20,
@@ -1161,6 +1169,7 @@
       "description": "[White Noise SNR +10 dB] Dictation: Patient Vitals (US Male) (am_michael)",
       "mode": "dictation",
       "text": "Patient vital signs are stable with blood pressure one twenty over eighty.",
+      "alt_text": "Patient vital signs are stable with blood pressure 120 over 80.",
       "voice": "am_michael",
       "speaking_rate": 1,
       "snr_db": 10,
@@ -1176,6 +1185,7 @@
       "description": "[White Noise SNR +5 dB] Dictation: Patient Vitals (US Male) (am_michael)",
       "mode": "dictation",
       "text": "Patient vital signs are stable with blood pressure one twenty over eighty.",
+      "alt_text": "Patient vital signs are stable with blood pressure 120 over 80.",
       "voice": "am_michael",
       "speaking_rate": 1,
       "snr_db": 5,
@@ -1191,6 +1201,7 @@
       "description": "[White Noise SNR 0 dB] Dictation: Patient Vitals (US Male) (am_michael)",
       "mode": "dictation",
       "text": "Patient vital signs are stable with blood pressure one twenty over eighty.",
+      "alt_text": "Patient vital signs are stable with blood pressure 120 over 80.",
       "voice": "am_michael",
       "speaking_rate": 1,
       "snr_db": 0,
@@ -1206,6 +1217,7 @@
       "description": "[Typing Clacks SNR +15 dB] Dictation: Patient Vitals (US Male) (am_michael)",
       "mode": "dictation",
       "text": "Patient vital signs are stable with blood pressure one twenty over eighty.",
+      "alt_text": "Patient vital signs are stable with blood pressure 120 over 80.",
       "voice": "am_michael",
       "speaking_rate": 1,
       "snr_db": 15,
@@ -1221,6 +1233,7 @@
       "description": "[Typing Clacks SNR +5 dB] Dictation: Patient Vitals (US Male) (am_michael)",
       "mode": "dictation",
       "text": "Patient vital signs are stable with blood pressure one twenty over eighty.",
+      "alt_text": "Patient vital signs are stable with blood pressure 120 over 80.",
       "voice": "am_michael",
       "speaking_rate": 1,
       "snr_db": 5,
@@ -1236,6 +1249,7 @@
       "description": "[Room Reverberation (RT60 ~0.4s)] Dictation: Patient Vitals (US Male) (am_michael)",
       "mode": "dictation",
       "text": "Patient vital signs are stable with blood pressure one twenty over eighty.",
+      "alt_text": "Patient vital signs are stable with blood pressure 120 over 80.",
       "voice": "am_michael",
       "speaking_rate": 1,
       "snr_db": 15,
@@ -1379,7 +1393,7 @@
       "category": "dictation",
       "expected": "signos vitales",
       "wav_file": "t2_dict_es_vitals_ef_snr15_pink.wav",
-      "duration_sec": 5.7720625
+      "duration_sec": 5.670875
     },
     {
       "id": "T2_DICT_PT_VITALS_PF_SNR15_PINK",
@@ -1394,7 +1408,7 @@
       "category": "dictation",
       "expected": "sinais vitais",
       "wav_file": "t2_dict_pt_vitals_pf_snr15_pink.wav",
-      "duration_sec": 6.1071875
+      "duration_sec": 5.5346875
     },
     {
       "id": "T2_DICT_FR_VITALS_FF_SNR15_PINK",
@@ -1409,7 +1423,7 @@
       "category": "dictation",
       "expected": "constantes vitales",
       "wav_file": "t2_dict_fr_vitals_ff_snr15_pink.wav",
-      "duration_sec": 7.658125
+      "duration_sec": 5.966875
     },
     {
       "id": "T2_DICT_IT_VITALS_IF_SNR15_PINK",
@@ -1424,7 +1438,7 @@
       "category": "dictation",
       "expected": "parametri vitali",
       "wav_file": "t2_dict_it_vitals_if_snr15_pink.wav",
-      "duration_sec": 6.2393125
+      "duration_sec": 6.044375
     },
     {
       "id": "T2_DICT_ZH_VITALS_XB_SNR15_PINK",

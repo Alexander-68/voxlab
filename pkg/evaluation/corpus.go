@@ -23,6 +23,7 @@ type EvalItem struct {
 	Description  string       `json:"description"`
 	Mode         TestCaseMode `json:"mode"`
 	Text         string       `json:"text"`
+	AltText      string       `json:"alt_text,omitempty"` // same words in written form ("2 mg"), scored as equally correct
 	Voice        string       `json:"voice"`
 	SpeakingRate float64      `json:"speaking_rate,omitempty"`
 	SNR          *float64     `json:"snr_db,omitempty"`
@@ -41,9 +42,10 @@ const DefaultMaxErrorRate = 0.35
 // ScoreDictation grades a draft on one error rate: CER for CJK references, which have no word
 // boundaries, otherwise WER. A key term in the draft is reported but cannot rescue a bad transcript.
 func ScoreDictation(item EvalItem, draft string) (errorRate float64, passed, keyTermHit bool) {
-	errorRate = CalculateWER(item.Text, draft)
-	if strings.ContainsFunc(item.Text, isCJK) {
-		errorRate = CalculateCER(item.Text, draft)
+	ref := BestReference(item, draft)
+	errorRate = CalculateWER(ref, draft)
+	if strings.ContainsFunc(ref, isCJK) {
+		errorRate = CalculateCER(ref, draft)
 	}
 	limit := DefaultMaxErrorRate
 	if item.MaxErrorRate != nil {
@@ -51,6 +53,15 @@ func ScoreDictation(item EvalItem, draft string) (errorRate float64, passed, key
 	}
 	keyTermHit = item.Expected != "" && strings.Contains(strings.ToLower(draft), strings.ToLower(item.Expected))
 	return errorRate, draft != "" && errorRate <= limit, keyTermHit
+}
+
+// BestReference picks the accepted wording closest to the hypothesis. Models write numbers and units
+// their own way, and "2 mg" for "two milligrams" is not a recognition error.
+func BestReference(item EvalItem, hypothesis string) string {
+	if item.AltText != "" && CalculateWER(item.AltText, hypothesis) < CalculateWER(item.Text, hypothesis) {
+		return item.AltText
+	}
+	return item.Text
 }
 
 // EvalManifest represents a suite of test items.

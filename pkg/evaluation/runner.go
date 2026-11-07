@@ -27,11 +27,13 @@ type ItemResult struct {
 	SNR               *float64      `json:"snr_db,omitempty"`
 	NoiseType         string        `json:"noise_type,omitempty"`
 	Accent            string        `json:"accent,omitempty"`
+	WavFile           string        `json:"wav_file,omitempty"`
 	Passed            bool          `json:"passed"`
 	Transcript        string        `json:"transcript"`
 	IntentID          string        `json:"intent_id,omitempty"`
 	Confidence        float64       `json:"confidence,omitempty"`
-	Decision          string        `json:"decision,omitempty"` // "ACCEPT", "REJECT", "SILENCE"
+	Class             string        `json:"class,omitempty"`    // what the item expects: "ACCEPT", "REJECT", "SILENCE"
+	Decision          string        `json:"decision,omitempty"` // what the pipeline did, same values
 	Reason            string        `json:"reason,omitempty"`
 	WER               float64       `json:"wer"`
 	CER               float64       `json:"cer"`
@@ -163,6 +165,7 @@ func (r *EvalRunner) EvaluateItem(ctx context.Context, item EvalItem, wavPath st
 		SNR:          item.SNR,
 		NoiseType:    item.NoiseType,
 		Accent:       item.Accent,
+		WavFile:      item.WavFile,
 	}
 
 	wavData, err := os.ReadFile(wavPath)
@@ -212,18 +215,20 @@ func (r *EvalRunner) EvaluateItem(ctx context.Context, item EvalItem, wavPath st
 
 	// Drain messages in background
 	var (
-		mu                 sync.Mutex
-		state              string
-		receivedIntent     string
-		receivedConf       float64
-		receivedReject     string
-		receivedClarify    string
-		finalTranscript    string
-		receivedDraft      string
-		droppedChunks      int
-		firstPartialTime   time.Time
-		finalRecvTime      time.Time
-		secondPassRecvTime time.Time
+		mu               sync.Mutex
+		state            string
+		receivedIntent   string
+		receivedConf     float64
+		receivedReject   string
+		receivedClarify  string
+		finalTranscript  string
+		receivedDraft    string
+		droppedChunks    int
+		feeding          bool // this item's audio is flowing, so meter events describe it
+		gateOpened       bool
+		firstPartialTime time.Time
+		finalRecvTime    time.Time
+		secondPassMs     float64 // summed: a dictation can refine several segments
 	)
 
 	go func() {
@@ -248,6 +253,10 @@ func (r *EvalRunner) EvaluateItem(ctx context.Context, item EvalItem, wavPath st
 			case "voice.state":
 				if to, ok := msg.Data["to_state"].(string); ok {
 					state = to
+				}
+			case "audio.meter":
+				if open, _ := msg.Data["passed_gate"].(bool); open && feeding {
+					gateOpened = true
 				}
 			case "asr.queue_overflow":
 				droppedChunks++
@@ -284,15 +293,12 @@ func (r *EvalRunner) EvaluateItem(ctx context.Context, item EvalItem, wavPath st
 					finalRecvTime = now
 				}
 			case "transcript.refined":
-				if secondPassRecvTime.IsZero() {
-					secondPassRecvTime = now
+				if ms, ok := msg.Data["latency_ms"].(float64); ok {
+					secondPassMs += ms
 				}
 			case "annotation.draft":
 				if d, ok := msg.Data["draft_text"].(string); ok {
 					receivedDraft = d
-				}
-				if secondPassRecvTime.IsZero() {
-					secondPassRecvTime = now
 				}
 			}
 			mu.Unlock()
@@ -356,6 +362,9 @@ func (r *EvalRunner) EvaluateItem(ctx context.Context, item EvalItem, wavPath st
 	// 2. Stream audio at real time, as a microphone would. Latencies are only meaningful at
 	// this pace, and faster feeds overflow the ASR queue during a second pass.
 	streamStartTime := time.Now()
+	mu.Lock()
+	feeding = true
+	mu.Unlock()
 	nextChunk := streamStartTime
 	send := func(pcm []byte) error {
 		if err := conn.WriteMessage(websocket.BinaryMessage, pcm); err != nil {
@@ -428,37 +437,46 @@ func (r *EvalRunner) EvaluateItem(ctx context.Context, item EvalItem, wavPath st
 	if !finalRecvTime.IsZero() && finalRecvTime.After(speechEndTime) {
 		res.EndpointDelay = finalRecvTime.Sub(speechEndTime)
 	}
-	if !secondPassRecvTime.IsZero() && !finalRecvTime.IsZero() && secondPassRecvTime.After(finalRecvTime) {
-		res.SecondPassLatency = secondPassRecvTime.Sub(finalRecvTime)
+	res.SecondPassLatency = time.Duration(secondPassMs * float64(time.Millisecond))
+
+	switch {
+	case receivedReject != "" || receivedClarify != "":
+		res.Decision = "REJECT"
+	case receivedIntent != "" || receivedDraft != "":
+		res.Decision = "ACCEPT"
+	default:
+		res.Decision = "SILENCE"
 	}
 
 	// Check pass / fail conditions
 	switch {
 	case item.Expected == "DROPPED_BY_GATE":
-		// Must not trigger intent or create dictation draft
-		res.Passed = (receivedIntent == "" && receivedDraft == "")
-		res.Decision = "SILENCE"
+		// The gate must hold for the whole clip and nothing may reach recognition. ASR alone is no
+		// proof: it hears nothing in faint noise whether or not the gate is doing its job.
+		res.Class = "SILENCE"
+		res.Passed = res.Decision == "SILENCE" && !gateOpened && firstPartialTime.IsZero() && finalTranscript == ""
 		res.WER = 0.0
 		res.CER = 0.0
 
 	case strings.HasPrefix(item.Expected, "REJECT:"):
 		expectedReason := strings.TrimPrefix(item.Expected, "REJECT:")
 		res.Passed = (receivedReject == expectedReason || (receivedReject != "" && expectedReason == ""))
-		res.Decision = "REJECT"
+		res.Class = "REJECT"
 		res.WER = CalculateWER(item.Text, finalTranscript)
 		res.CER = CalculateCER(item.Text, finalTranscript)
 
 	case item.Mode == ModeDictation:
-		res.WER = CalculateWER(item.Text, receivedDraft)
-		res.CER = CalculateCER(item.Text, receivedDraft)
+		ref := BestReference(item, receivedDraft)
+		res.WER = CalculateWER(ref, receivedDraft)
+		res.CER = CalculateCER(ref, receivedDraft)
 		_, res.Passed, res.KeyTermHit = ScoreDictation(item, receivedDraft)
-		res.Decision = "ACCEPT"
+		res.Class = "ACCEPT"
 
 	default: // Command intent match
 		res.Passed = (receivedIntent == item.Expected)
 		res.WER = CalculateWER(item.Text, finalTranscript)
 		res.CER = CalculateCER(item.Text, finalTranscript)
-		res.Decision = "ACCEPT"
+		res.Class = "ACCEPT"
 	}
 
 	return res, nil

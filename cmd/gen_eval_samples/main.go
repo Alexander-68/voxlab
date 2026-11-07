@@ -1,10 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 
+	"voxlab/pkg/audio"
 	"voxlab/pkg/config"
 	"voxlab/pkg/engine"
 	"voxlab/pkg/evaluation"
@@ -26,8 +30,10 @@ func main() {
 			t1Dir = filepath.Join("data", "test_samples", "eval")
 		}
 		log.Printf("=== Generating Tier 1 Smoke Corpus in %s ===", t1Dir)
-		// Tier 1 uses existing generator logic
-		generateTier1(t1Dir, runner)
+		if err := generateTier1(t1Dir, runner); err != nil {
+			runner.Close() // log.Fatal skips the deferred Close
+			log.Fatalf("failed generating Tier 1 corpus: %v", err)
+		}
 	}
 
 	if *tierFlag == "2" || *tierFlag == "all" {
@@ -38,90 +44,70 @@ func main() {
 		log.Printf("=== Generating Tier 2 Deep Acoustic Matrix in %s ===", t2Dir)
 		manifest, err := evaluation.GenerateTier2Corpus(t2Dir, runner)
 		if err != nil {
+			runner.Close() // log.Fatal skips the deferred Close
 			log.Fatalf("failed generating Tier 2 corpus: %v", err)
 		}
 		log.Printf("Successfully generated Tier 2 Deep Acoustic Matrix: %d items in %s", len(manifest.Items), t2Dir)
 	}
 }
 
-func generateTier1(outDir string, runner engine.SpeechEngine) {
-	// Re-uses Tier 1 synthesis
-	// Ensure directory exists
-	// (same 5 cases as before)
-	cases := []struct {
-		id       string
-		desc     string
-		mode     evaluation.TestCaseMode
-		text     string
-		voice    string
-		expected string
-		filename string
-	}{
-		{
-			id:       "T1_CMD_SETTINGS",
-			desc:     "Command: Open Settings (US Female voice)",
-			mode:     evaluation.ModeCommand,
-			text:     "open settings",
-			voice:    "af_heart",
-			expected: "NAV_SETTINGS",
-			filename: "t1_cmd_settings.wav",
-		},
-		{
-			id:       "T1_CMD_START_REC",
-			desc:     "Command: Start Recording (US Male voice)",
-			mode:     evaluation.ModeCommand,
-			text:     "start recording",
-			voice:    "am_adam",
-			expected: "START_RECORDING",
-			filename: "t1_cmd_start_recording.wav",
-		},
-		{
-			id:       "T1_CMD_NEGATION",
-			desc:     "Command: Negation Rejection (US Female voice)",
-			mode:     evaluation.ModeCommand,
-			text:     "do not stop recording",
-			voice:    "af_heart",
-			expected: "REJECT:NEGATION_DETECTED",
-			filename: "t1_cmd_negation.wav",
-		},
-		{
-			id:       "T1_DICT_BENCH",
-			desc:     "Dictation: Technical phrase (British Female voice)",
-			mode:     evaluation.ModeDictation,
-			text:     "The voice pipeline test bench is operational and ready.",
-			voice:    "bf_emma",
-			expected: "pipeline test bench",
-			filename: "t1_dict_bench.wav",
-		},
+func generateTier1(outDir string, runner engine.SpeechEngine) error {
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		return err
+	}
+	exact := 0.0
+	cases := []evaluation.EvalItem{
+		{ID: "T1_CMD_SETTINGS", Description: "Command: Open Settings (US Female voice)", Mode: evaluation.ModeCommand,
+			Text: "open settings", Voice: "af_heart", Expected: "NAV_SETTINGS", WavFile: "t1_cmd_settings.wav"},
+		{ID: "T1_CMD_START_REC", Description: "Command: Start Recording (US Male voice)", Mode: evaluation.ModeCommand,
+			Text: "start recording", Voice: "am_adam", Expected: "START_RECORDING", WavFile: "t1_cmd_start_recording.wav"},
+		{ID: "T1_CMD_NEGATION", Description: "Command: Negation Rejection (US Female voice)", Mode: evaluation.ModeCommand,
+			Text: "do not stop recording", Voice: "af_heart", Expected: "REJECT:NEGATION_DETECTED", WavFile: "t1_cmd_negation.wav"},
+		{ID: "T1_DICT_BENCH", Description: "Dictation: Technical phrase (British Female voice)", Mode: evaluation.ModeDictation,
+			Text: "The voice pipeline test bench is operational and ready.", Voice: "bf_emma", Expected: "pipeline test bench",
+			MaxErrorRate: &exact, WavFile: "t1_dict_bench.wav"},
 	}
 
-	manifest := evaluation.EvalManifest{
-		Version: "1.0",
-		Tier:    "tier-1-smoke",
-		Items:   make([]evaluation.EvalItem, 0),
-	}
-
+	manifest := evaluation.EvalManifest{Version: "1.0", Tier: "tier-1-smoke"}
 	for _, c := range cases {
-		manifest.Items = append(manifest.Items, evaluation.EvalItem{
-			ID:          c.id,
-			Description: c.desc,
-			Mode:        c.mode,
-			Text:        c.text,
-			Voice:       c.voice,
-			Expected:    c.expected,
-			WavFile:     c.filename,
-			DurationSec: 2.5,
+		samples, err := evaluation.LoadOrSynthesizeClip(filepath.Join(outDir, c.WavFile), runner, engine.TTSRequest{
+			Text: c.Text, Voice: c.Voice, Speed: 1.0, SampleRate: 24000,
 		})
+		if err != nil {
+			return fmt.Errorf("%s: %w", c.ID, err)
+		}
+		c.DurationSec = float64(len(samples)) / 16000.0
+		manifest.Items = append(manifest.Items, c)
+	}
+
+	// Low-level hiss plus faint periodic clicks, both below the gate.
+	noise := make([]float32, 16000*2)
+	for i := range noise {
+		noise[i] = float32((float64(i%997)/997.0 - 0.5) * 0.006)
+		if i%3200 == 0 {
+			noise[i] += 0.015
+		}
+	}
+	noiseBytes, err := audio.EncodeWAV(noise, 16000)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "t1_noise_below_gate.wav"), noiseBytes, 0644); err != nil {
+		return err
 	}
 	manifest.Items = append(manifest.Items, evaluation.EvalItem{
 		ID:          "T1_NOISE_GATE",
 		Description: "Acoustic Noise: Low-level typing/room chatter below gate threshold",
 		Mode:        evaluation.ModeCommand,
-		Text:        "",
 		Voice:       "synthetic",
 		Expected:    "DROPPED_BY_GATE",
 		WavFile:     "t1_noise_below_gate.wav",
 		DurationSec: 2.0,
 	})
-	log.Printf("Tier-1 manifest verified with %d items.", len(manifest.Items))
+
+	manBytes, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(outDir, "manifest.json"), manBytes, 0644)
 }
