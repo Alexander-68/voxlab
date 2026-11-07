@@ -28,7 +28,7 @@
       "category": "command",
       "expected": "NAV_SETTINGS",
       "wav_file": "base_cmd_settings_bm.wav",
-      "duration_sec": 2.5614375
+      "duration_sec": 2.5635
     },
     {
       "id": "T2_CLEAN_CMD_START_REC_AM",
@@ -42,7 +42,7 @@
       "category": "command",
       "expected": "START_RECORDING",
       "wav_file": "base_cmd_start_rec_am.wav",
-      "duration_sec": 2.4950625
+      "duration_sec": 2.4946875
     },
     {
       "id": "T2_CLEAN_CMD_START_REC_BF",
@@ -84,7 +84,7 @@
       "category": "command",
       "expected": "DISPLAY_DARK",
       "wav_file": "base_cmd_dim_bm.wav",
-      "duration_sec": 2.56725
+      "duration_sec": 2.5735625
     },
     {
       "id": "T2_CLEAN_CMD_SCOPE_AF",
@@ -98,7 +98,7 @@
       "category": "command",
       "expected": "ROUTE_VIDEO",
       "wav_file": "base_cmd_scope_af.wav",
-      "duration_sec": 4.3533125
+      "duration_sec": 4.357125
     },
     {
       "id": "T2_CLEAN_CMD_PREF_AM",
@@ -112,7 +112,7 @@
       "category": "command",
       "expected": "NAV_SETTINGS",
       "wav_file": "base_cmd_pref_am.wav",
-      "duration_sec": 3.7323125
+      "duration_sec": 3.73225
     },
     {
       "id": "T2_CLEAN_DICT_BENCH_BF",
@@ -141,7 +141,7 @@
       "category": "dictation",
       "expected": "blood pressure",
       "wav_file": "base_dict_vitals_am.wav",
-      "duration_sec": 6.2680625
+      "duration_sec": 6.2685
     },
     {
       "id": "T2_CLEAN_DICT_INCISION_AF",
@@ -184,7 +184,7 @@
       "category": "negation",
       "expected": "REJECT:NEGATION_DETECTED",
       "wav_file": "base_neg_stop_af.wav",
-      "duration_sec": 2.87125
+      "duration_sec": 2.8773125
     },
     {
       "id": "T2_CLEAN_NEG_SETTINGS_AM",
@@ -212,7 +212,7 @@
       "category": "distractor",
       "expected": "REJECT:OUT_OF_DOMAIN_CHATTER",
       "wav_file": "base_dist_lunch_am.wav",
-      "duration_sec": 4.0265
+      "duration_sec": 4.0265625
     },
     {
       "id": "T2_CLEAN_CMD_ES_EF",
@@ -240,7 +240,7 @@
       "category": "dictation",
       "expected": "signos vitales",
       "wav_file": "base_dict_es_vitals_ef.wav",
-      "duration_sec": 5.670875
+      "duration_sec": 5.5690625
     },
     {
       "id": "T2_CLEAN_DICT_ES_INCISION_AM",
@@ -269,7 +269,7 @@
       "category": "dictation",
       "expected": "midazolam",
       "wav_file": "base_dict_es_med_es.wav",
-      "duration_sec": 4.96025
+      "duration_sec": 4.9609375
     },
     {
       "id": "T2_CLEAN_DICT_ES_BENCH_EF",
@@ -297,7 +297,7 @@
       "category": "dictation",
       "expected": "sinais vitais",
       "wav_file": "base_dict_pt_vitals_pf.wav",
-      "duration_sec": 5.5346875
+      "duration_sec": 5.5345625
     },
     {
       "id": "T2_CLEAN_DICT_PT_INCISION_PM",
@@ -340,7 +340,7 @@
       "category": "dictation",
       "expected": "processamento de voz",
       "wav_file": "base_dict_pt_status_pf.wav",
-      "duration_sec": 4.85525
+      "duration_sec": 4.855125
     },
     {
       "id": "T2_CLEAN_DICT_FR_VITALS_FF",
@@ -354,7 +354,7 @@
       "category": "dictation",
       "expected": "constantes vitales",
       "wav_file": "base_dict_fr_vitals_ff.wav",
-      "duration_sec": 5.966875
+      "duration_sec": 5.9668125
     },
     {
       "id": "T2_CLEAN_DICT_FR_INCISION_FF",
@@ -368,7 +368,7 @@
       "category": "dictation",
       "expected": "site incisionnel",
       "wav_file": "base_dict_fr_incision_ff.wav",
-      "duration_sec": 5.677125
+      "duration_sec": 5.6770625
     },
     {
       "id": "T2_CLEAN_DICT_FR_MED_FF",
@@ -383,7 +383,7 @@
       "category": "dictation",
       "expected": "midazolam",
       "wav_file": "base_dict_fr_med_ff.wav",
-      "duration_sec": 5.3174375
+      "duration_sec": 5.3173125
     },
     {
       "id": "T2_CLEAN_DICT_FR_BENCH_FF",
@@ -397,7 +397,7 @@
       "category": "dictation",
       "expected": "banc d'essai",
       "wav_file": "base_dict_fr_bench_ff.wav",
-      "duration_sec": 4.9021875
+      "duration_sec": 4.9023125
     },
     {
       "id": "T2_CLEAN_DICT_IT_VITALS_IF",
@@ -411,7 +411,7 @@
       "category": "dictation",
       "expected": "parametri vitali",
       "wav_file": "base_dict_it_vitals_if.wav",
-      "duration_sec": 6.044375
+      "duration_sec": 6.0454375
     },
     {
       "id": "T2_CLEAN_DICT_IT_INCISION_IM",
@@ -425,7 +425,7 @@
       "category": "dictation",
       "expected": "ferita chirurgica",
       "wav_file": "base_dict_it_incision_im.wav",
-      "duration_sec": 5.9266875
+      "duration_sec": 5.9268125
     },
     {
       "id": "T2_CLEAN_DICT_IT_MED_IF",
@@ -454,7 +454,7 @@
       "category": "dictation",
       "expected": "riconoscimento vocale",
       "wav_file": "base_dict_it_bench_im.wav",
-      "duration_sec": 4.98125
+      "duration_sec": 4.9811875
     },
     {
       "id": "T2_CLEAN_DICT_ZH_VITALS_XB",
@@ -468,7 +468,7 @@
       "category": "dictation",
       "expected": "生命体征",
       "wav_file": "base_dict_zh_vitals_xb.wav",
-      "duration_sec": 7.3199375
+      "duration_sec": 7.3198125
     },
     {
       "id": "T2_CLEAN_DICT_ZH_INCISION_YJ",
@@ -497,7 +497,7 @@
       "category": "dictation",
       "expected": "咪达唑仑",
       "wav_file": "base_dict_zh_med_xn.wav",
-      "duration_sec": 6.744625
+      "duration_sec": 6.7446875
     },
     {
       "id": "T2_CLEAN_DICT_ZH_ANESTHESIA_YX",
@@ -511,7 +511,7 @@
       "category": "dictation",
       "expected": "全身麻醉",
       "wav_file": "base_dict_zh_anesthesia_yx.wav",
-      "duration_sec": 6.8336875
+      "duration_sec": 6.838875
     },
     {
       "id": "T2_CLEAN_DICT_ZH_STATUS_XX",
@@ -539,7 +539,7 @@
       "category": "dictation",
       "expected": "自主呼吸",
       "wav_file": "base_dict_zh_postop_xy.wav",
-      "duration_sec": 7.0089375
+      "duration_sec": 7.0123125
     },
     {
       "id": "T2_CLEAN_DICT_ZH_BLOOD_YXIA",
@@ -553,7 +553,7 @@
       "category": "dictation",
       "expected": "出血量",
       "wav_file": "base_dict_zh_blood_yxia.wav",
-      "duration_sec": 7.2548125
+      "duration_sec": 7.2549375
     },
     {
       "id": "T2_CLEAN_DICT_ZH_NEURO_YY",
@@ -567,7 +567,7 @@
       "category": "dictation",
       "expected": "对光反射",
       "wav_file": "base_dict_zh_neuro_yy.wav",
-      "duration_sec": 6.833875
+      "duration_sec": 6.83375
     },
     {
       "id": "T2_CLEAN_DICT_ZH_FAST_XB",
@@ -581,7 +581,7 @@
       "category": "dictation",
       "expected": "呼吸平稳",
       "wav_file": "base_dict_zh_fast_xb.wav",
-      "duration_sec": 7.5944375
+      "duration_sec": 7.5945625
     },
     {
       "id": "T2_CLEAN_DICT_ZH_SLOW_YJ",
@@ -595,7 +595,7 @@
       "category": "dictation",
       "expected": "心电监护",
       "wav_file": "base_dict_zh_slow_yj.wav",
-      "duration_sec": 7.6540625
+      "duration_sec": 7.6570625
     },
     {
       "id": "T2_CLEAN_DICT_ZH_DISCHARGE_XN",
@@ -609,7 +609,7 @@
       "category": "dictation",
       "expected": "遵医嘱",
       "wav_file": "base_dict_zh_discharge_xn.wav",
-      "duration_sec": 6.979375
+      "duration_sec": 6.9791875
     },
     {
       "id": "T2_CLEAN_DICT_ZH_PATHOLOGY_YX",
@@ -623,7 +623,7 @@
       "category": "dictation",
       "expected": "病理切片",
       "wav_file": "base_dict_zh_pathology_yx.wav",
-      "duration_sec": 6.3655
+      "duration_sec": 6.3699375
     },
     {
       "id": "T2_CLEAN_DICT_ZH_OXYGEN_XX",
@@ -637,7 +637,7 @@
       "category": "dictation",
       "expected": "血氧饱和度",
       "wav_file": "base_dict_zh_oxygen_xx.wav",
-      "duration_sec": 6.748625
+      "duration_sec": 6.7485
     },
     {
       "id": "T2_CLEAN_DICT_ZH_DIAGNOSIS_XY",
@@ -651,7 +651,7 @@
       "category": "dictation",
       "expected": "腹腔镜",
       "wav_file": "base_dict_zh_diagnosis_xy.wav",
-      "duration_sec": 7.4400625
+      "duration_sec": 7.4396875
     },
     {
       "id": "T2_CMD_SETTINGS_AF_SNR20",
@@ -831,7 +831,7 @@
       "category": "command",
       "expected": "START_RECORDING",
       "wav_file": "t2_cmd_start_rec_am_snr20.wav",
-      "duration_sec": 2.4950625
+      "duration_sec": 2.4946875
     },
     {
       "id": "T2_CMD_START_REC_AM_SNR15_PINK",
@@ -846,7 +846,7 @@
       "category": "command",
       "expected": "START_RECORDING",
       "wav_file": "t2_cmd_start_rec_am_snr15_pink.wav",
-      "duration_sec": 2.4950625
+      "duration_sec": 2.4946875
     },
     {
       "id": "T2_CMD_START_REC_AM_SNR10",
@@ -861,7 +861,7 @@
       "category": "command",
       "expected": "START_RECORDING",
       "wav_file": "t2_cmd_start_rec_am_snr10.wav",
-      "duration_sec": 2.4950625
+      "duration_sec": 2.4946875
     },
     {
       "id": "T2_CMD_START_REC_AM_SNR05",
@@ -876,7 +876,7 @@
       "category": "command",
       "expected": "START_RECORDING",
       "wav_file": "t2_cmd_start_rec_am_snr05.wav",
-      "duration_sec": 2.4950625
+      "duration_sec": 2.4946875
     },
     {
       "id": "T2_CMD_START_REC_AM_SNR00",
@@ -891,7 +891,7 @@
       "category": "command",
       "expected": "START_RECORDING",
       "wav_file": "t2_cmd_start_rec_am_snr00.wav",
-      "duration_sec": 2.4950625
+      "duration_sec": 2.4946875
     },
     {
       "id": "T2_CMD_START_REC_AM_SNRM05",
@@ -906,7 +906,7 @@
       "category": "command",
       "expected": "START_RECORDING",
       "wav_file": "t2_cmd_start_rec_am_snrm05.wav",
-      "duration_sec": 2.4950625
+      "duration_sec": 2.4946875
     },
     {
       "id": "T2_CMD_START_REC_AM_TYPING_15",
@@ -921,7 +921,7 @@
       "category": "command",
       "expected": "START_RECORDING",
       "wav_file": "t2_cmd_start_rec_am_typing_15.wav",
-      "duration_sec": 2.4950625
+      "duration_sec": 2.4946875
     },
     {
       "id": "T2_CMD_START_REC_AM_TYPING_05",
@@ -936,7 +936,7 @@
       "category": "command",
       "expected": "START_RECORDING",
       "wav_file": "t2_cmd_start_rec_am_typing_05.wav",
-      "duration_sec": 2.4950625
+      "duration_sec": 2.4946875
     },
     {
       "id": "T2_CMD_START_REC_AM_BABBLE_15",
@@ -951,7 +951,7 @@
       "category": "command",
       "expected": "START_RECORDING",
       "wav_file": "t2_cmd_start_rec_am_babble_15.wav",
-      "duration_sec": 2.4950625
+      "duration_sec": 2.4946875
     },
     {
       "id": "T2_CMD_START_REC_AM_BABBLE_05",
@@ -966,7 +966,7 @@
       "category": "command",
       "expected": "START_RECORDING",
       "wav_file": "t2_cmd_start_rec_am_babble_05.wav",
-      "duration_sec": 2.4950625
+      "duration_sec": 2.4946875
     },
     {
       "id": "T2_CMD_START_REC_AM_REVERB",
@@ -981,7 +981,7 @@
       "category": "command",
       "expected": "START_RECORDING",
       "wav_file": "t2_cmd_start_rec_am_reverb.wav",
-      "duration_sec": 2.4950625
+      "duration_sec": 2.4946875
     },
     {
       "id": "T2_DICT_BENCH_BF_SNR20",
@@ -1162,7 +1162,7 @@
       "category": "dictation",
       "expected": "blood pressure",
       "wav_file": "t2_dict_vitals_am_snr20.wav",
-      "duration_sec": 6.2680625
+      "duration_sec": 6.2685
     },
     {
       "id": "T2_DICT_VITALS_AM_SNR10",
@@ -1178,7 +1178,7 @@
       "category": "dictation",
       "expected": "blood pressure",
       "wav_file": "t2_dict_vitals_am_snr10.wav",
-      "duration_sec": 6.2680625
+      "duration_sec": 6.2685
     },
     {
       "id": "T2_DICT_VITALS_AM_SNR05",
@@ -1194,7 +1194,7 @@
       "category": "dictation",
       "expected": "blood pressure",
       "wav_file": "t2_dict_vitals_am_snr05.wav",
-      "duration_sec": 6.2680625
+      "duration_sec": 6.2685
     },
     {
       "id": "T2_DICT_VITALS_AM_SNR00",
@@ -1210,7 +1210,7 @@
       "category": "dictation",
       "expected": "blood pressure",
       "wav_file": "t2_dict_vitals_am_snr00.wav",
-      "duration_sec": 6.2680625
+      "duration_sec": 6.2685
     },
     {
       "id": "T2_DICT_VITALS_AM_TYPING_15",
@@ -1226,7 +1226,7 @@
       "category": "dictation",
       "expected": "blood pressure",
       "wav_file": "t2_dict_vitals_am_typing_15.wav",
-      "duration_sec": 6.2680625
+      "duration_sec": 6.2685
     },
     {
       "id": "T2_DICT_VITALS_AM_TYPING_05",
@@ -1242,7 +1242,7 @@
       "category": "dictation",
       "expected": "blood pressure",
       "wav_file": "t2_dict_vitals_am_typing_05.wav",
-      "duration_sec": 6.2680625
+      "duration_sec": 6.2685
     },
     {
       "id": "T2_DICT_VITALS_AM_REVERB",
@@ -1258,7 +1258,7 @@
       "category": "dictation",
       "expected": "blood pressure",
       "wav_file": "t2_dict_vitals_am_reverb.wav",
-      "duration_sec": 6.2680625
+      "duration_sec": 6.2685
     },
     {
       "id": "T2_DICT_INCISION_AF_BABBLE_15",
@@ -1303,7 +1303,7 @@
       "category": "negation",
       "expected": "REJECT:NEGATION_DETECTED",
       "wav_file": "t2_neg_stop_af_snr20.wav",
-      "duration_sec": 2.87125
+      "duration_sec": 2.8773125
     },
     {
       "id": "T2_NEG_STOP_AF_SNR10",
@@ -1318,7 +1318,7 @@
       "category": "negation",
       "expected": "REJECT:NEGATION_DETECTED",
       "wav_file": "t2_neg_stop_af_snr10.wav",
-      "duration_sec": 2.87125
+      "duration_sec": 2.8773125
     },
     {
       "id": "T2_NEG_STOP_AF_SNR05",
@@ -1333,7 +1333,7 @@
       "category": "negation",
       "expected": "REJECT:NEGATION_DETECTED",
       "wav_file": "t2_neg_stop_af_snr05.wav",
-      "duration_sec": 2.87125
+      "duration_sec": 2.8773125
     },
     {
       "id": "T2_CMD_ES_EF_SNR20",
@@ -1393,7 +1393,7 @@
       "category": "dictation",
       "expected": "signos vitales",
       "wav_file": "t2_dict_es_vitals_ef_snr15_pink.wav",
-      "duration_sec": 5.670875
+      "duration_sec": 5.5690625
     },
     {
       "id": "T2_DICT_PT_VITALS_PF_SNR15_PINK",
@@ -1408,7 +1408,7 @@
       "category": "dictation",
       "expected": "sinais vitais",
       "wav_file": "t2_dict_pt_vitals_pf_snr15_pink.wav",
-      "duration_sec": 5.5346875
+      "duration_sec": 5.5345625
     },
     {
       "id": "T2_DICT_FR_VITALS_FF_SNR15_PINK",
@@ -1423,7 +1423,7 @@
       "category": "dictation",
       "expected": "constantes vitales",
       "wav_file": "t2_dict_fr_vitals_ff_snr15_pink.wav",
-      "duration_sec": 5.966875
+      "duration_sec": 5.9668125
     },
     {
       "id": "T2_DICT_IT_VITALS_IF_SNR15_PINK",
@@ -1438,7 +1438,7 @@
       "category": "dictation",
       "expected": "parametri vitali",
       "wav_file": "t2_dict_it_vitals_if_snr15_pink.wav",
-      "duration_sec": 6.044375
+      "duration_sec": 6.0454375
     },
     {
       "id": "T2_DICT_ZH_VITALS_XB_SNR15_PINK",
@@ -1453,7 +1453,7 @@
       "category": "dictation",
       "expected": "生命体征",
       "wav_file": "t2_dict_zh_vitals_xb_snr15_pink.wav",
-      "duration_sec": 7.3199375
+      "duration_sec": 7.3198125
     },
     {
       "id": "T2_DICT_ZH_VITALS_XB_TYPING_15",
@@ -1468,7 +1468,7 @@
       "category": "dictation",
       "expected": "生命体征",
       "wav_file": "t2_dict_zh_vitals_xb_typing_15.wav",
-      "duration_sec": 7.3199375
+      "duration_sec": 7.3198125
     },
     {
       "id": "T2_DICT_ZH_INCISION_YJ_BABBLE_15",

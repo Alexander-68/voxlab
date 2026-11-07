@@ -15,63 +15,63 @@
   },
   "dropped_chunks": 0,
   "total_cases": 104,
-  "passed": 94,
-  "failed": 10,
-  "pass_rate": 0.9038461538461539,
-  "avg_wer": 0.11804221997121028,
-  "avg_cer": 0.09087879916347562,
+  "passed": 92,
+  "failed": 12,
+  "pass_rate": 0.8846153846153846,
+  "avg_wer": 0.12057483294790221,
+  "avg_cer": 0.09466876489208553,
   "intent_accuracy": 0.8823529411764706,
   "rejection_accuracy": 1,
   "gate_precision": 1,
-  "duration": 585159707200,
+  "duration": 583839431200,
   "latency_stats": {
     "ttft": {
-      "min_ms": 762,
-      "max_ms": 1970,
-      "avg_ms": 1328.4,
-      "p50_ms": 1347,
-      "p90_ms": 1380,
-      "p95_ms": 1385,
-      "p99_ms": 1961
+      "min_ms": 750,
+      "max_ms": 3001,
+      "avg_ms": 1315.2,
+      "p50_ms": 1321,
+      "p90_ms": 1352,
+      "p95_ms": 1380,
+      "p99_ms": 1891
     },
     "endpoint_delay": {
       "min_ms": 0,
       "max_ms": 1860,
-      "avg_ms": 949.8,
+      "avg_ms": 959.4,
       "p50_ms": 1200,
-      "p90_ms": 1268,
-      "p95_ms": 1431,
+      "p90_ms": 1321,
+      "p95_ms": 1411,
       "p99_ms": 1860
     },
     "second_pass": {
-      "min_ms": 240,
-      "max_ms": 423,
-      "avg_ms": 337.1,
-      "p50_ms": 336,
-      "p90_ms": 402,
-      "p95_ms": 406,
-      "p99_ms": 423
+      "min_ms": 257,
+      "max_ms": 467,
+      "avg_ms": 331,
+      "p50_ms": 331,
+      "p90_ms": 410,
+      "p95_ms": 441,
+      "p99_ms": 467
     },
     "total_duration": {
-      "min_ms": 1980,
-      "max_ms": 9354,
-      "avg_ms": 5625.8,
-      "p50_ms": 6436,
-      "p90_ms": 8740,
-      "p95_ms": 9108,
-      "p99_ms": 9328
+      "min_ms": 1944,
+      "max_ms": 9368,
+      "avg_ms": 5613.2,
+      "p50_ms": 6400,
+      "p90_ms": 8728,
+      "p95_ms": 9098,
+      "p99_ms": 9308
     }
   },
   "snr_curve": [
     {
       "label": "Clean",
       "count": 48,
-      "passed": 42,
-      "pass_rate": 0.875,
-      "avg_wer": 0.154,
-      "avg_cer": 0.133,
+      "passed": 41,
+      "pass_rate": 0.8541666666666666,
+      "avg_wer": 0.153,
+      "avg_cer": 0.132,
       "intent_accuracy": 1,
-      "avg_latency_ms": 6402.9
+      "avg_latency_ms": 6389.8
     },
     {
       "snr_db": 20,
@@ -82,7 +82,7 @@
       "avg_wer": 0.055,
       "avg_cer": 0.035,
       "intent_accuracy": 1,
-      "avg_latency_ms": 4085.3
+      "avg_latency_ms": 4075.8
     },
     {
       "snr_db": 15,
@@ -90,21 +90,21 @@
       "count": 23,
       "passed": 23,
       "pass_rate": 1,
-      "avg_wer": 0.075,
-      "avg_cer": 0.066,
+      "avg_wer": 0.066,
+      "avg_cer": 0.057,
       "intent_accuracy": 1,
-      "avg_latency_ms": 5851
+      "avg_latency_ms": 5837.5
     },
     {
       "snr_db": 10,
       "label": "+10 dB",
       "count": 6,
-      "passed": 5,
-      "pass_rate": 0.8333333333333334,
-      "avg_wer": 0.1,
-      "avg_cer": 0.017,
-      "intent_accuracy": 0.667,
-      "avg_latency_ms": 4076.2
+      "passed": 6,
+      "pass_rate": 1,
+      "avg_wer": 0,
+      "avg_cer": 0,
+      "intent_accuracy": 1,
+      "avg_latency_ms": 4095.2
     },
     {
       "snr_db": 5,
@@ -115,29 +115,29 @@
       "avg_wer": 0.059,
       "avg_cer": 0.02,
       "intent_accuracy": 0.857,
-      "avg_latency_ms": 4518
+      "avg_latency_ms": 4493.1
     },
     {
       "snr_db": 0,
       "label": "+0 dB",
       "count": 4,
-      "passed": 3,
-      "pass_rate": 0.75,
-      "avg_wer": 0.148,
-      "avg_cer": 0.026,
+      "passed": 2,
+      "pass_rate": 0.5,
+      "avg_wer": 0.271,
+      "avg_cer": 0.127,
       "intent_accuracy": 0.5,
-      "avg_latency_ms": 5011
+      "avg_latency_ms": 5010.8
     },
     {
       "snr_db": -5,
       "label": "-5 dB",
       "count": 3,
-      "passed": 2,
-      "pass_rate": 0.6666666666666666,
-      "avg_wer": 0.278,
-      "avg_cer": 0.295,
-      "intent_accuracy": 0.5,
-      "avg_latency_ms": 3635.7
+      "passed": 1,
+      "pass_rate": 0.3333333333333333,
+      "avg_wer": 0.444,
+      "avg_cer": 0.379,
+      "intent_accuracy": 0,
+      "avg_latency_ms": 3609
     }
   ],
   "voice_breakdown": {
@@ -176,10 +176,10 @@
     "am_adam": {
       "key": "am_adam",
       "count": 14,
-      "passed": 14,
-      "pass_rate": 1,
-      "avg_wer": 0,
-      "avg_cer": 0
+      "passed": 13,
+      "pass_rate": 0.9285714285714286,
+      "avg_wer": 0.038,
+      "avg_cer": 0.011
     },
     "am_echo": {
       "key": "am_echo",
@@ -192,18 +192,18 @@
     "am_michael": {
       "key": "am_michael",
       "count": 8,
-      "passed": 8,
-      "pass_rate": 1,
-      "avg_wer": 0.182,
-      "avg_cer": 0.111
+      "passed": 7,
+      "pass_rate": 0.875,
+      "avg_wer": 0.216,
+      "avg_cer": 0.161
     },
     "bf_emma": {
       "key": "bf_emma",
       "count": 13,
       "passed": 13,
       "pass_rate": 1,
-      "avg_wer": 0.026,
-      "avg_cer": 0.017
+      "avg_wer": 0.043,
+      "avg_cer": 0.025
     },
     "bf_isabella": {
       "key": "bf_isabella",
@@ -232,18 +232,18 @@
     "ef_dora": {
       "key": "ef_dora",
       "count": 7,
-      "passed": 5,
-      "pass_rate": 0.7142857142857143,
-      "avg_wer": 0.154,
-      "avg_cer": 0.027
+      "passed": 6,
+      "pass_rate": 0.8571428571428571,
+      "avg_wer": 0.082,
+      "avg_cer": 0.015
     },
     "em_alex": {
       "key": "em_alex",
       "count": 1,
       "passed": 1,
       "pass_rate": 1,
-      "avg_wer": 0.077,
-      "avg_cer": 0.033
+      "avg_wer": 0,
+      "avg_cer": 0
     },
     "em_santa": {
       "key": "em_santa",
@@ -314,16 +314,16 @@
       "count": 4,
       "passed": 3,
       "pass_rate": 0.75,
-      "avg_wer": 0.339,
-      "avg_cer": 0.339
+      "avg_wer": 0.368,
+      "avg_cer": 0.368
     },
     "zf_xiaoni": {
       "key": "zf_xiaoni",
       "count": 2,
       "passed": 0,
       "pass_rate": 0,
-      "avg_wer": 0.79,
-      "avg_cer": 0.79
+      "avg_wer": 0.69,
+      "avg_cer": 0.69
     },
     "zf_xiaoxiao": {
       "key": "zf_xiaoxiao",
@@ -338,24 +338,24 @@
       "count": 2,
       "passed": 1,
       "pass_rate": 0.5,
-      "avg_wer": 0.321,
-      "avg_cer": 0.321
+      "avg_wer": 0.242,
+      "avg_cer": 0.242
     },
     "zm_yunjian": {
       "key": "zm_yunjian",
       "count": 4,
       "passed": 3,
       "pass_rate": 0.75,
-      "avg_wer": 0.283,
-      "avg_cer": 0.283
+      "avg_wer": 0.285,
+      "avg_cer": 0.285
     },
     "zm_yunxi": {
       "key": "zm_yunxi",
       "count": 2,
-      "passed": 2,
-      "pass_rate": 1,
-      "avg_wer": 0.262,
-      "avg_cer": 0.262
+      "passed": 1,
+      "pass_rate": 0.5,
+      "avg_wer": 0.29,
+      "avg_cer": 0.29
     },
     "zm_yunxia": {
       "key": "zm_yunxia",
@@ -388,16 +388,16 @@
       "count": 2,
       "passed": 1,
       "pass_rate": 0.5,
-      "avg_wer": 0.268,
-      "avg_cer": 0.198
+      "avg_wer": 0.32,
+      "avg_cer": 0.25
     },
     "1.0x": {
       "key": "1.0x",
       "count": 88,
-      "passed": 80,
-      "pass_rate": 0.9090909090909091,
+      "passed": 78,
+      "pass_rate": 0.8863636363636364,
       "avg_wer": 0.122,
-      "avg_cer": 0.093
+      "avg_cer": 0.095
     },
     "1.1x": {
       "key": "1.1x",
@@ -412,8 +412,8 @@
       "count": 2,
       "passed": 1,
       "pass_rate": 0.5,
-      "avg_wer": 0.278,
-      "avg_cer": 0.278
+      "avg_wer": 0.361,
+      "avg_cer": 0.361
     },
     "1.3x": {
       "key": "1.3x",
@@ -430,48 +430,48 @@
       "count": 9,
       "passed": 9,
       "pass_rate": 1,
-      "avg_wer": 0.026,
-      "avg_cer": 0.026
+      "avg_wer": 0.032,
+      "avg_cer": 0.032
     },
     "clean": {
       "key": "clean",
       "count": 46,
-      "passed": 40,
-      "pass_rate": 0.8695652173913043,
-      "avg_wer": 0.154,
-      "avg_cer": 0.133
+      "passed": 39,
+      "pass_rate": 0.8478260869565217,
+      "avg_wer": 0.153,
+      "avg_cer": 0.132
     },
     "pink": {
       "key": "pink",
       "count": 8,
       "passed": 8,
       "pass_rate": 1,
-      "avg_wer": 0.038,
-      "avg_cer": 0.038
+      "avg_wer": 0.044,
+      "avg_cer": 0.044
     },
     "reverb": {
       "key": "reverb",
       "count": 5,
       "passed": 5,
       "pass_rate": 1,
-      "avg_wer": 0.112,
-      "avg_cer": 0.092
+      "avg_wer": 0.093,
+      "avg_cer": 0.073
     },
     "typing": {
       "key": "typing",
       "count": 10,
       "passed": 10,
       "pass_rate": 1,
-      "avg_wer": 0.099,
-      "avg_cer": 0.077
+      "avg_wer": 0.077,
+      "avg_cer": 0.055
     },
     "white": {
       "key": "white",
       "count": 26,
-      "passed": 22,
-      "pass_rate": 0.8461538461538461,
-      "avg_wer": 0.123,
-      "avg_cer": 0.06
+      "passed": 21,
+      "pass_rate": 0.8076923076923077,
+      "avg_wer": 0.145,
+      "avg_cer": 0.086
     }
   },
   "results": [
@@ -492,9 +492,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2522814000,
-      "ttft": 1353181400,
-      "endpoint_delay": 1230906000,
+      "duration": 2514577300,
+      "ttft": 1351295900,
+      "endpoint_delay": 1321011400,
       "second_pass_latency": 0
     },
     {
@@ -514,9 +514,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2544368500,
-      "ttft": 1329043500,
-      "endpoint_delay": 1171923300,
+      "duration": 2515584300,
+      "ttft": 1350511900,
+      "endpoint_delay": 1141123700,
       "second_pass_latency": 0
     },
     {
@@ -536,9 +536,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2512962600,
-      "ttft": 1380127200,
-      "endpoint_delay": 1231225500,
+      "duration": 2512839200,
+      "ttft": 1350998800,
+      "endpoint_delay": 1231576400,
       "second_pass_latency": 0
     },
     {
@@ -558,9 +558,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2520992600,
-      "ttft": 1345952300,
-      "endpoint_delay": 1083097700,
+      "duration": 2512697600,
+      "ttft": 1321244900,
+      "endpoint_delay": 1081112800,
       "second_pass_latency": 0
     },
     {
@@ -580,9 +580,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2573730200,
-      "ttft": 1381546600,
-      "endpoint_delay": 1268038900,
+      "duration": 2513251200,
+      "ttft": 1351139500,
+      "endpoint_delay": 1200658100,
       "second_pass_latency": 0
     },
     {
@@ -602,9 +602,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 3084245400,
-      "ttft": 1961215600,
-      "endpoint_delay": 1860964600,
+      "duration": 3084828000,
+      "ttft": 1891023700,
+      "endpoint_delay": 1860689300,
       "second_pass_latency": 0
     },
     {
@@ -624,9 +624,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 4223636400,
-      "ttft": 1401590700,
-      "endpoint_delay": 1431749600,
+      "duration": 4194458200,
+      "ttft": 1350389700,
+      "endpoint_delay": 1411852300,
       "second_pass_latency": 0
     },
     {
@@ -646,9 +646,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 3613698900,
-      "ttft": 1970674600,
-      "endpoint_delay": 1261466000,
+      "duration": 3625386900,
+      "ttft": 1890621300,
+      "endpoint_delay": 1290779000,
       "second_pass_latency": 0
     },
     {
@@ -666,10 +666,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6453519200,
-      "ttft": 793626100,
+      "duration": 6390282000,
+      "ttft": 784703400,
       "endpoint_delay": 0,
-      "second_pass_latency": 376000000,
+      "second_pass_latency": 347000000,
       "key_term_hit": true
     },
     {
@@ -687,10 +687,10 @@
       "decision": "ACCEPT",
       "wer": 0.2727272727272727,
       "cer": 0.17307692307692307,
-      "duration": 8127873500,
-      "ttft": 1402734800,
+      "duration": 8057085400,
+      "ttft": 1320647900,
       "endpoint_delay": 0,
-      "second_pass_latency": 398000000,
+      "second_pass_latency": 308000000,
       "key_term_hit": true
     },
     {
@@ -708,10 +708,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7099860200,
-      "ttft": 1355394400,
+      "duration": 7090037700,
+      "ttft": 1352786800,
       "endpoint_delay": 0,
-      "second_pass_latency": 406000000,
+      "second_pass_latency": 393000000,
       "key_term_hit": true
     },
     {
@@ -729,10 +729,10 @@
       "decision": "ACCEPT",
       "wer": 0.16666666666666666,
       "cer": 0.02702702702702703,
-      "duration": 6978674900,
-      "ttft": 1370103200,
+      "duration": 6954563500,
+      "ttft": 1351231600,
       "endpoint_delay": 0,
-      "second_pass_latency": 406000000,
+      "second_pass_latency": 326000000,
       "key_term_hit": true
     },
     {
@@ -751,9 +751,9 @@
       "reason": "NEGATION_DETECTED",
       "wer": 0,
       "cer": 0,
-      "duration": 2520816200,
-      "ttft": 1381497600,
-      "endpoint_delay": 810727700,
+      "duration": 2515791900,
+      "ttft": 1320845700,
+      "endpoint_delay": 810702900,
       "second_pass_latency": 0
     },
     {
@@ -772,9 +772,9 @@
       "reason": "NEGATION_DETECTED",
       "wer": 0,
       "cer": 0,
-      "duration": 3663194900,
-      "ttft": 795045400,
-      "endpoint_delay": 1321071100,
+      "duration": 3623570700,
+      "ttft": 1321403800,
+      "endpoint_delay": 1291363900,
       "second_pass_latency": 0
     },
     {
@@ -793,9 +793,9 @@
       "reason": "OUT_OF_DOMAIN_CHATTER",
       "wer": 0,
       "cer": 0,
-      "duration": 3628312800,
-      "ttft": 1351738600,
-      "endpoint_delay": 932272500,
+      "duration": 3622703900,
+      "ttft": 1322179900,
+      "endpoint_delay": 930649500,
       "second_pass_latency": 0
     },
     {
@@ -815,9 +815,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2496560800,
-      "ttft": 1312413500,
-      "endpoint_delay": 1230446700,
+      "duration": 2513566900,
+      "ttft": 1353219900,
+      "endpoint_delay": 1260873800,
       "second_pass_latency": 0
     },
     {
@@ -835,10 +835,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7453846100,
-      "ttft": 1364479500,
+      "duration": 7266873600,
+      "ttft": 1353567400,
       "endpoint_delay": 0,
-      "second_pass_latency": 382000000,
+      "second_pass_latency": 351000000,
       "key_term_hit": true
     },
     {
@@ -851,15 +851,16 @@
       "accent": "es-ES",
       "wav_file": "base_dict_es_incision_am.wav",
       "passed": true,
-      "transcript": "El sitio de la incisisión está limpio sin signos de inflamación ni eritema.",
+      "transcript": "El sitio de la incisión está limpio sin signos de inflamación ni eritema.",
       "class": "ACCEPT",
       "decision": "ACCEPT",
-      "wer": 0.07692307692307693,
-      "cer": 0.03333333333333333,
-      "duration": 7418844000,
-      "ttft": 1314933600,
+      "wer": 0,
+      "cer": 0,
+      "duration": 7420871200,
+      "ttft": 1354218800,
       "endpoint_delay": 0,
-      "second_pass_latency": 344000000
+      "second_pass_latency": 436000000,
+      "key_term_hit": true
     },
     {
       "id": "T2_CLEAN_DICT_ES_MED_ES",
@@ -876,10 +877,10 @@
       "decision": "ACCEPT",
       "wer": 0.25,
       "cer": 0.09615384615384616,
-      "duration": 6668492800,
-      "ttft": 1350396400,
+      "duration": 6628301500,
+      "ttft": 1320824000,
       "endpoint_delay": 0,
-      "second_pass_latency": 348000000
+      "second_pass_latency": 313000000
     },
     {
       "id": "T2_CLEAN_DICT_ES_BENCH_EF",
@@ -896,10 +897,10 @@
       "decision": "ACCEPT",
       "wer": 0.07692307692307693,
       "cer": 0.0196078431372549,
-      "duration": 6510019900,
-      "ttft": 1321895300,
+      "duration": 6518216800,
+      "ttft": 1350648400,
       "endpoint_delay": 0,
-      "second_pass_latency": 358000000,
+      "second_pass_latency": 317000000,
       "key_term_hit": true
     },
     {
@@ -917,10 +918,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7216004400,
-      "ttft": 1333408300,
+      "duration": 7186962600,
+      "ttft": 1323851800,
       "endpoint_delay": 0,
-      "second_pass_latency": 392000000,
+      "second_pass_latency": 464000000,
       "key_term_hit": true
     },
     {
@@ -938,10 +939,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7035426900,
-      "ttft": 1380099500,
+      "duration": 7068756200,
+      "ttft": 1320529700,
       "endpoint_delay": 0,
-      "second_pass_latency": 324000000,
+      "second_pass_latency": 375000000,
       "key_term_hit": true
     },
     {
@@ -959,10 +960,10 @@
       "decision": "ACCEPT",
       "wer": 0.25,
       "cer": 0.11320754716981132,
-      "duration": 6968339900,
-      "ttft": 1332698500,
+      "duration": 6968801100,
+      "ttft": 1321665100,
       "endpoint_delay": 0,
-      "second_pass_latency": 313000000
+      "second_pass_latency": 331000000
     },
     {
       "id": "T2_CLEAN_DICT_PT_STATUS_PF",
@@ -979,10 +980,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6543030600,
-      "ttft": 1352724200,
+      "duration": 6537374000,
+      "ttft": 1442203700,
       "endpoint_delay": 0,
-      "second_pass_latency": 295000000,
+      "second_pass_latency": 305000000,
       "key_term_hit": true
     },
     {
@@ -1000,10 +1001,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7616850000,
-      "ttft": 1306836300,
+      "duration": 7620550600,
+      "ttft": 1351668500,
       "endpoint_delay": 0,
-      "second_pass_latency": 332000000,
+      "second_pass_latency": 365000000,
       "key_term_hit": true
     },
     {
@@ -1021,10 +1022,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7459258800,
-      "ttft": 1356354000,
+      "duration": 7485635000,
+      "ttft": 1320270400,
       "endpoint_delay": 0,
-      "second_pass_latency": 385000000,
+      "second_pass_latency": 369000000,
       "key_term_hit": true
     },
     {
@@ -1042,10 +1043,10 @@
       "decision": "ACCEPT",
       "wer": 0.25,
       "cer": 0.044444444444444446,
-      "duration": 7082421300,
-      "ttft": 1356757400,
+      "duration": 7095316300,
+      "ttft": 1321007100,
       "endpoint_delay": 0,
-      "second_pass_latency": 328000000,
+      "second_pass_latency": 335000000,
       "key_term_hit": true
     },
     {
@@ -1063,10 +1064,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6586300100,
-      "ttft": 1353361800,
+      "duration": 6549120900,
+      "ttft": 810717400,
       "endpoint_delay": 0,
-      "second_pass_latency": 345000000,
+      "second_pass_latency": 350000000,
       "key_term_hit": true
     },
     {
@@ -1084,10 +1085,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7747819700,
-      "ttft": 1385130100,
+      "duration": 7724878100,
+      "ttft": 1323285500,
       "endpoint_delay": 0,
-      "second_pass_latency": 423000000,
+      "second_pass_latency": 380000000,
       "key_term_hit": true
     },
     {
@@ -1105,10 +1106,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7645375900,
-      "ttft": 1327705000,
+      "duration": 7648141600,
+      "ttft": 1322619600,
       "endpoint_delay": 0,
-      "second_pass_latency": 402000000,
+      "second_pass_latency": 467000000,
       "key_term_hit": true
     },
     {
@@ -1126,10 +1127,10 @@
       "decision": "ACCEPT",
       "wer": 0.125,
       "cer": 0.023255813953488372,
-      "duration": 6869465800,
-      "ttft": 1309798700,
+      "duration": 6851768300,
+      "ttft": 1320883200,
       "endpoint_delay": 0,
-      "second_pass_latency": 350000000
+      "second_pass_latency": 337000000
     },
     {
       "id": "T2_CLEAN_DICT_IT_BENCH_IM",
@@ -1146,10 +1147,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6683710700,
-      "ttft": 1314469400,
+      "duration": 6688373100,
+      "ttft": 1321679800,
       "endpoint_delay": 0,
-      "second_pass_latency": 336000000,
+      "second_pass_latency": 334000000,
       "key_term_hit": true
     },
     {
@@ -1162,16 +1163,15 @@
       "accent": "zh-CN",
       "wav_file": "base_dict_zh_vitals_xb.wav",
       "passed": true,
-      "transcript": "患者生命体征平稳, อ压核心绿均在正常范围内.",
+      "transcript": "患者生命体争平稳, g压核心绿军在正常范围内.",
       "class": "ACCEPT",
       "decision": "ACCEPT",
-      "wer": 0.15,
-      "cer": 0.15,
-      "duration": 9117054600,
-      "ttft": 1338571500,
+      "wer": 0.25,
+      "cer": 0.25,
+      "duration": 9158266800,
+      "ttft": 1325248000,
       "endpoint_delay": 0,
-      "second_pass_latency": 0,
-      "key_term_hit": true
+      "second_pass_latency": 0
     },
     {
       "id": "T2_CLEAN_DICT_ZH_INCISION_YJ",
@@ -1183,13 +1183,13 @@
       "accent": "zh-CN",
       "wav_file": "base_dict_zh_incision_yj.wav",
       "passed": true,
-      "transcript": "手术切口干燥整接, 为见明显红种肾出极感染迹象.",
+      "transcript": "手术切口干燥整结, 未见明显红种肾出极感染迹象.",
       "class": "ACCEPT",
       "decision": "ACCEPT",
-      "wer": 0.23809523809523808,
-      "cer": 0.23809523809523808,
-      "duration": 8768740300,
-      "ttft": 1324210500,
+      "wer": 0.19047619047619047,
+      "cer": 0.19047619047619047,
+      "duration": 8731670700,
+      "ttft": 1380910600,
       "endpoint_delay": 0,
       "second_pass_latency": 0,
       "key_term_hit": true
@@ -1204,13 +1204,13 @@
       "accent": "zh-CN",
       "wav_file": "base_dict_zh_med_xn.wav",
       "passed": false,
-      "transcript": "竟麦腿著米打左轮量好课, 你切馆茶欢这真状态.",
+      "transcript": "经脉腿著米打左轮量毫克, 你切管茶欢这真状态.",
       "class": "ACCEPT",
       "decision": "ACCEPT",
-      "wer": 0.8571428571428571,
-      "cer": 0.8571428571428571,
-      "duration": 8391489200,
-      "ttft": 1354030200,
+      "wer": 0.7142857142857143,
+      "cer": 0.7142857142857143,
+      "duration": 8419232200,
+      "ttft": 1321562300,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1223,14 +1223,14 @@
       "noise_type": "clean",
       "accent": "zh-CN",
       "wav_file": "base_dict_zh_anesthesia_yx.wav",
-      "passed": true,
-      "transcript": "全神麻最右岛平稳, 器罐插管顺利通气良好.",
+      "passed": false,
+      "transcript": "全神麻最右岛平稳, 器罐差管顺利, 通气良好.",
       "class": "ACCEPT",
       "decision": "ACCEPT",
-      "wer": 0.3333333333333333,
-      "cer": 0.3333333333333333,
-      "duration": 8604673100,
-      "ttft": 1300855400,
+      "wer": 0.3888888888888889,
+      "cer": 0.3888888888888889,
+      "duration": 8591084900,
+      "ttft": 1351255300,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1244,13 +1244,13 @@
       "accent": "zh-CN",
       "wav_file": "base_dict_zh_status_xx.wav",
       "passed": true,
-      "transcript": "语音处理管道语音频测试平台已成功建立并就续.",
+      "transcript": "语音处理管道语音频测试平台已成功建立, 并就续.",
       "class": "ACCEPT",
       "decision": "ACCEPT",
       "wer": 0.09523809523809523,
       "cer": 0.09523809523809523,
-      "duration": 7460701800,
-      "ttft": 1360412700,
+      "duration": 7500246600,
+      "ttft": 1322522700,
       "endpoint_delay": 0,
       "second_pass_latency": 0,
       "key_term_hit": true
@@ -1265,15 +1265,16 @@
       "accent": "zh-CN",
       "wav_file": "base_dict_zh_postop_xy.wav",
       "passed": true,
-      "transcript": "树后神至清楚, 自助呼吸恢复良好, 安返病房.",
+      "transcript": "术后神智清楚, 自主呼吸恢复良好, 安返病房.",
       "class": "ACCEPT",
       "decision": "ACCEPT",
-      "wer": 0.16666666666666666,
-      "cer": 0.16666666666666666,
-      "duration": 8776031900,
-      "ttft": 1299870200,
+      "wer": 0.05555555555555555,
+      "cer": 0.05555555555555555,
+      "duration": 8748361400,
+      "ttft": 1351921100,
       "endpoint_delay": 0,
-      "second_pass_latency": 0
+      "second_pass_latency": 0,
+      "key_term_hit": true
     },
     {
       "id": "T2_CLEAN_DICT_ZH_BLOOD_YXIA",
@@ -1290,8 +1291,8 @@
       "decision": "ACCEPT",
       "wer": 0.47368421052631576,
       "cer": 0.47368421052631576,
-      "duration": 8935708300,
-      "ttft": 1353633500,
+      "duration": 8947224500,
+      "ttft": 1321222700,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1305,13 +1306,13 @@
       "accent": "zh-CN",
       "wav_file": "base_dict_zh_neuro_yy.wav",
       "passed": true,
-      "transcript": "神经反射正常, 双色同孔等大同源, 对光反射灵民.",
+      "transcript": "神经反射正常, 双色同孔等大同员对光反射灵民.",
       "class": "ACCEPT",
       "decision": "ACCEPT",
       "wer": 0.2,
       "cer": 0.2,
-      "duration": 8624233200,
-      "ttft": 1349648400,
+      "duration": 8612119700,
+      "ttft": 1322217100,
       "endpoint_delay": 0,
       "second_pass_latency": 0,
       "key_term_hit": true
@@ -1326,13 +1327,13 @@
       "accent": "zh-CN",
       "wav_file": "base_dict_zh_fast_xb.wav",
       "passed": false,
-      "transcript": "宽速记录, 金绿鬼长, 乌吸平稳, 装费呼吸引擎.",
+      "transcript": "宽速记录, 金绿鬼让乌西平稳. 庆庆.",
       "class": "ACCEPT",
       "decision": "ACCEPT",
-      "wer": 0.5555555555555556,
-      "cer": 0.5555555555555556,
-      "duration": 9328734400,
-      "ttft": 1361290800,
+      "wer": 0.7222222222222222,
+      "cer": 0.7222222222222222,
+      "duration": 9308695900,
+      "ttft": 1291135400,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1346,13 +1347,13 @@
       "accent": "zh-CN",
       "wav_file": "base_dict_zh_slow_yj.wav",
       "passed": false,
-      "transcript": "缓慢记录. 持续行电减护, 观察饮留业性状.",
+      "transcript": "焕慢记录. 持续行电减货, 观察饮留业性状.",
       "class": "ACCEPT",
       "decision": "ACCEPT",
-      "wer": 0.3684210526315789,
-      "cer": 0.3684210526315789,
-      "duration": 9354687200,
-      "ttft": 1354821500,
+      "wer": 0.47368421052631576,
+      "cer": 0.47368421052631576,
+      "duration": 9368235700,
+      "ttft": 1321272400,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1366,13 +1367,13 @@
       "accent": "zh-CN",
       "wav_file": "base_dict_zh_discharge_xn.wav",
       "passed": false,
-      "transcript": "曾以驻鬼. 安史幻药以走后门镇复查.",
+      "transcript": "曾以驻鬼. 安史幻药一种后门政复查.",
       "class": "ACCEPT",
       "decision": "ACCEPT",
-      "wer": 0.7222222222222222,
-      "cer": 0.7222222222222222,
-      "duration": 8740418700,
-      "ttft": 1326098700,
+      "wer": 0.6666666666666666,
+      "cer": 0.6666666666666666,
+      "duration": 8742746200,
+      "ttft": 1321244000,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1386,16 +1387,15 @@
       "accent": "zh-CN",
       "wav_file": "base_dict_zh_pathology_yx.wav",
       "passed": true,
-      "transcript": "树中快速病理切片回报未良性病变。 边缘为建残留.",
+      "transcript": "树中快速病切片回报为良性病变。 边缘为建残留.",
       "class": "ACCEPT",
       "decision": "ACCEPT",
       "wer": 0.19047619047619047,
       "cer": 0.19047619047619047,
-      "duration": 8169099500,
-      "ttft": 1349206200,
+      "duration": 8223233000,
+      "ttft": 1350972300,
       "endpoint_delay": 0,
-      "second_pass_latency": 0,
-      "key_term_hit": true
+      "second_pass_latency": 0
     },
     {
       "id": "T2_CLEAN_DICT_ZH_OXYGEN_XX",
@@ -1412,8 +1412,8 @@
       "decision": "ACCEPT",
       "wer": 0.34782608695652173,
       "cer": 0.34782608695652173,
-      "duration": 8546986300,
-      "ttft": 1380181100,
+      "duration": 8555008700,
+      "ttft": 1442405800,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1427,13 +1427,13 @@
       "accent": "zh-CN",
       "wav_file": "base_dict_zh_diagnosis_xy.wav",
       "passed": false,
-      "transcript": "初步诊断明确, 吴特书进记证女行则欺负枪近手术.",
+      "transcript": "初步诊断明确. 特殊竞技证, 女行则欺负枪净手术.",
       "class": "ACCEPT",
       "decision": "ACCEPT",
-      "wer": 0.47619047619047616,
-      "cer": 0.47619047619047616,
-      "duration": 9255797400,
-      "ttft": 1328614400,
+      "wer": 0.42857142857142855,
+      "cer": 0.42857142857142855,
+      "duration": 9199516500,
+      "ttft": 1320906700,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1455,9 +1455,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2557358200,
-      "ttft": 1299465100,
-      "endpoint_delay": 1260869700,
+      "duration": 2513809800,
+      "ttft": 1321117900,
+      "endpoint_delay": 1321067800,
       "second_pass_latency": 0
     },
     {
@@ -1478,9 +1478,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2497633800,
-      "ttft": 1321110300,
-      "endpoint_delay": 1200623000,
+      "duration": 2514581200,
+      "ttft": 1320856100,
+      "endpoint_delay": 1320906000,
       "second_pass_latency": 0
     },
     {
@@ -1501,9 +1501,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2527982300,
-      "ttft": 1324175900,
-      "endpoint_delay": 1201118700,
+      "duration": 2512960500,
+      "ttft": 1321282200,
+      "endpoint_delay": 1200852800,
       "second_pass_latency": 0
     },
     {
@@ -1524,8 +1524,8 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2525377700,
-      "ttft": 1320455300,
+      "duration": 2513352100,
+      "ttft": 1321009500,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1546,9 +1546,9 @@
       "reason": "LOW_CONFIDENCE",
       "wer": 0.5,
       "cer": 0.08333333333333333,
-      "duration": 3101200200,
-      "ttft": 1321451300,
-      "endpoint_delay": 511037300,
+      "duration": 3083791900,
+      "ttft": 1350012400,
+      "endpoint_delay": 510754200,
       "second_pass_latency": 0
     },
     {
@@ -1568,8 +1568,8 @@
       "reason": "LOW_CONFIDENCE",
       "wer": 0.5,
       "cer": 0.6666666666666666,
-      "duration": 1980187000,
-      "ttft": 1357931400,
+      "duration": 1944626500,
+      "ttft": 1320082900,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1591,9 +1591,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2519367100,
-      "ttft": 1322205800,
-      "endpoint_delay": 648100,
+      "duration": 2514857000,
+      "ttft": 1380596800,
+      "endpoint_delay": 865400,
       "second_pass_latency": 0
     },
     {
@@ -1614,9 +1614,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2555826700,
-      "ttft": 1323944900,
-      "endpoint_delay": 120702700,
+      "duration": 2513294900,
+      "ttft": 1320821300,
+      "endpoint_delay": 91116000,
       "second_pass_latency": 0
     },
     {
@@ -1637,9 +1637,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2525057800,
-      "ttft": 1352398800,
-      "endpoint_delay": 1231031700,
+      "duration": 2513853800,
+      "ttft": 1320092500,
+      "endpoint_delay": 1290801600,
       "second_pass_latency": 0
     },
     {
@@ -1660,8 +1660,8 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2527715900,
-      "ttft": 1347881400,
+      "duration": 2513995100,
+      "ttft": 1350634700,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1683,9 +1683,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2527323200,
-      "ttft": 1326328800,
-      "endpoint_delay": 1201046000,
+      "duration": 2514918700,
+      "ttft": 1321862500,
+      "endpoint_delay": 1200851800,
       "second_pass_latency": 0
     },
     {
@@ -1706,9 +1706,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2528205300,
-      "ttft": 1357506900,
-      "endpoint_delay": 1230830700,
+      "duration": 2513150500,
+      "ttft": 1321138200,
+      "endpoint_delay": 1230607100,
       "second_pass_latency": 0
     },
     {
@@ -1729,9 +1729,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2498441700,
-      "ttft": 1322988200,
-      "endpoint_delay": 1200680200,
+      "duration": 2513656100,
+      "ttft": 1320642900,
+      "endpoint_delay": 1230842400,
       "second_pass_latency": 0
     },
     {
@@ -1752,8 +1752,8 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2520113300,
-      "ttft": 1357191400,
+      "duration": 2515593900,
+      "ttft": 1320076900,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1775,8 +1775,8 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2525206600,
-      "ttft": 1353035000,
+      "duration": 2513988100,
+      "ttft": 1320447200,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1798,8 +1798,8 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2528100400,
-      "ttft": 1322946700,
+      "duration": 2512954600,
+      "ttft": 1320936200,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1813,16 +1813,15 @@
       "noise_type": "white",
       "accent": "en-US",
       "wav_file": "t2_cmd_start_rec_am_snrm05.wav",
-      "passed": true,
-      "transcript": "Start recording",
-      "intent_id": "START_RECORDING",
-      "confidence": 1,
+      "passed": false,
+      "transcript": "Start reporting",
       "class": "ACCEPT",
-      "decision": "ACCEPT",
-      "wer": 0,
-      "cer": 0,
-      "duration": 2527273200,
-      "ttft": 1375245200,
+      "decision": "REJECT",
+      "reason": "LOW_CONFIDENCE",
+      "wer": 0.5,
+      "cer": 0.14285714285714285,
+      "duration": 2514254100,
+      "ttft": 1320496900,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1844,9 +1843,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2497046200,
-      "ttft": 1326999900,
-      "endpoint_delay": 150737800,
+      "duration": 2482942600,
+      "ttft": 1320851300,
+      "endpoint_delay": 150799300,
       "second_pass_latency": 0
     },
     {
@@ -1867,9 +1866,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2526340700,
-      "ttft": 1351651300,
-      "endpoint_delay": 121122200,
+      "duration": 2513220400,
+      "ttft": 1321445900,
+      "endpoint_delay": 121381600,
       "second_pass_latency": 0
     },
     {
@@ -1890,9 +1889,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2527548700,
-      "ttft": 1381333500,
-      "endpoint_delay": 1231036000,
+      "duration": 2546108300,
+      "ttft": 1350870900,
+      "endpoint_delay": 1263051500,
       "second_pass_latency": 0
     },
     {
@@ -1913,8 +1912,8 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2523422600,
-      "ttft": 1388600000,
+      "duration": 2513527100,
+      "ttft": 1351608600,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1936,9 +1935,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2527531800,
-      "ttft": 1356417400,
-      "endpoint_delay": 1140689800,
+      "duration": 2512836100,
+      "ttft": 1321972200,
+      "endpoint_delay": 1140833500,
       "second_pass_latency": 0
     },
     {
@@ -1957,10 +1956,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6396592600,
-      "ttft": 795749900,
+      "duration": 6379698700,
+      "ttft": 781972100,
       "endpoint_delay": 0,
-      "second_pass_latency": 240000000,
+      "second_pass_latency": 334000000,
       "key_term_hit": true
     },
     {
@@ -1979,10 +1978,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6436384900,
-      "ttft": 784047100,
+      "duration": 6367664100,
+      "ttft": 781711500,
       "endpoint_delay": 0,
-      "second_pass_latency": 311000000,
+      "second_pass_latency": 265000000,
       "key_term_hit": true
     },
     {
@@ -2001,10 +2000,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6384981000,
-      "ttft": 1361132000,
+      "duration": 6391310000,
+      "ttft": 1320930800,
       "endpoint_delay": 0,
-      "second_pass_latency": 272000000,
+      "second_pass_latency": 267000000,
       "key_term_hit": true
     },
     {
@@ -2023,10 +2022,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6376782900,
-      "ttft": 1375886900,
+      "duration": 6368967900,
+      "ttft": 1320881200,
       "endpoint_delay": 0,
-      "second_pass_latency": 302000000,
+      "second_pass_latency": 273000000,
       "key_term_hit": true
     },
     {
@@ -2040,16 +2039,15 @@
       "accent": "en-GB",
       "wav_file": "t2_dict_bench_bf_snr00.wav",
       "passed": true,
-      "transcript": "The Voice Pipeline test bench is operational and ready.",
+      "transcript": "The Voice Pipeline testbench is operational and ready.",
       "class": "ACCEPT",
       "decision": "ACCEPT",
-      "wer": 0,
+      "wer": 0.2222222222222222,
       "cer": 0,
-      "duration": 6377755300,
-      "ttft": 1331792500,
+      "duration": 6391449600,
+      "ttft": 1320984000,
       "endpoint_delay": 0,
-      "second_pass_latency": 291000000,
-      "key_term_hit": true
+      "second_pass_latency": 281000000
     },
     {
       "id": "T2_DICT_BENCH_BF_SNRM05",
@@ -2062,15 +2060,15 @@
       "accent": "en-GB",
       "wav_file": "t2_dict_bench_bf_snrm05.wav",
       "passed": true,
-      "transcript": "The voice point manifestment is operational and ready.",
+      "transcript": "The Voice Might 96 is operational and ready.",
       "class": "ACCEPT",
       "decision": "ACCEPT",
       "wer": 0.3333333333333333,
-      "cer": 0.21739130434782608,
-      "duration": 6400796600,
-      "ttft": 1330369500,
+      "cer": 0.32608695652173914,
+      "duration": 6369961800,
+      "ttft": 1320160800,
       "endpoint_delay": 0,
-      "second_pass_latency": 270000000
+      "second_pass_latency": 280000000
     },
     {
       "id": "T2_DICT_BENCH_BF_TYPING_15",
@@ -2088,10 +2086,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6385755700,
-      "ttft": 1380118100,
+      "duration": 6400922300,
+      "ttft": 781443100,
       "endpoint_delay": 0,
-      "second_pass_latency": 281000000,
+      "second_pass_latency": 267000000,
       "key_term_hit": true
     },
     {
@@ -2110,10 +2108,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6408607300,
-      "ttft": 1337815000,
+      "duration": 6392336000,
+      "ttft": 750633400,
       "endpoint_delay": 0,
-      "second_pass_latency": 282000000,
+      "second_pass_latency": 275000000,
       "key_term_hit": true
     },
     {
@@ -2132,10 +2130,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6375522500,
-      "ttft": 762884200,
+      "duration": 6389298900,
+      "ttft": 752366200,
       "endpoint_delay": 0,
-      "second_pass_latency": 270000000,
+      "second_pass_latency": 278000000,
       "key_term_hit": true
     },
     {
@@ -2154,10 +2152,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6433812000,
-      "ttft": 1333541500,
+      "duration": 6358683200,
+      "ttft": 1321069100,
       "endpoint_delay": 0,
-      "second_pass_latency": 306000000,
+      "second_pass_latency": 257000000,
       "key_term_hit": true
     },
     {
@@ -2176,10 +2174,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6407197100,
-      "ttft": 1339492300,
+      "duration": 6404269600,
+      "ttft": 782083900,
       "endpoint_delay": 0,
-      "second_pass_latency": 313000000,
+      "second_pass_latency": 298000000,
       "key_term_hit": true
     },
     {
@@ -2198,10 +2196,10 @@
       "decision": "ACCEPT",
       "wer": 0.2727272727272727,
       "cer": 0.17307692307692307,
-      "duration": 8045844900,
-      "ttft": 1356791000,
+      "duration": 8052466100,
+      "ttft": 1321256500,
       "endpoint_delay": 0,
-      "second_pass_latency": 283000000,
+      "second_pass_latency": 263000000,
       "key_term_hit": true
     },
     {
@@ -2220,10 +2218,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 8041458800,
-      "ttft": 1299564800,
+      "duration": 8156489400,
+      "ttft": 1320438600,
       "endpoint_delay": 0,
-      "second_pass_latency": 401000000,
+      "second_pass_latency": 410000000,
       "key_term_hit": true
     },
     {
@@ -2242,10 +2240,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 8075502800,
-      "ttft": 1350885500,
+      "duration": 8091415700,
+      "ttft": 1351273800,
       "endpoint_delay": 0,
-      "second_pass_latency": 401000000,
+      "second_pass_latency": 374000000,
       "key_term_hit": true
     },
     {
@@ -2258,16 +2256,16 @@
       "noise_type": "white",
       "accent": "en-US",
       "wav_file": "t2_dict_vitals_am_snr00.wav",
-      "passed": true,
-      "transcript": "Patient vital signs are stable with blood pressure 120 over 8.",
+      "passed": false,
+      "transcript": "Are stable with blood pressure 120 over eight.",
       "class": "ACCEPT",
       "decision": "ACCEPT",
-      "wer": 0.09090909090909091,
-      "cer": 0.019230769230769232,
-      "duration": 8038567700,
-      "ttft": 1357236300,
+      "wer": 0.36363636363636365,
+      "cer": 0.4230769230769231,
+      "duration": 8057868500,
+      "ttft": 3001007200,
       "endpoint_delay": 0,
-      "second_pass_latency": 340000000,
+      "second_pass_latency": 286000000,
       "key_term_hit": true
     },
     {
@@ -2286,10 +2284,10 @@
       "decision": "ACCEPT",
       "wer": 0.2727272727272727,
       "cer": 0.17307692307692307,
-      "duration": 8040560800,
-      "ttft": 1313008200,
+      "duration": 8041018600,
+      "ttft": 1320021400,
       "endpoint_delay": 0,
-      "second_pass_latency": 302000000,
+      "second_pass_latency": 269000000,
       "key_term_hit": true
     },
     {
@@ -2308,10 +2306,10 @@
       "decision": "ACCEPT",
       "wer": 0.2727272727272727,
       "cer": 0.17307692307692307,
-      "duration": 8095964200,
-      "ttft": 1381007300,
+      "duration": 7999141900,
+      "ttft": 1320598200,
       "endpoint_delay": 0,
-      "second_pass_latency": 275000000,
+      "second_pass_latency": 274000000,
       "key_term_hit": true
     },
     {
@@ -2330,10 +2328,10 @@
       "decision": "ACCEPT",
       "wer": 0.2727272727272727,
       "cer": 0.17307692307692307,
-      "duration": 8049163500,
-      "ttft": 1318608600,
+      "duration": 8039141400,
+      "ttft": 1320767100,
       "endpoint_delay": 0,
-      "second_pass_latency": 283000000,
+      "second_pass_latency": 269000000,
       "key_term_hit": true
     },
     {
@@ -2352,10 +2350,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7044174600,
-      "ttft": 1313656200,
+      "duration": 7057906200,
+      "ttft": 1321192200,
       "endpoint_delay": 0,
-      "second_pass_latency": 333000000,
+      "second_pass_latency": 347000000,
       "key_term_hit": true
     },
     {
@@ -2374,10 +2372,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7092464300,
-      "ttft": 1361576500,
+      "duration": 7050255300,
+      "ttft": 1321344400,
       "endpoint_delay": 0,
-      "second_pass_latency": 374000000,
+      "second_pass_latency": 355000000,
       "key_term_hit": true
     },
     {
@@ -2397,9 +2395,9 @@
       "reason": "NEGATION_DETECTED",
       "wer": 0,
       "cer": 0,
-      "duration": 2490287200,
-      "ttft": 1326090600,
-      "endpoint_delay": 780376700,
+      "duration": 2514358200,
+      "ttft": 1323287300,
+      "endpoint_delay": 810491400,
       "second_pass_latency": 0
     },
     {
@@ -2419,8 +2417,8 @@
       "reason": "NEGATION_DETECTED",
       "wer": 0,
       "cer": 0,
-      "duration": 2489998400,
-      "ttft": 1336732600,
+      "duration": 2514777300,
+      "ttft": 1320981200,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -2441,9 +2439,9 @@
       "reason": "NEGATION_DETECTED",
       "wer": 0,
       "cer": 0,
-      "duration": 3067694800,
-      "ttft": 1340415500,
-      "endpoint_delay": 120572500,
+      "duration": 3054552800,
+      "ttft": 1321394100,
+      "endpoint_delay": 120212700,
       "second_pass_latency": 0
     },
     {
@@ -2464,9 +2462,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2496818100,
-      "ttft": 1314221100,
-      "endpoint_delay": 1230997900,
+      "duration": 2484311400,
+      "ttft": 1321051100,
+      "endpoint_delay": 1230303400,
       "second_pass_latency": 0
     },
     {
@@ -2479,16 +2477,17 @@
       "noise_type": "white",
       "accent": "es",
       "wav_file": "t2_cmd_es_ef_snr10.wav",
-      "passed": false,
-      "transcript": "Open setting",
+      "passed": true,
+      "transcript": "Open settings",
+      "intent_id": "NAV_SETTINGS",
+      "confidence": 1,
       "class": "ACCEPT",
-      "decision": "REJECT",
-      "reason": "LOW_CONFIDENCE",
-      "wer": 0.5,
-      "cer": 0.08333333333333333,
-      "duration": 2496688100,
-      "ttft": 1334049200,
-      "endpoint_delay": 630877300,
+      "decision": "ACCEPT",
+      "wer": 0,
+      "cer": 0,
+      "duration": 2483494100,
+      "ttft": 1320773100,
+      "endpoint_delay": 630974500,
       "second_pass_latency": 0
     },
     {
@@ -2508,9 +2507,9 @@
       "reason": "LOW_CONFIDENCE",
       "wer": 0.5,
       "cer": 0.08333333333333333,
-      "duration": 2525784300,
-      "ttft": 1336888100,
-      "endpoint_delay": 61094400,
+      "duration": 2514020000,
+      "ttft": 1320679300,
+      "endpoint_delay": 60975300,
       "second_pass_latency": 0
     },
     {
@@ -2529,10 +2528,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7455182100,
-      "ttft": 1315437100,
+      "duration": 7226564900,
+      "ttft": 1320776900,
       "endpoint_delay": 0,
-      "second_pass_latency": 331000000,
+      "second_pass_latency": 320000000,
       "key_term_hit": true
     },
     {
@@ -2551,10 +2550,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7235532800,
-      "ttft": 1351752800,
+      "duration": 7239247000,
+      "ttft": 1321080600,
       "endpoint_delay": 0,
-      "second_pass_latency": 355000000,
+      "second_pass_latency": 313000000,
       "key_term_hit": true
     },
     {
@@ -2573,10 +2572,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7646081400,
-      "ttft": 1350208200,
+      "duration": 7639626300,
+      "ttft": 1350695600,
       "endpoint_delay": 0,
-      "second_pass_latency": 406000000,
+      "second_pass_latency": 363000000,
       "key_term_hit": true
     },
     {
@@ -2595,10 +2594,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7706535500,
-      "ttft": 1321382700,
+      "duration": 7698554900,
+      "ttft": 1320263700,
       "endpoint_delay": 0,
-      "second_pass_latency": 366000000,
+      "second_pass_latency": 441000000,
       "key_term_hit": true
     },
     {
@@ -2612,13 +2611,13 @@
       "accent": "zh-CN",
       "wav_file": "t2_dict_zh_vitals_xb_snr15_pink.wav",
       "passed": true,
-      "transcript": "患者圣命体争平稳, 却压核心绿军在正常范围内.",
+      "transcript": "患者圣命体争平, ื压核心绿军在正常范围内.",
       "class": "ACCEPT",
       "decision": "ACCEPT",
-      "wer": 0.3,
-      "cer": 0.3,
-      "duration": 9110895500,
-      "ttft": 1351876200,
+      "wer": 0.35,
+      "cer": 0.35,
+      "duration": 9112765100,
+      "ttft": 1321303300,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -2633,13 +2632,13 @@
       "accent": "zh-CN",
       "wav_file": "t2_dict_zh_vitals_xb_typing_15.wav",
       "passed": true,
-      "transcript": "患者生命体真平稳, 粤行绿军在正常范围内.",
+      "transcript": "患者生命体真平稳, 血压核心绿均在正常范围内.",
       "class": "ACCEPT",
       "decision": "ACCEPT",
-      "wer": 0.35,
-      "cer": 0.35,
-      "duration": 9108249400,
-      "ttft": 1315666600,
+      "wer": 0.15,
+      "cer": 0.15,
+      "duration": 9098755300,
+      "ttft": 1321094800,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -2654,13 +2653,13 @@
       "accent": "zh-CN",
       "wav_file": "t2_dict_zh_incision_yj_babble_15.wav",
       "passed": true,
-      "transcript": "手术切口干燥整接, 为见明显红种肾出极感染迹象.",
+      "transcript": "手术切口干燥整接, 为建明显红种肾出极感染迹象.",
       "class": "ACCEPT",
       "decision": "ACCEPT",
-      "wer": 0.23809523809523808,
-      "cer": 0.23809523809523808,
-      "duration": 8716715100,
-      "ttft": 1380633800,
+      "wer": 0.2857142857142857,
+      "cer": 0.2857142857142857,
+      "duration": 8717687400,
+      "ttft": 1320915500,
       "endpoint_delay": 0,
       "second_pass_latency": 0,
       "key_term_hit": true
@@ -2676,13 +2675,13 @@
       "accent": "zh-CN",
       "wav_file": "t2_dict_zh_incision_yj_reverb.wav",
       "passed": true,
-      "transcript": "手术切口干燥整解, 为建明显红种肾出极感染迹象.",
+      "transcript": "手术切口干燥整解, 未见明显红种肾出极感染迹象.",
       "class": "ACCEPT",
       "decision": "ACCEPT",
-      "wer": 0.2857142857142857,
-      "cer": 0.2857142857142857,
-      "duration": 8745448800,
-      "ttft": 1351673400,
+      "wer": 0.19047619047619047,
+      "cer": 0.19047619047619047,
+      "duration": 8728194800,
+      "ttft": 1320460500,
       "endpoint_delay": 0,
       "second_pass_latency": 0,
       "key_term_hit": true
@@ -2700,7 +2699,7 @@
       "decision": "SILENCE",
       "wer": 0,
       "cer": 0,
-      "duration": 3591569900,
+      "duration": 3562348700,
       "ttft": 0,
       "endpoint_delay": 0,
       "second_pass_latency": 0
@@ -2718,7 +2717,7 @@
       "decision": "SILENCE",
       "wer": 0,
       "cer": 0,
-      "duration": 3628825200,
+      "duration": 3564246100,
       "ttft": 0,
       "endpoint_delay": 0,
       "second_pass_latency": 0

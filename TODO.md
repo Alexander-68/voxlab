@@ -12,10 +12,10 @@ Finished work is in the git log and is not repeated here.
 - **Synthetic Round-Trip Acoustic Evaluation (Tier 1 & Tier 2)**:
   - **Tier 1 Smoke Suite**: 5 golden test cases verifying zero-regression pipeline health (~25s). Runs on every `go test`; skips without models.
   - **Tier 2 Deep Acoustic Matrix**: On demand (`go run ./cmd/eval_bench -tier 2`, or `VOXLAB_TIER2=1 go test ./pkg/evaluation/ -timeout 40m`; about 10 minutes, audio is fed at real time). Full 104-clip acoustic benchmark matrix spanning 20+ Kokoro voices, British/American accents, and extended multilingual dictation suites across Spanish (`es-ES`), Brazilian Portuguese (`pt-BR`), French (`fr-FR`), Italian (`it-IT`), and Mandarin Chinese (`zh-CN` with 18 varied acoustic cases), speaking rates (0.8x - 1.3x), SNR degradation ladder (+20dB down to -5dB), mechanical typing clacks, room babble chatter, acoustic room reverb, and sub-gate noise suppression. (Japanese removed from supported matrix due to lack of native ASR dictionary in resident models).
-  - **Measured Results** (Tier 2 at `4fe6c6d`; report and settings in `data/eval_report_tier-2-deep-matrix.json`): **94/104 passed (90.4%)**,
-    above the Tier 2 test's 80% bar. 0 audio chunks dropped. Second pass costs about 350 ms per dictation segment. Against the previous 93/104,
-    four transcripts changed with the new second-pass pads: French "vie intraveineuse" now passes; two Spanish items still pass with small slips.
-    The per-language table below is from the 93/104 run.
+  - **Measured Results** (Tier 2 re-baselined with anti-aliased sinc resampler; report and settings in `data/eval_report_tier-2-deep-matrix.json`): **92/104 passed (88.5%)**,
+    above the Tier 2 test's 80% bar. 0 audio chunks dropped. Second pass costs about 331 ms per dictation segment.
+    With anti-aliased sinc downsampling (24 to 16 kHz), French dictation now achieves 4/4 (100% pass, WER 0.06 / CER 0.01).
+    Mandarin clean dictation is 7/14 passed (1 clip at CER 0.388 just missed the 0.35 threshold); Spanish-accented command at SNR 10dB (`T2_CMD_ES_EF_SNR10`) now passes.
     - A dictation item passes at an error rate of 0.35 or lower: CER for Chinese, WER otherwise. Items may list a written form (`alt_text`, e.g. "2 mg"), and the closer reference counts.
     - Run-to-run repeatability is confirmed: two runs on the old corpus gave identical transcripts on all 104 items.
     - The previous 78/104 used an invalid non-English corpus (Kokoro read es/pt/fr/it text as English), so it is not comparable.
@@ -24,11 +24,11 @@ Finished work is in the git log and is not repeated here.
     | --- | --- | --- | --- |
     | English commands (incl. Spanish-accented) | 12/12 | 0.00 | 0.00 |
     | English dictation | 4/4 | 0.11 | 0.05 |
-    | Spanish (`es-ES`) | 4/4 | 0.06 | 0.02 |
+    | Spanish (`es-ES`) | 4/4 | 0.08 | 0.03 |
     | Portuguese (`pt-BR`) | 4/4 | 0.06 | 0.03 |
     | Italian (`it-IT`) | 4/4 | 0.03 | 0.01 |
-    | French (`fr-FR`) | 3/4 | 0.09 | 0.02 |
-    | Mandarin (`zh-CN`) | 8/14 | 0.37 | 0.37 |
+    | French (`fr-FR`) | 4/4 | 0.06 | 0.01 |
+    | Mandarin (`zh-CN`) | 7/14 | 0.37 | 0.37 |
 
     - **Known limits on these numbers**: the corpus is synthetic Kokoro speech. Mandarin errors are mostly homophones, which points at Kokoro's tones as much as at the ASR (see Language support). "Total Turnaround" includes the real-time audio feed, so it mostly reflects clip length.
   - **Multilingual Tokenizer & Hallucination Guard**: Hanzi/CJK rune segmentation in `corpus.go` for standard Chinese WER & CER evaluation; CJK guard in `refineLocked` (`pkg/engine/sherpa_runner.go`) preventing English offline models from overwriting native streaming Hanzi transcripts.
@@ -40,6 +40,7 @@ Finished work is in the git log and is not repeated here.
 
 ### Findings from the review sessions
 
+- **Anti-aliased corpus re-baseline complete.** After regenerating all 104 Tier-2 test audio samples using the Hann-windowed sinc resampler introduced in `4fe6c6d` (24 to 16 kHz downsampling), Tier 2 achieves 92/104 (88.5% pass rate), comfortably above the 80% bar with 0 dropped audio chunks. French clean dictation reached 4/4 (100% pass); overall Intent Accuracy is 88.2%, Rejection Precision 100%, and Gate Precision 100%.
 - **Repeatability confirmed.** Two Tier 2 runs on the same corpus (`7c3c29b`, `c208fa9`) gave identical transcripts on all 104 items, 78/104 each.
 - **No memory leak seen.** Sampled every 30 s across 8 minutes of a run: `eval_bench` 75 MB, streaming daemon 783 MB, second-pass daemon
   842 to 846 MB, all flat. The earlier kill was system memory pressure, not VoxLab.
@@ -162,6 +163,6 @@ Confirm whether each is intended before building.
 - [ ] Second pass may drop speech: once, "Findings colon clear lungs" was refined to "colon clear lungs common". Not reproduced in 36
       Kokoro segments. Suspected cause, now fixed: the segment cut dropped the end pad, so a close next phrase lost its start pad, and the
       0.6 s start pad was shorter than the measured first-token lag (up to 0.76 s). Pads are now 0.9 s / 0.3 s. Close if it does not recur.
-- [ ] `Resample` is anti-aliased since `4fe6c6d`, so regenerating the corpus changes every Kokoro clip (24 to 16 kHz). Re-baseline Tier 2 then.
+- [x] `Resample` is anti-aliased since `4fe6c6d`, so regenerating the corpus changes every Kokoro clip (24 to 16 kHz). Re-baseline Tier 2 then.
 - [ ] Fed at about 3x real time with 0.85 to 1.05 s pauses, the first pass lost whole phrases (2 of 12). Likely a faster-than-real-time
       artifact; check at real time before trusting short-pause results.
