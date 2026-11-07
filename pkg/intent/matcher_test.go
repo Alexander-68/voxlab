@@ -47,7 +47,6 @@ func TestIntentMatcher(t *testing.T) {
 
 // Utterances from linux-wpe-voice-recipe.md sections 4 and 13 that must never execute an action.
 func TestUtterancesThatMustNotAct(t *testing.T) {
-	matcher := NewIntentMatcher(DefaultCatalog(), 0.75, 0.10)
 	tests := []struct {
 		text, reason string // an empty reason accepts any non-ACCEPT decision
 	}{
@@ -71,16 +70,44 @@ func TestUtterancesThatMustNotAct(t *testing.T) {
 		{"Put that one over there", ""},
 		{"show camera on the monitor", ""},
 	}
-	for _, tc := range tests {
-		t.Run(tc.text, func(t *testing.T) {
-			dec := matcher.Match(tc.text)
-			if dec.Decision == "ACCEPT" {
-				t.Fatalf("executed %s at confidence %.2f", dec.IntentID, dec.Confidence)
+	for name, catalog := range testCatalogs(t) {
+		matcher := NewIntentMatcher(catalog, 0.75, 0.10)
+		for _, tc := range tests {
+			t.Run(name+"/"+tc.text, func(t *testing.T) {
+				dec := matcher.Match(tc.text)
+				if dec.Decision == "ACCEPT" {
+					t.Fatalf("executed %s at confidence %.2f", dec.IntentID, dec.Confidence)
+				}
+				if tc.reason != "" && dec.Reason != tc.reason {
+					t.Errorf("got %s %s, want reason %s", dec.Decision, dec.Reason, tc.reason)
+				}
+			})
+		}
+	}
+}
+
+// testCatalogs covers the built-in catalog and the one the server actually loads.
+func testCatalogs(t *testing.T) map[string]*CommandCatalog {
+	t.Helper()
+	shipped, err := LoadCatalog("../../data/commands.json")
+	if err != nil {
+		t.Fatalf("loading shipped catalog: %v", err)
+	}
+	return map[string]*CommandCatalog{"default": DefaultCatalog(), "shipped": shipped}
+}
+
+// Negation and narration words reject unconditionally, so a command containing one could never run.
+func TestCatalogExamplesAvoidRejectionWords(t *testing.T) {
+	for name, catalog := range testCatalogs(t) {
+		for _, cmd := range catalog.Commands {
+			for _, ex := range cmd.Examples {
+				for _, tok := range Tokenize(ex) {
+					if negationWords[tok] || narrationWords[tok] {
+						t.Errorf("%s: %s example %q contains rejection word %q", name, cmd.ID, ex, tok)
+					}
+				}
 			}
-			if tc.reason != "" && dec.Reason != tc.reason {
-				t.Errorf("got %s %s, want reason %s", dec.Decision, dec.Reason, tc.reason)
-			}
-		})
+		}
 	}
 }
 

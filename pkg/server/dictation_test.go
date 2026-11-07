@@ -116,6 +116,36 @@ func TestFormatDictationPhrase(t *testing.T) {
 			expected: "Give 2.5 mg.",
 		},
 		{
+			name:     "Spoken period in punctuated ASR output",
+			input:    "The patient is stable period, the wound is clean.",
+			expected: "The patient is stable. The wound is clean.",
+		},
+		{
+			name:     "Spoken period at the end of punctuated ASR output",
+			input:    "The patient is stable, period.",
+			expected: "The patient is stable.",
+		},
+		{
+			name:     "Spoken colon in punctuated ASR output",
+			input:    "Findings colon clear lungs.",
+			expected: "Findings: clear lungs.",
+		},
+		{
+			name:     "Keywords around a line break in punctuated ASR output",
+			input:    "Follow up in two weeks period new paragraph, no further action period.",
+			expected: "Follow up in two weeks.\n\nNo further action.",
+		},
+		{
+			name:     "Spoken period opening a phrase after a pause",
+			input:    "period new paragraph follow up",
+			expected: ".\n\nFollow up.",
+		},
+		{
+			name:     "Noun period ending a sentence",
+			input:    "It was a long period.",
+			expected: "It was a long period.",
+		},
+		{
 			name:     "Punctuated text keeps the organ",
 			input:    "Colon biopsy taken.",
 			expected: "Colon biopsy taken.",

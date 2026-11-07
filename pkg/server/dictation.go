@@ -28,21 +28,27 @@ var (
 
 var reSentenceEnd = regexp.MustCompile(`[.?!:\n]$`)
 
-// reHasPunctuation matches text that is already punctuated, such as second-pass output.
-// Decimals, thousands, and times do not count: their punctuation is followed by a digit.
-var reHasPunctuation = regexp.MustCompile(`[.,;:?!](?:\s|$)`)
+// rePunctRun matches the doubled punctuation left when the ASR punctuates around a spoken
+// keyword ("stable period, the wound"). reNewlinePunct matches the same after a line break.
+var (
+	rePunctRun     = regexp.MustCompile(`[.,;:?!]{2,}`)
+	reNewlinePunct = regexp.MustCompile(`\n[ \t]*[.,;:]+[ \t]*`)
+)
 
 // "period" and "colon" are also clinical nouns, and the word before them often shows which is meant.
-// ponytail: word lists, so an unlisted modifier still becomes punctuation in unpunctuated text.
+// ASR output is punctuated either way, so context is the only signal. The "" entry keeps "colon"
+// as a word at the start of a phrase; a dictated period can follow a pause, so it has none.
+// ponytail: word lists, so an unlisted modifier still becomes punctuation.
 var (
 	periodModifiers = map[string]bool{
-		"the": true, "a": true, "an": true, "this": true, "each": true,
+		"the": true, "a": true, "an": true, "this": true, "that": true, "each": true, "same": true,
+		"long": true, "short": true, "brief": true, "time": true,
 		"postoperative": true, "postop": true, "preoperative": true, "perioperative": true,
 		"recovery": true, "observation": true, "washout": true, "menstrual": true,
 		"refractory": true, "incubation": true, "latency": true, "neonatal": true,
 	}
 	colonModifiers = map[string]bool{
-		"the": true, "a": true, "an": true, "this": true,
+		"": true, "the": true, "a": true, "an": true, "this": true,
 		"ascending": true, "descending": true, "transverse": true, "sigmoid": true,
 		"right": true, "left": true, "distal": true, "proximal": true, "spastic": true,
 	}
@@ -54,8 +60,11 @@ func replaceSpokenWord(text string, re *regexp.Regexp, symbol string, modifiers 
 	last := 0
 	for _, m := range re.FindAllStringIndex(text, -1) {
 		before, after := strings.Fields(text[:m[0]]), strings.Fields(text[m[1]:])
-		isNoun := (len(before) == 0 && len(after) > 0) ||
-			(len(before) > 0 && modifiers[strings.ToLower(before[len(before)-1])]) ||
+		prev := ""
+		if len(before) > 0 {
+			prev = strings.ToLower(before[len(before)-1])
+		}
+		isNoun := (modifiers[prev] && (prev != "" || len(after) > 0)) ||
 			(len(after) > 0 && strings.EqualFold(after[0], "of"))
 		b.WriteString(text[last:m[0]])
 		if isNoun {
@@ -67,6 +76,14 @@ func replaceSpokenWord(text string, re *regexp.Regexp, symbol string, modifiers 
 	}
 	b.WriteString(text[last:])
 	return b.String()
+}
+
+// collapsePunctuation keeps one mark from a run, preferring whichever ends a sentence.
+func collapsePunctuation(run string) string {
+	if i := strings.IndexAny(run, ".?!"); i >= 0 {
+		return run[i : i+1]
+	}
+	return run[:1]
 }
 
 // FormatDictationPhrase formats a completed dictation phrase by converting spoken punctuation
@@ -81,12 +98,9 @@ func formatDictationPhraseInternal(rawText string, isContinuation bool) string {
 		return ""
 	}
 
-	// 1. Convert spoken keywords to punctuation symbols. In already punctuated text,
-	// "period" and "colon" are ordinary words.
-	if !reHasPunctuation.MatchString(text) {
-		text = replaceSpokenWord(text, rePeriod, ".", periodModifiers)
-		text = replaceSpokenWord(text, reColon, ":", colonModifiers)
-	}
+	// 1. Convert spoken keywords to punctuation symbols
+	text = replaceSpokenWord(text, rePeriod, ".", periodModifiers)
+	text = replaceSpokenWord(text, reColon, ":", colonModifiers)
 	text = reComma.ReplaceAllString(text, ",")
 	text = reQuestion.ReplaceAllString(text, "?")
 	text = reExclamation.ReplaceAllString(text, "!")
@@ -96,6 +110,8 @@ func formatDictationPhraseInternal(rawText string, isContinuation bool) string {
 
 	// 2. Adjust spacing around punctuation and clean newlines
 	text = rePrePunctSpace.ReplaceAllString(text, "$1")
+	text = rePunctRun.ReplaceAllStringFunc(text, collapsePunctuation)
+	text = reNewlinePunct.ReplaceAllString(text, "\n")
 	text = reNewlineSpaces.ReplaceAllString(text, "\n")
 	text = reMultiNewlines.ReplaceAllString(text, "\n\n")
 	text = reMultiSpaces.ReplaceAllString(text, " ")
