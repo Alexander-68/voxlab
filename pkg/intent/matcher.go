@@ -44,16 +44,39 @@ func NewIntentMatcher(catalog *CommandCatalog, confThreshold, marginThreshold fl
 	}
 }
 
+// Tokens as produced by Tokenize, so contractions appear without their apostrophe.
+var (
+	negationWords = map[string]bool{
+		"not": true, "no": true, "never": true, "cannot": true,
+		"dont": true, "wont": true, "cant": true, "shouldnt": true, "wouldnt": true,
+		"couldnt": true, "mustnt": true, "doesnt": true, "didnt": true,
+	}
+	// ponytail: word list, so unlisted narration still matches; add words as the corpus finds them.
+	narrationWords = map[string]bool{
+		"said": true, "says": true, "told": true, "asked": true,
+		"yesterday": true, "tomorrow": true, "earlier": true, "ago": true,
+	}
+)
+
 // HasNegation checks if the transcript contains explicit negations.
 func HasNegation(text string) bool {
 	tokens := Tokenize(text)
-	negations := map[string]bool{"not": true, "dont": true, "don't": true, "never": true, "no": true, "stop": false}
 	for i, t := range tokens {
-		if negations[t] {
+		if negationWords[t] {
 			// Check if followed by an action verb
 			if i+1 < len(tokens) {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+// IsNarration reports speech that describes or quotes an action instead of requesting it.
+func IsNarration(text string) bool {
+	for _, t := range Tokenize(text) {
+		if narrationWords[t] {
+			return true
 		}
 	}
 	return false
@@ -122,6 +145,14 @@ func (m *IntentMatcher) Match(transcript string) IntentDecision {
 		return IntentDecision{
 			Decision:      "REJECT",
 			Reason:        "NEGATION_DETECTED",
+			RawTranscript: transcript,
+		}
+	}
+
+	if IsNarration(cleanText) {
+		return IntentDecision{
+			Decision:      "REJECT",
+			Reason:        "NARRATION_DETECTED",
 			RawTranscript: transcript,
 		}
 	}

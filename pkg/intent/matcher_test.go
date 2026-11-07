@@ -44,3 +44,58 @@ func TestIntentMatcher(t *testing.T) {
 		t.Errorf("expected REJECT NEGATION_DETECTED, got %s %s", dec5.Decision, dec5.Reason)
 	}
 }
+
+// Utterances from linux-wpe-voice-recipe.md sections 4 and 13 that must never execute an action.
+func TestUtterancesThatMustNotAct(t *testing.T) {
+	matcher := NewIntentMatcher(DefaultCatalog(), 0.75, 0.10)
+	tests := []struct {
+		text, reason string // an empty reason accepts any non-ACCEPT decision
+	}{
+		{"don't stop recording", "NEGATION_DETECTED"},
+		{"Don't stop recording.", "NEGATION_DETECTED"},
+		{"don’t stop recording", "NEGATION_DETECTED"},
+		{"DON'T STOP RECORDING", "NEGATION_DETECTED"},
+		{"dont stop recording", "NEGATION_DETECTED"},
+		{"Hey MediCapture, don't stop recording", "NEGATION_DETECTED"},
+		{"won't stop recording", "NEGATION_DETECTED"},
+		{"can't stop recording", "NEGATION_DETECTED"},
+		{"you shouldn't start recording", "NEGATION_DETECTED"},
+		{"do not stop recording", "NEGATION_DETECTED"},
+		{"never start recording", "NEGATION_DETECTED"},
+		{"start—no, stop recording", "NEGATION_DETECTED"},
+		{"Hey MediCapture, start—no, stop recording", "NEGATION_DETECTED"},
+		{"John said start recording yesterday", "NARRATION_DETECTED"},
+		{"she told me to stop recording", "NARRATION_DETECTED"},
+		{"I started recording yesterday", ""},
+		{"Hey MediCapture, what time is lunch?", ""},
+		{"Put that one over there", ""},
+		{"show camera on the monitor", ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.text, func(t *testing.T) {
+			dec := matcher.Match(tc.text)
+			if dec.Decision == "ACCEPT" {
+				t.Fatalf("executed %s at confidence %.2f", dec.IntentID, dec.Confidence)
+			}
+			if tc.reason != "" && dec.Reason != tc.reason {
+				t.Errorf("got %s %s, want reason %s", dec.Decision, dec.Reason, tc.reason)
+			}
+		})
+	}
+}
+
+// Guards the negation and narration lists against rejecting real commands.
+func TestPlainCommandsStillAccepted(t *testing.T) {
+	matcher := NewIntentMatcher(DefaultCatalog(), 0.75, 0.10)
+	for text, want := range map[string]string{
+		"stop recording":       "STOP_RECORDING",
+		"Stop recording.":      "STOP_RECORDING",
+		"start recording":      "START_RECORDING",
+		"please open settings": "NAV_SETTINGS",
+		"skip track":           "MEDIA_NEXT",
+	} {
+		if dec := matcher.Match(text); dec.Decision != "ACCEPT" || dec.IntentID != want {
+			t.Errorf("%q: got %s %s (%s), want ACCEPT %s", text, dec.Decision, dec.IntentID, dec.Reason, want)
+		}
+	}
+}
