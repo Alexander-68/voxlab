@@ -100,5 +100,6 @@ Confirm whether each is intended before building.
 - [ ] Second pass may drop speech: once, "Findings colon clear lungs" was refined to "colon clear lungs common". Not reproduced in 36
       Kokoro segments. Suspected cause, now fixed: the segment cut dropped the end pad, so a close next phrase lost its start pad, and the
       0.6 s start pad was shorter than the measured first-token lag (up to 0.76 s). Pads are now 0.9 s / 0.3 s. Close if it does not recur.
+- [ ] `Resample` is anti-aliased since `4fe6c6d`, so regenerating the corpus changes every Kokoro clip (24 to 16 kHz). Re-baseline Tier 2 then.
 - [ ] Fed at about 3x real time with 0.85 to 1.05 s pauses, the first pass lost whole phrases (2 of 12). Likely a faster-than-real-time
       artifact; check at real time before trusting short-pause results.
