@@ -16,6 +16,11 @@ func TestFormatDictationPhrase(t *testing.T) {
 			expected: "",
 		},
 		{
+			name:     "Chinese full stop is not doubled",
+			input:    "患者生命体征平稳。",
+			expected: "患者生命体征平稳。",
+		},
+		{
 			name:     "Whitespace only",
 			input:    "   \n  \t  ",
 			expected: "",

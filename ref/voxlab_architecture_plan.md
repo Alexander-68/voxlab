@@ -38,13 +38,13 @@ Develop the complete VoxLab application according to `AGENTS.md` and reference r
 
 > [!IMPORTANT]
 > **Sherpa-ONNX Engine Strategy for Windows & Linux**
-> Full neural speech models (Kokoro TTS and Zipformer ASR) are large ONNX files (~100MB to ~500MB each).
+> Full neural speech models (Kokoro TTS and streaming transducer ASR) are large ONNX files (~100MB to ~500MB each).
 > To ensure VoxLab works **immediately out-of-the-box** without requiring gigabytes of downloads or local C++ compilers (like MSVC on Windows), VoxLab includes:
 > 
 > 1. **Dual Engine Mode**:
 >    - **Live Sherpa-ONNX Mode**: Executes Sherpa-ONNX binaries (`sherpa-onnx-offline-tts`, `sherpa-onnx-online-websocket-server`, `sherpa-onnx-keyword-spotter`) or native C-API libraries against downloaded ONNX models.
 >    - **Testbench Simulator Mode**: Built-in zero-dependency Go engine that simulates realistic ASR partial transcripts, VAD energy detection, intent scoring, and synthetic audio output for instant development and testing.
-> 2. **Model Downloader Scripts & UI**: One-click scripts (`scripts/download_models.ps1` and `scripts/download_models.sh`) to fetch official Kokoro TTS and Zipformer models.
+> 2. **Model Downloader Scripts & UI**: One-click scripts (`scripts/download_models.ps1` and `scripts/download_models.sh`) to fetch official Kokoro TTS and ASR models (Nemotron 3.5 streaming and Kroko Zipformer for the first pass, Parakeet TDT for the second pass).
 
 ---
 
@@ -74,10 +74,10 @@ flowchart TD
 
         subgraph Dispatch["Speech Recognition & Mode Gate"]
             ModeGate{"Mode Gate"}
-            CmdASR["Command ASR (Streaming Zipformer)"]
+            CmdASR["Command ASR (Streaming Nemotron 3.5)"]
             IntentRouter["Semantic Intent Router & Distractor Filter"]
             PolicySM["Interaction State Machine"]
-            DictASR["Dictation ASR (Streaming Zipformer)"]
+            DictASR["Dictation ASR (Streaming Nemotron 3.5 + Parakeet second pass)"]
             DraftMgr["Annotation Draft Manager"]
         end
 
@@ -132,12 +132,12 @@ flowchart TD
 
 #### [NEW] `pkg/config/config.go`
 
-- Server configuration: Port (default `8080`), Bind address (`0.0.0.0`).
+- Server configuration: Port (default `8080`), Bind address (`127.0.0.1`; `-host 0.0.0.0` exposes it to the LAN, unauthenticated).
 - Audio configuration: Sample rate (`16000`), Channels (`1`), Frame size (`480` samples / 30ms).
 - Noise filter thresholds: RMS noise floor (`-42 dBFS`), high-pass cut-off (`80 Hz`).
 - Wake-word config: Keyword string (`Hey VoxLab`), trigger threshold (`0.40`), pre-roll buffer duration (`1.0s`).
 - Intent scoring thresholds: Confidence threshold (`0.80`), Runner-up margin (`0.12`).
-- Model paths: Directories for Kokoro TTS, Zipformer ASR, and KWS tokens.
+- Model paths: Directories for Kokoro TTS, streaming and second-pass ASR, and KWS tokens.
 
 #### [NEW] `pkg/server/server.go`
 
@@ -241,7 +241,7 @@ flowchart TD
 
 #### [NEW] `web/index.html`
 
-- Five-panel responsive layout:
+- Original five-panel plan. As built (`web/index.html`): three panels, **1. Audio In & DSP** (with the wake-word detector), **2. Speech Recognition Lab** (tabs: Voice Commands, Voice Dictations, Acoustic Benchmark) and **3. Text to Speech**, followed by the latency waterfall and the IPC event stream. The planned layout:
   1. **Top Bar**: Connection status, Host OS badge (Win/Linux), Mode indicator (`IDLE`/`LISTENING`/`SPEAKING`), Global Mute.
   2. **Panel 1: Audio Input & Filter Hub**:
      - Source toggle: [Web UI Mic] / [Host App Mic] / [Test WAV Sample].
@@ -314,7 +314,7 @@ flowchart TD
 
 #### [NEW] `scripts/download_models.ps1` (Windows) & `scripts/download_models.sh` (Linux)
 
-- Downloads official Kokoro TTS model files (`model.onnx`, `voices.bin`, `tokens.txt`, `espeak-ng-data`) and streaming Zipformer ASR model files from GitHub releases into `models/`.
+- Downloads official Kokoro TTS model files (`model.onnx`, `voices.bin`, `tokens.txt`, `espeak-ng-data`) and streaming and second-pass ASR model files from GitHub releases into `models/`.
 
 ---
 

@@ -178,89 +178,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // --- Dictation Punctuation & Formatting Helpers ---
-  // "period" and "colon" are also clinical nouns; mirrors pkg/server/dictation.go.
-  // The '' entry keeps "colon" as a word at the start of a phrase.
-  const PERIOD_MODIFIERS = new Set(['the', 'a', 'an', 'this', 'that', 'each', 'same', 'long', 'short', 'brief', 'time',
-    'postoperative', 'postop', 'preoperative', 'perioperative', 'recovery', 'observation', 'washout', 'menstrual',
-    'refractory', 'incubation', 'latency', 'neonatal']);
-  const COLON_MODIFIERS = new Set(['', 'the', 'a', 'an', 'this', 'ascending', 'descending', 'transverse', 'sigmoid',
-    'right', 'left', 'distal', 'proximal', 'spastic']);
-
-  function replaceSpokenWord(text, regex, symbol, modifiers) {
-    return text.replace(regex, (match, offset) => {
-      const before = text.slice(0, offset).trim().split(/\s+/).filter(Boolean);
-      const after = text.slice(offset + match.length).trim().split(/\s+/).filter(Boolean);
-      const prev = before.length > 0 ? before[before.length - 1].toLowerCase() : '';
-      const isNoun = (modifiers.has(prev) && (prev !== '' || after.length > 0))
-        || (after.length > 0 && after[0].toLowerCase() === 'of');
-      return isNoun ? match : symbol;
-    });
-  }
-
-  function formatDictationPhrase(rawText, isContinuation = false) {
-    if (!rawText) return '';
-    let text = rawText.trim();
-    if (!text) return '';
-
-    text = replaceSpokenWord(text, /\b(?:period|full stop)\b/gi, '.', PERIOD_MODIFIERS);
-    text = replaceSpokenWord(text, /\bcolon\b/gi, ':', COLON_MODIFIERS);
-
-    const punctuationMap = [
-      { regex: /\bcomma\b/gi, replacement: ',' },
-      { regex: /\bquestion mark\b/gi, replacement: '?' },
-      { regex: /\bexclamation (?:mark|point)\b/gi, replacement: '!' },
-      { regex: /\bsemicolon\b/gi, replacement: ';' },
-      { regex: /\bnew paragraph\b/gi, replacement: '\n\n' },
-      { regex: /\bnew line\b/gi, replacement: '\n' },
-    ];
-
-    for (const { regex, replacement } of punctuationMap) {
-      text = text.replace(regex, replacement);
-    }
-
-    // Adjust spacing around punctuation and clean newlines
-    text = text.replace(/[ \t]+([.,;:?!])/g, '$1');
-    // Collapse doubled punctuation from ASR that punctuates around a spoken keyword
-    text = text.replace(/[.,;:?!]{2,}/g, (run) => (run.match(/[.?!]/) || [run[0]])[0]);
-    text = text.replace(/\n[ \t]*[.,;:]+[ \t]*/g, '\n');
-    text = text.replace(/[ \t]*\n[ \t]*/g, '\n');
-    text = text.replace(/\n{3,}/g, '\n\n');
-    text = text.replace(/[ \t]{2,}/g, ' ');
-    text = text.replace(/^[ \t]+|[ \t]+$/g, '');
-
-    if (!text) return '';
-
-    // Automatic punctuation '.' on pause if phrase does not already end with punctuation
-    if (!/[.?!,;:\n]$/.test(text)) {
-      text += '.';
-    }
-
-    // If NOT a continuation of an unfinished sentence, capitalize the first letter
-    if (!isContinuation) {
-      text = text.replace(/^(\s*)([a-z])/i, (_, p1, p2) => p1 + p2.toUpperCase());
-    }
-    // Capitalize after sentence-ending punctuation (. ? !)
-    text = text.replace(/([.?!]\s+)([a-z])/g, (_, p1, p2) => p1 + p2.toUpperCase());
-    // Capitalize after newlines
-    text = text.replace(/(\n+\s*)([a-z])/g, (_, p1, p2) => p1 + p2.toUpperCase());
-
-    return text;
-  }
-
-  function appendDictationPhrase(currentText, newPhrase) {
-    if (!newPhrase) return currentText || '';
-    const current = (currentText || '').trimEnd();
-    const isContinuation = current.length > 0 && !/[.?!:\n]$/.test(current);
-    const formatted = formatDictationPhrase(newPhrase, isContinuation);
-    if (!formatted) return current;
-    if (!current) return formatted;
-    if (formatted.startsWith('\n')) {
-      return current + formatted;
-    }
-    return current + ' ' + formatted;
-  }
-
   // --- Browser Web Speech API Support ---
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   let browserRecognizer = null;
@@ -390,13 +307,9 @@ document.addEventListener('DOMContentLoaded', () => {
             dictationLiveBox.innerHTML = `<strong>${escapeHtml(display)}</strong>`;
           }
           if (finalStr.trim()) {
-            const formatted = formatDictationPhrase(finalStr);
-            dictationDraftText.value = appendDictationPhrase(dictationDraftText.value, finalStr);
-            dictationLiveBox.innerHTML = `<strong>${escapeHtml(formatted)}</strong>`;
-            draftWordCount.textContent = dictationDraftText.value.trim().split(/\s+/).filter(Boolean).length;
-            dictationStatusBadge.textContent = 'Dictating';
-            dictationStatusBadge.className = 'badge badge-ready';
-            logEvent('browser_asr.dictation', `Draft text: "${dictationDraftText.value}"`);
+            // The server formats and appends it, and answers with annotation.draft.
+            logEvent('browser_asr.dictation', `Phrase: "${finalStr.trim()}"`);
+            client.injectText(finalStr.trim(), 'dictation');
           }
         }
       };
@@ -1635,14 +1548,8 @@ document.addEventListener('DOMContentLoaded', () => {
   function handleCustomDictInject(textToInject) {
     const raw = (textToInject !== undefined ? textToInject : (customDictInput ? customDictInput.value : '')).trim();
     if (!raw) return;
-    const formatted = formatDictationPhrase(raw);
-    dictationDraftText.value = appendDictationPhrase(dictationDraftText.value, raw);
-    dictationLiveBox.innerHTML = `<strong>${escapeHtml(formatted)}</strong>`;
-    draftWordCount.textContent = dictationDraftText.value.trim().split(/\s+/).filter(Boolean).length;
-    dictationStatusBadge.textContent = 'Dictating';
-    dictationStatusBadge.className = 'badge badge-ready';
-    logEvent('dictation.inject', `Injected: "${formatted}"`);
-    client.injectText(raw, 'dictation');
+    logEvent('dictation.inject', `Injected: "${raw}"`);
+    client.injectText(raw, 'dictation'); // the server formats it and answers with annotation.draft
     if (customDictInput && textToInject === undefined) {
       customDictInput.value = '';
     }

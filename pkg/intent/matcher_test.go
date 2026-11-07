@@ -1,6 +1,7 @@
 package intent
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -124,5 +125,14 @@ func TestPlainCommandsStillAccepted(t *testing.T) {
 		if dec := matcher.Match(text); dec.Decision != "ACCEPT" || dec.IntentID != want {
 			t.Errorf("%q: got %s %s (%s), want ACCEPT %s", text, dec.Decision, dec.IntentID, dec.Reason, want)
 		}
+	}
+}
+
+func TestTokenizeNonASCII(t *testing.T) {
+	if got := Tokenize("患者平稳。Don't stop"); strings.Join(got, "|") != "患|者|平|稳|dont|stop" {
+		t.Errorf("Tokenize = %q", got)
+	}
+	if got := Tokenize("Señal estable"); strings.Join(got, "|") != "señal|estable" {
+		t.Errorf("Tokenize = %q", got)
 	}
 }

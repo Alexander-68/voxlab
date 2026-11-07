@@ -87,76 +87,68 @@ func DecodeWAV(r io.Reader) (samples []float32, sampleRate int, err error) {
 	var sRate uint32
 	var dataBytes []byte
 
-	// Read chunks until data chunk found
-	for {
+	// Read chunks until the data chunk. Chunks are padded to an even size.
+	for dataBytes == nil {
 		var chunkID [4]byte
 		var chunkSize uint32
 		if _, err := io.ReadFull(r, chunkID[:]); err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			return nil, 0, err
+			break
 		}
 		if err := binary.Read(r, binary.LittleEndian, &chunkSize); err != nil {
 			return nil, 0, err
 		}
-
-		cID := string(chunkID[:])
-		if cID == "fmt " {
-			if err := binary.Read(r, binary.LittleEndian, &audioFormat); err != nil {
+		switch string(chunkID[:]) {
+		case "fmt ":
+			if chunkSize < 16 {
+				return nil, 0, errors.New("WAV fmt chunk too short")
+			}
+			var f struct {
+				AudioFormat, NumChannels uint16
+				SampleRate, ByteRate     uint32
+				BlockAlign, Bits         uint16
+			}
+			if err := binary.Read(r, binary.LittleEndian, &f); err != nil {
 				return nil, 0, err
 			}
-			if err := binary.Read(r, binary.LittleEndian, &numChannels); err != nil {
+			audioFormat, numChannels, sRate, bitsPerSample = f.AudioFormat, f.NumChannels, f.SampleRate, f.Bits
+			if _, err := io.CopyN(io.Discard, r, int64(chunkSize-16+chunkSize&1)); err != nil {
 				return nil, 0, err
 			}
-			if err := binary.Read(r, binary.LittleEndian, &sRate); err != nil {
+		case "data":
+			// Read what is there: streamed WAVs often state a size larger than the file.
+			if dataBytes, err = io.ReadAll(io.LimitReader(r, int64(chunkSize))); err != nil {
 				return nil, 0, err
 			}
-			var byteRate uint32
-			var blockAlign uint16
-			_ = binary.Read(r, binary.LittleEndian, &byteRate)
-			_ = binary.Read(r, binary.LittleEndian, &blockAlign)
-			if err := binary.Read(r, binary.LittleEndian, &bitsPerSample); err != nil {
-				return nil, 0, err
+		default:
+			if _, err := io.CopyN(io.Discard, r, int64(chunkSize)+int64(chunkSize&1)); err != nil {
+				return nil, 0, errors.New("truncated WAV chunk " + string(chunkID[:]))
 			}
-			// Skip any extra format bytes
-			if chunkSize > 16 {
-				skip := make([]byte, chunkSize-16)
-				_, _ = io.ReadFull(r, skip)
-			}
-		} else if cID == "data" {
-			dataBytes = make([]byte, chunkSize)
-			if _, err := io.ReadFull(r, dataBytes); err != nil {
-				return nil, 0, err
-			}
-			break
-		} else {
-			// Skip unknown chunk
-			skip := make([]byte, chunkSize)
-			_, _ = io.ReadFull(r, skip)
 		}
 	}
 
 	if dataBytes == nil {
 		return nil, 0, errors.New("no data chunk found in WAV")
 	}
-
-	// Convert 16-bit PCM to float32 mono
-	if bitsPerSample != 16 {
+	// 0xFFFE is WAVE_FORMAT_EXTENSIBLE; at 16 bits its subformat can only be PCM.
+	if (audioFormat != 1 && audioFormat != 0xFFFE) || bitsPerSample != 16 {
 		return nil, 0, errors.New("only 16-bit PCM WAV currently supported")
+	}
+	if numChannels == 0 || sRate == 0 {
+		return nil, 0, errors.New("WAV fmt chunk has no channels or sample rate")
 	}
 
 	intSamples := BytesToInt16PCM(dataBytes)
-	if numChannels == 2 {
-		// Downmix stereo to mono
-		monoCount := len(intSamples) / 2
-		monoS := make([]int16, monoCount)
-		for i := 0; i < monoCount; i++ {
-			left := int32(intSamples[i*2])
-			right := int32(intSamples[i*2+1])
-			monoS[i] = int16((left + right) / 2)
+	if ch := int(numChannels); ch > 1 {
+		// Downmix to mono
+		mono := make([]int16, len(intSamples)/ch)
+		for i := range mono {
+			var sum int32
+			for _, v := range intSamples[i*ch : i*ch+ch] {
+				sum += int32(v)
+			}
+			mono[i] = int16(sum / int32(ch))
 		}
-		intSamples = monoS
+		intSamples = mono
 	}
 
 	return Int16ToFloat32(intSamples), int(sRate), nil
@@ -174,13 +166,14 @@ func GenerateChime(sampleRate int, freq1, freq2 float64, durationSec float64) []
 		envelope := math.Exp(-4.0 * t / durationSec)
 		// Dual frequency harmonic chord
 		s1 := math.Sin(2.0 * math.Pi * freq1 * t)
-		s2 := 0.5 * math.Sin(2.0 * math.Pi * freq2 * t)
+		s2 := 0.5 * math.Sin(2.0*math.Pi*freq2*t)
 		out[i] = float32(0.4 * envelope * (s1 + s2))
 	}
 	return out
 }
 
-// Resample converts mono float32 audio samples between sample rates using linear interpolation.
+// Resample converts mono float32 audio between sample rates: linear interpolation when
+// upsampling, a Hann-windowed sinc low-pass at 0.45 x toRate when downsampling (no aliasing).
 func Resample(samples []float32, fromRate, toRate int) []float32 {
 	if fromRate == toRate || len(samples) == 0 || fromRate <= 0 || toRate <= 0 {
 		return samples
@@ -192,6 +185,28 @@ func Resample(samples []float32, fromRate, toRate int) []float32 {
 	out := make([]float32, outLen)
 	ratio := float64(fromRate) / float64(toRate)
 	n := len(samples)
+	if ratio > 1 {
+		cut := 0.45 / ratio             // cutoff in cycles per input sample
+		half := int(math.Ceil(4 / cut)) // 8 zero crossings each side
+		for i := range out {
+			c := float64(i) * ratio
+			var acc, wsum float64
+			for j := max(0, int(c)-half); j <= min(n-1, int(c)+half); j++ {
+				x := float64(j) - c
+				h := 2 * cut
+				if x != 0 {
+					h = math.Sin(2*math.Pi*cut*x) / (math.Pi * x)
+				}
+				h *= 0.5 + 0.5*math.Cos(math.Pi*x/float64(half+1))
+				acc += h * float64(samples[j])
+				wsum += h
+			}
+			if wsum != 0 {
+				out[i] = float32(acc / wsum) // unity gain at DC, also at the edges
+			}
+		}
+		return out
+	}
 	for i := 0; i < outLen; i++ {
 		srcPos := float64(i) * ratio
 		srcIdx := int(srcPos)

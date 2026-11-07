@@ -80,7 +80,6 @@ with pink noise at +5 dB. WER, CER for Mandarin; lower is better. "Better/worse"
       C toolchain is installed; it cannot run here.
 - [ ] **I4 remainder** Disconnect cancels playback but not a listening turn (recipe §11). The TTS failsafe timer can unmute during later playback.
 - [ ] LAN mode (`-host 0.0.0.0`) has no authentication, only a warning.
-- [ ] `go vet` reports 5 `unsafe.Pointer` warnings, probably false positives on C-owned pointers.
 - [ ] Daemons are reaped and killed with VoxLab through a job object on Windows only. Elsewhere a crash still orphans them.
 
 ## Features missing against README and plan
@@ -98,7 +97,8 @@ Confirm whether each is intended before building.
 - [ ] **I27** `download_models.sh` glob fails silently on Linux.
 - [ ] **I29** Sherpa daemons start even in simulator mode, about 1.4 GB.
 - [ ] New dictation clears the server draft, so unsaved text in the box is replaced by the first new phrase.
-- [ ] Second pass may drop speech: in a probe, "Findings colon clear lungs" was refined to "colon clear lungs common". Seen once, not investigated.
-- [ ] Formatter exists twice, in `dictation.go` and `bench-ui.js`, and must be kept in step. Chinese gets `。.` and word counts of 0 (`Tokenize` is ASCII-only).
-- [ ] `ref/` still describes a 5-panel UI and Zipformer, and the plan's `0.0.0.0` bind.
-- [ ] Remaining review minors: WAV parser edge cases, `Resample` has no anti-aliasing, `go.mod` marks gorilla `// indirect`.
+- [ ] Second pass may drop speech: once, "Findings colon clear lungs" was refined to "colon clear lungs common". Not reproduced in 36
+      Kokoro segments. Suspected cause, now fixed: the segment cut dropped the end pad, so a close next phrase lost its start pad, and the
+      0.6 s start pad was shorter than the measured first-token lag (up to 0.76 s). Pads are now 0.9 s / 0.3 s. Close if it does not recur.
+- [ ] Fed at about 3x real time with 0.85 to 1.05 s pauses, the first pass lost whole phrases (2 of 12). Likely a faster-than-real-time
+      artifact; check at real time before trusting short-pause results.

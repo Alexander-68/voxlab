@@ -2,6 +2,7 @@ package audio
 
 import (
 	"bytes"
+	"encoding/binary"
 	"math"
 	"testing"
 )
@@ -201,6 +202,26 @@ func TestResample(t *testing.T) {
 		t.Fatalf("expected resampled length %d, got %d", expectedLen, len(res))
 	}
 
+	// Downsampling keeps a 1 kHz tone and suppresses an 11 kHz one, which would alias to 5 kHz.
+	rms := func(freq float64) float64 {
+		in := make([]float32, 48000)
+		for i := range in {
+			in[i] = float32(math.Sin(2 * math.Pi * freq * float64(i) / 48000))
+		}
+		out := Resample(in, 48000, 16000)
+		var sum float64
+		for _, v := range out[1000:15000] {
+			sum += float64(v) * float64(v)
+		}
+		return math.Sqrt(sum / 14000)
+	}
+	if r := rms(1000); r < 0.68 || r > 0.73 {
+		t.Errorf("1 kHz tone RMS after downsampling = %.3f, want about 0.707", r)
+	}
+	if r := rms(11000); r > 0.01 {
+		t.Errorf("11 kHz tone RMS after downsampling = %.3f, want < 0.01 (aliasing)", r)
+	}
+
 	// Verify identity resampling (same rate)
 	same := Resample(inSamples, inRate, inRate)
 	if len(same) != len(inSamples) {
@@ -211,5 +232,32 @@ func TestResample(t *testing.T) {
 	empty := Resample(nil, inRate, outRate)
 	if empty != nil {
 		t.Errorf("expected nil for empty slice")
+	}
+}
+
+// TestDecodeWAVEdgeCases: an odd-sized chunk with its pad byte before fmt, stereo, and a data
+// size larger than the file (as streamed WAVs write it).
+func TestDecodeWAVEdgeCases(t *testing.T) {
+	le := binary.LittleEndian
+	var b []byte
+	b = append(b, "RIFF\x00\x00\x00\x00WAVE"...)
+	b = append(b, "LIST\x03\x00\x00\x00abc\x00"...)
+	b = append(b, "fmt \x10\x00\x00\x00"...)
+	b = le.AppendUint16(b, 1)
+	b = le.AppendUint16(b, 2)
+	b = le.AppendUint32(b, 8000)
+	b = le.AppendUint32(b, 32000)
+	b = le.AppendUint16(b, 4)
+	b = le.AppendUint16(b, 16)
+	b = append(b, "data\xff\xff\xff\xff"...)
+	for _, v := range []int16{1000, 3000, -2000, -4000} {
+		b = le.AppendUint16(b, uint16(v))
+	}
+	s, rate, err := DecodeWAV(bytes.NewReader(b))
+	if err != nil || rate != 8000 || len(s) != 2 {
+		t.Fatalf("DecodeWAV = %d samples, rate %d, err %v; want 2 samples at 8000", len(s), rate, err)
+	}
+	if want := Int16ToFloat32([]int16{2000, -3000}); s[0] != want[0] || s[1] != want[1] {
+		t.Errorf("downmix = %v, want %v", s, want)
 	}
 }

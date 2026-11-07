@@ -35,7 +35,7 @@ VoxLab has been implemented as a complete, cross-platform voice pipeline test be
 
 - [`data/commands.json`](file:///C:/Alex/voxlab/data/commands.json): Canonical command catalog with 8 actions, aliases, slots, and conversational distractor phrases.
 - [`data/test_samples/`](file:///C:/Alex/voxlab/data/test_samples/): Sample WAV files (`chime_alert.wav`, `voice_test.wav`) for deterministic audio injection.
-- [`scripts/download_models.ps1`](file:///C:/Alex/voxlab/scripts/download_models.ps1) & [`scripts/download_models.sh`](file:///C:/Alex/voxlab/scripts/download_models.sh): Automation scripts to download pre-trained Sherpa-ONNX Kokoro TTS and Zipformer ASR models.
+- [`scripts/download_models.ps1`](file:///C:/Alex/voxlab/scripts/download_models.ps1) & [`scripts/download_models.sh`](file:///C:/Alex/voxlab/scripts/download_models.sh): Automation scripts to download pre-trained Sherpa-ONNX Kokoro TTS and ASR models (Nemotron 3.5 and Kroko streaming, Parakeet TDT second pass).
 - [`README.md`](file:///C:/Alex/voxlab/README.md): Comprehensive system documentation, architecture diagrams, CLI guides, and IPC protocol reference.
 
 ---

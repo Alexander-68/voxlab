@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
+	"unicode"
 )
 
 // CommandEntry represents one canonical command in the catalog.
@@ -112,7 +113,7 @@ func DefaultCatalog() *CommandCatalog {
 	}
 }
 
-// Tokenize converts text to lowercase words stripped of punctuation.
+// Tokenize converts text to lowercase words stripped of punctuation. Each Han character is one token.
 // Apostrophes are removed rather than split on, so "don't" stays one token: "dont".
 func Tokenize(text string) []string {
 	text = strings.ToLower(text)
@@ -121,7 +122,9 @@ func Tokenize(text string) []string {
 		if r == '\'' || r == '’' {
 			continue
 		}
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == ' ' {
+		if unicode.Is(unicode.Han, r) {
+			b.WriteString(" " + string(r) + " ") // no spaces between Chinese words; count characters
+		} else if unicode.IsLetter(r) || unicode.IsDigit(r) {
 			b.WriteRune(r)
 		} else {
 			b.WriteRune(' ')

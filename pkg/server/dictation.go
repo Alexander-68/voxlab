@@ -20,13 +20,13 @@ var (
 	reNewlineSpaces = regexp.MustCompile(`[ \t]*\n[ \t]*`)
 	reMultiNewlines = regexp.MustCompile(`\n{3,}`)
 	reMultiSpaces   = regexp.MustCompile(`[ \t]{2,}`)
-	reEndsWithPunct = regexp.MustCompile(`[.;,!?:\n]$`)
+	reEndsWithPunct = regexp.MustCompile(`[.;,!?:\n。！？；：，]$`)
 	reLeadingChar   = regexp.MustCompile(`^(\s*)([a-z])`)
 	reAfterSentence = regexp.MustCompile(`([.?!]\s+)([a-z])`)
 	reAfterNewline  = regexp.MustCompile(`(\n+\s*)([a-z])`)
 )
 
-var reSentenceEnd = regexp.MustCompile(`[.?!:\n]$`)
+var reSentenceEnd = regexp.MustCompile(`[.?!:\n。！？：]$`)
 
 // rePunctRun matches the doubled punctuation left when the ASR punctuates around a spoken
 // keyword ("stable period, the wound"). reNewlinePunct matches the same after a line break.

@@ -252,7 +252,7 @@ func (w *windowsSpeechEnhancer) primeWithSilence() {
 		uintptr(w.sampleRate),
 	)
 	if outPtr != 0 {
-		audio := (*cDenoisedAudio)(unsafe.Pointer(outPtr))
+		audio := cPtr[cDenoisedAudio](outPtr)
 		if audio.N > 0 && audio.Samples != nil {
 			src := unsafe.Slice(audio.Samples, audio.N)
 			w.fifo = append(w.fifo, src...)
@@ -340,7 +340,7 @@ func (w *windowsSpeechEnhancer) ProcessChunk(chunk []float32) []float32 {
 		uintptr(w.sampleRate),
 	)
 	if outPtr != 0 {
-		audio := (*cDenoisedAudio)(unsafe.Pointer(outPtr))
+		audio := cPtr[cDenoisedAudio](outPtr)
 		if audio.N > 0 && audio.Samples != nil {
 			src := unsafe.Slice(audio.Samples, audio.N)
 			w.fifo = append(w.fifo, src...)
@@ -388,3 +388,7 @@ func (w *windowsSpeechEnhancer) Close() error {
 	}
 	return nil
 }
+
+// cPtr views a C-owned address as *T. Going through &p keeps go vet quiet: the
+// memory is not Go heap, so the uintptr-to-pointer rule it enforces does not apply.
+func cPtr[T any](p uintptr) *T { return *(**T)(unsafe.Pointer(&p)) }

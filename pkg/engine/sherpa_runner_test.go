@@ -306,3 +306,26 @@ func TestSecondPassPerMode(t *testing.T) {
 		t.Errorf("expected second_pass_dictation false after toggle")
 	}
 }
+
+// TestCutSegmentKeepsEndPad: two segments whose pads overlap. The second segment's start pad
+// must reach back into audio the first segment's end pad also used.
+func TestCutSegmentKeepsEndPad(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Audio.SampleRate = 100 // 1 sample = 10 ms
+	r := &SherpaRunner{cfg: cfg}
+	for i := range 500 {
+		r.segAudio = append(r.segAudio, float32(i))
+	}
+	seg1 := r.cutSegmentLocked(&ASRResult{StartSec: 1.0, EndSec: 2.0})
+	if seg1[0] != 10 || seg1[len(seg1)-1] != 229 {
+		t.Fatalf("seg1 = [%v..%v], want [10..229]", seg1[0], seg1[len(seg1)-1])
+	}
+	seg2 := r.cutSegmentLocked(&ASRResult{StartSec: 3.0, EndSec: 4.0})
+	if seg2[0] != 210 || seg2[len(seg2)-1] != 429 {
+		t.Fatalf("seg2 = [%v..%v], want [210..429]", seg2[0], seg2[len(seg2)-1])
+	}
+	seg3 := r.cutSegmentLocked(&ASRResult{StartSec: 4.5, EndSec: 4.8})
+	if seg3[0] != 400 || seg3[len(seg3)-1] != 499 {
+		t.Fatalf("seg3 = [%v..%v], want start clamped to the previous last token (400) and end at buffer end", seg3[0], seg3[len(seg3)-1])
+	}
+}

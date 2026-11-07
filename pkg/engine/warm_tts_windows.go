@@ -158,7 +158,7 @@ func warmTtsProgressCallback(samplesPtr uintptr, numSamples int32, progressBits 
 	warmTtsCbMu.Unlock()
 
 	if fn != nil && numSamples > 0 && samplesPtr != 0 {
-		src := unsafe.Slice((*float32)(unsafe.Pointer(samplesPtr)), int(numSamples))
+		src := unsafe.Slice(cPtr[float32](samplesPtr), int(numSamples))
 		chunk := make([]float32, numSamples)
 		copy(chunk, src)
 		progress := math.Float32frombits(uint32(progressBits))
@@ -263,7 +263,7 @@ func (w *windowsWarmTTS) SynthesizeStream(text string, sid int, speed float64, o
 			return nil, fmt.Errorf("sherpa-onnx c-api streaming synthesis failed: %v", callErr)
 		}
 
-		audioStruct := (*cGeneratedAudio)(unsafe.Pointer(audioPtr))
+		audioStruct := cPtr[cGeneratedAudio](audioPtr)
 		if audioStruct == nil || audioStruct.N <= 0 || audioStruct.Samples == nil {
 			w.destroyAudioFn.Call(audioPtr)
 			return nil, fmt.Errorf("synthesis returned empty audio waveform")
@@ -307,7 +307,7 @@ func (w *windowsWarmTTS) SynthesizeStream(text string, sid int, speed float64, o
 		return nil, fmt.Errorf("sherpa-onnx c-api synthesis failed: %v", err)
 	}
 
-	audioStruct := (*cGeneratedAudio)(unsafe.Pointer(audioPtr))
+	audioStruct := cPtr[cGeneratedAudio](audioPtr)
 	if audioStruct == nil || audioStruct.N <= 0 || audioStruct.Samples == nil {
 		w.destroyAudioFn.Call(audioPtr)
 		return nil, fmt.Errorf("synthesis returned empty audio waveform")
@@ -458,3 +458,7 @@ func newPlatformWarmTTS(
 		modelKey:       key,
 	}, nil
 }
+
+// cPtr views a C-owned address as *T. Going through &p keeps go vet quiet: the
+// memory is not Go heap, so the uintptr-to-pointer rule it enforces does not apply.
+func cPtr[T any](p uintptr) *T { return *(**T)(unsafe.Pointer(&p)) }

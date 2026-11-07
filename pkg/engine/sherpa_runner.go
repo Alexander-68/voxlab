@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -240,18 +241,27 @@ func (r *SherpaRunner) ASRModelInfo() map[string]interface{} {
 	}
 }
 
-// cutSegmentLocked removes the audio of an endpointed segment from segAudio and returns it.
-// Token timestamps bound the speech; pads cover onsets before the first token and the last word's tail.
+// Second-pass pads around the token timestamps, measured on Kokoro speech with Nemotron 3.5:
+// the first token lags the onset by up to 0.76 s (when the first pass drops the first word),
+// the last token trails the speech end by at most 0.15 s. Calibration knobs.
+const (
+	segStartPadSec = 0.9
+	segEndPadSec   = 0.3
+)
+
+// cutSegmentLocked returns the audio of an endpointed segment and drops segAudio up to its last token.
+// The end pad stays in the buffer, so the next segment's start pad can still reach back into it.
 func (r *SherpaRunner) cutSegmentLocked(res *ASRResult) []float32 {
 	sr := float64(r.cfg.Audio.SampleRate)
-	from, to := 0, len(r.segAudio)
+	from, to, keep := 0, len(r.segAudio), len(r.segAudio)
 	if res.EndSec > 0 {
-		from = max(0, min(to, int((res.StartSec-0.6)*sr)-r.segBase))
-		to = max(from, min(to, int((res.EndSec+0.5)*sr)-r.segBase))
+		from = max(0, min(to, int(math.Round((res.StartSec-segStartPadSec)*sr))-r.segBase))
+		keep = max(from, min(to, int(math.Round(res.EndSec*sr))-r.segBase))
+		to = max(keep, min(to, int(math.Round((res.EndSec+segEndPadSec)*sr))-r.segBase))
 	}
-	seg := r.segAudio[from:to]
-	r.segAudio = append([]float32(nil), r.segAudio[to:]...)
-	r.segBase += to
+	seg := append([]float32(nil), r.segAudio[from:to]...)
+	r.segAudio = append([]float32(nil), r.segAudio[keep:]...)
+	r.segBase += keep
 	return seg
 }
 
