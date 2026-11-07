@@ -11,69 +11,67 @@
     "gate_enabled": true,
     "agc": true,
     "highpass": true,
-    "enhancer": "GTCRN Neural Denoiser",
-    "input_language": "en-US",
-    "commit": "c208fa9ba35e93b35f2248f53f10ced743e56490-dirty"
+    "enhancer": "GTCRN Neural Denoiser"
   },
   "dropped_chunks": 0,
   "total_cases": 104,
-  "passed": 93,
-  "failed": 11,
-  "pass_rate": 0.8942307692307693,
-  "avg_wer": 0.11774173920197951,
-  "avg_cer": 0.09101674081356559,
+  "passed": 94,
+  "failed": 10,
+  "pass_rate": 0.9038461538461539,
+  "avg_wer": 0.11804221997121028,
+  "avg_cer": 0.09087879916347562,
   "intent_accuracy": 0.8823529411764706,
   "rejection_accuracy": 1,
   "gate_precision": 1,
-  "duration": 582945761800,
+  "duration": 585159707200,
   "latency_stats": {
     "ttft": {
-      "min_ms": 771,
-      "max_ms": 1930,
-      "avg_ms": 1326.9,
-      "p50_ms": 1339,
+      "min_ms": 762,
+      "max_ms": 1970,
+      "avg_ms": 1328.4,
+      "p50_ms": 1347,
       "p90_ms": 1380,
-      "p95_ms": 1380,
-      "p99_ms": 1886
+      "p95_ms": 1385,
+      "p99_ms": 1961
     },
     "endpoint_delay": {
-      "min_ms": 31,
-      "max_ms": 1831,
-      "avg_ms": 967.2,
+      "min_ms": 0,
+      "max_ms": 1860,
+      "avg_ms": 949.8,
       "p50_ms": 1200,
-      "p90_ms": 1260,
-      "p95_ms": 1410,
-      "p99_ms": 1831
+      "p90_ms": 1268,
+      "p95_ms": 1431,
+      "p99_ms": 1860
     },
     "second_pass": {
-      "min_ms": 252,
-      "max_ms": 448,
-      "avg_ms": 349.5,
-      "p50_ms": 345,
-      "p90_ms": 424,
-      "p95_ms": 440,
-      "p99_ms": 448
+      "min_ms": 240,
+      "max_ms": 423,
+      "avg_ms": 337.1,
+      "p50_ms": 336,
+      "p90_ms": 402,
+      "p95_ms": 406,
+      "p99_ms": 423
     },
     "total_duration": {
-      "min_ms": 1942,
-      "max_ms": 9325,
-      "avg_ms": 5604.7,
-      "p50_ms": 6394,
-      "p90_ms": 8711,
-      "p95_ms": 9083,
-      "p99_ms": 9311
+      "min_ms": 1980,
+      "max_ms": 9354,
+      "avg_ms": 5625.8,
+      "p50_ms": 6436,
+      "p90_ms": 8740,
+      "p95_ms": 9108,
+      "p99_ms": 9328
     }
   },
   "snr_curve": [
     {
       "label": "Clean",
       "count": 48,
-      "passed": 41,
-      "pass_rate": 0.8541666666666666,
+      "passed": 42,
+      "pass_rate": 0.875,
       "avg_wer": 0.154,
-      "avg_cer": 0.132,
+      "avg_cer": 0.133,
       "intent_accuracy": 1,
-      "avg_latency_ms": 6381.3
+      "avg_latency_ms": 6402.9
     },
     {
       "snr_db": 20,
@@ -84,7 +82,7 @@
       "avg_wer": 0.055,
       "avg_cer": 0.035,
       "intent_accuracy": 1,
-      "avg_latency_ms": 4063.8
+      "avg_latency_ms": 4085.3
     },
     {
       "snr_db": 15,
@@ -95,7 +93,7 @@
       "avg_wer": 0.075,
       "avg_cer": 0.066,
       "intent_accuracy": 1,
-      "avg_latency_ms": 5832.9
+      "avg_latency_ms": 5851
     },
     {
       "snr_db": 10,
@@ -106,7 +104,7 @@
       "avg_wer": 0.1,
       "avg_cer": 0.017,
       "intent_accuracy": 0.667,
-      "avg_latency_ms": 4072
+      "avg_latency_ms": 4076.2
     },
     {
       "snr_db": 5,
@@ -117,7 +115,7 @@
       "avg_wer": 0.059,
       "avg_cer": 0.02,
       "intent_accuracy": 0.857,
-      "avg_latency_ms": 4484.8
+      "avg_latency_ms": 4518
     },
     {
       "snr_db": 0,
@@ -128,7 +126,7 @@
       "avg_wer": 0.148,
       "avg_cer": 0.026,
       "intent_accuracy": 0.5,
-      "avg_latency_ms": 4998
+      "avg_latency_ms": 5011
     },
     {
       "snr_db": -5,
@@ -137,9 +135,9 @@
       "passed": 2,
       "pass_rate": 0.6666666666666666,
       "avg_wer": 0.278,
-      "avg_cer": 0.302,
+      "avg_cer": 0.295,
       "intent_accuracy": 0.5,
-      "avg_latency_ms": 3611.3
+      "avg_latency_ms": 3635.7
     }
   ],
   "voice_breakdown": {
@@ -205,7 +203,7 @@
       "passed": 13,
       "pass_rate": 1,
       "avg_wer": 0.026,
-      "avg_cer": 0.018
+      "avg_cer": 0.017
     },
     "bf_isabella": {
       "key": "bf_isabella",
@@ -236,16 +234,16 @@
       "count": 7,
       "passed": 5,
       "pass_rate": 0.7142857142857143,
-      "avg_wer": 0.143,
-      "avg_cer": 0.024
+      "avg_wer": 0.154,
+      "avg_cer": 0.027
     },
     "em_alex": {
       "key": "em_alex",
       "count": 1,
       "passed": 1,
       "pass_rate": 1,
-      "avg_wer": 0,
-      "avg_cer": 0
+      "avg_wer": 0.077,
+      "avg_cer": 0.033
     },
     "em_santa": {
       "key": "em_santa",
@@ -258,10 +256,10 @@
     "ff_siwis": {
       "key": "ff_siwis",
       "count": 5,
-      "passed": 4,
-      "pass_rate": 0.8,
-      "avg_wer": 0.075,
-      "avg_cer": 0.018
+      "passed": 5,
+      "pass_rate": 1,
+      "avg_wer": 0.05,
+      "avg_cer": 0.009
     },
     "if_sara": {
       "key": "if_sara",
@@ -396,18 +394,18 @@
     "1.0x": {
       "key": "1.0x",
       "count": 88,
-      "passed": 79,
-      "pass_rate": 0.8977272727272727,
-      "avg_wer": 0.123,
-      "avg_cer": 0.094
+      "passed": 80,
+      "pass_rate": 0.9090909090909091,
+      "avg_wer": 0.122,
+      "avg_cer": 0.093
     },
     "1.1x": {
       "key": "1.1x",
       "count": 8,
       "passed": 8,
       "pass_rate": 1,
-      "avg_wer": 0,
-      "avg_cer": 0
+      "avg_wer": 0.011,
+      "avg_cer": 0.003
     },
     "1.2x": {
       "key": "1.2x",
@@ -438,10 +436,10 @@
     "clean": {
       "key": "clean",
       "count": 46,
-      "passed": 39,
-      "pass_rate": 0.8478260869565217,
+      "passed": 40,
+      "pass_rate": 0.8695652173913043,
       "avg_wer": 0.154,
-      "avg_cer": 0.132
+      "avg_cer": 0.133
     },
     "pink": {
       "key": "pink",
@@ -473,7 +471,7 @@
       "passed": 22,
       "pass_rate": 0.8461538461538461,
       "avg_wer": 0.123,
-      "avg_cer": 0.061
+      "avg_cer": 0.06
     }
   },
   "results": [
@@ -494,9 +492,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2515955200,
-      "ttft": 1342637100,
-      "endpoint_delay": 1230727700,
+      "duration": 2522814000,
+      "ttft": 1353181400,
+      "endpoint_delay": 1230906000,
       "second_pass_latency": 0
     },
     {
@@ -516,9 +514,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2513007300,
-      "ttft": 1348899200,
-      "endpoint_delay": 1141067200,
+      "duration": 2544368500,
+      "ttft": 1329043500,
+      "endpoint_delay": 1171923300,
       "second_pass_latency": 0
     },
     {
@@ -538,9 +536,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2482420800,
-      "ttft": 1380709700,
-      "endpoint_delay": 1200513800,
+      "duration": 2512962600,
+      "ttft": 1380127200,
+      "endpoint_delay": 1231225500,
       "second_pass_latency": 0
     },
     {
@@ -560,9 +558,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2511853100,
-      "ttft": 1355716700,
-      "endpoint_delay": 1080878400,
+      "duration": 2520992600,
+      "ttft": 1345952300,
+      "endpoint_delay": 1083097700,
       "second_pass_latency": 0
     },
     {
@@ -582,9 +580,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2512217600,
-      "ttft": 1354184900,
-      "endpoint_delay": 1200932000,
+      "duration": 2573730200,
+      "ttft": 1381546600,
+      "endpoint_delay": 1268038900,
       "second_pass_latency": 0
     },
     {
@@ -604,9 +602,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 3052557800,
-      "ttft": 1930436600,
-      "endpoint_delay": 1831060000,
+      "duration": 3084245400,
+      "ttft": 1961215600,
+      "endpoint_delay": 1860964600,
       "second_pass_latency": 0
     },
     {
@@ -626,9 +624,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 4192853400,
-      "ttft": 1326069100,
-      "endpoint_delay": 1410821600,
+      "duration": 4223636400,
+      "ttft": 1401590700,
+      "endpoint_delay": 1431749600,
       "second_pass_latency": 0
     },
     {
@@ -648,9 +646,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 3622588500,
-      "ttft": 1886322000,
-      "endpoint_delay": 1290885000,
+      "duration": 3613698900,
+      "ttft": 1970674600,
+      "endpoint_delay": 1261466000,
       "second_pass_latency": 0
     },
     {
@@ -668,10 +666,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6391225700,
-      "ttft": 808916600,
+      "duration": 6453519200,
+      "ttft": 793626100,
       "endpoint_delay": 0,
-      "second_pass_latency": 351000000,
+      "second_pass_latency": 376000000,
       "key_term_hit": true
     },
     {
@@ -689,10 +687,10 @@
       "decision": "ACCEPT",
       "wer": 0.2727272727272727,
       "cer": 0.17307692307692307,
-      "duration": 8010509700,
-      "ttft": 1314671900,
+      "duration": 8127873500,
+      "ttft": 1402734800,
       "endpoint_delay": 0,
-      "second_pass_latency": 350000000,
+      "second_pass_latency": 398000000,
       "key_term_hit": true
     },
     {
@@ -710,10 +708,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7040916900,
-      "ttft": 1330823400,
+      "duration": 7099860200,
+      "ttft": 1355394400,
       "endpoint_delay": 0,
-      "second_pass_latency": 412000000,
+      "second_pass_latency": 406000000,
       "key_term_hit": true
     },
     {
@@ -731,10 +729,10 @@
       "decision": "ACCEPT",
       "wer": 0.16666666666666666,
       "cer": 0.02702702702702703,
-      "duration": 6874404900,
-      "ttft": 1312537200,
+      "duration": 6978674900,
+      "ttft": 1370103200,
       "endpoint_delay": 0,
-      "second_pass_latency": 314000000,
+      "second_pass_latency": 406000000,
       "key_term_hit": true
     },
     {
@@ -753,9 +751,9 @@
       "reason": "NEGATION_DETECTED",
       "wer": 0,
       "cer": 0,
-      "duration": 2483872400,
-      "ttft": 1338420500,
-      "endpoint_delay": 780729100,
+      "duration": 2520816200,
+      "ttft": 1381497600,
+      "endpoint_delay": 810727700,
       "second_pass_latency": 0
     },
     {
@@ -774,9 +772,9 @@
       "reason": "NEGATION_DETECTED",
       "wer": 0,
       "cer": 0,
-      "duration": 3592709300,
-      "ttft": 795378800,
-      "endpoint_delay": 1260718200,
+      "duration": 3663194900,
+      "ttft": 795045400,
+      "endpoint_delay": 1321071100,
       "second_pass_latency": 0
     },
     {
@@ -795,9 +793,9 @@
       "reason": "OUT_OF_DOMAIN_CHATTER",
       "wer": 0,
       "cer": 0,
-      "duration": 3622965500,
-      "ttft": 1322703500,
-      "endpoint_delay": 930246300,
+      "duration": 3628312800,
+      "ttft": 1351738600,
+      "endpoint_delay": 932272500,
       "second_pass_latency": 0
     },
     {
@@ -817,9 +815,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2512622900,
-      "ttft": 1350250000,
-      "endpoint_delay": 1260609000,
+      "duration": 2496560800,
+      "ttft": 1312413500,
+      "endpoint_delay": 1230446700,
       "second_pass_latency": 0
     },
     {
@@ -837,10 +835,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7449736400,
-      "ttft": 1398871800,
+      "duration": 7453846100,
+      "ttft": 1364479500,
       "endpoint_delay": 0,
-      "second_pass_latency": 398000000,
+      "second_pass_latency": 382000000,
       "key_term_hit": true
     },
     {
@@ -853,16 +851,15 @@
       "accent": "es-ES",
       "wav_file": "base_dict_es_incision_am.wav",
       "passed": true,
-      "transcript": "El sitio de la incisión está limpio sin signos de inflamación ni eritema.",
+      "transcript": "El sitio de la incisisión está limpio sin signos de inflamación ni eritema.",
       "class": "ACCEPT",
       "decision": "ACCEPT",
-      "wer": 0,
-      "cer": 0,
-      "duration": 7453869400,
-      "ttft": 1337007500,
+      "wer": 0.07692307692307693,
+      "cer": 0.03333333333333333,
+      "duration": 7418844000,
+      "ttft": 1314933600,
       "endpoint_delay": 0,
-      "second_pass_latency": 440000000,
-      "key_term_hit": true
+      "second_pass_latency": 344000000
     },
     {
       "id": "T2_CLEAN_DICT_ES_MED_ES",
@@ -879,10 +876,10 @@
       "decision": "ACCEPT",
       "wer": 0.25,
       "cer": 0.09615384615384616,
-      "duration": 6627882000,
-      "ttft": 1353636700,
+      "duration": 6668492800,
+      "ttft": 1350396400,
       "endpoint_delay": 0,
-      "second_pass_latency": 294000000
+      "second_pass_latency": 348000000
     },
     {
       "id": "T2_CLEAN_DICT_ES_BENCH_EF",
@@ -894,15 +891,15 @@
       "accent": "es-ES",
       "wav_file": "base_dict_es_bench_ef.wav",
       "passed": true,
-      "transcript": "El banco de pruebas de la tubería de voz está operativo y listo.",
+      "transcript": "El banco de pruebas de la tubería de Vos está operativo y listo.",
       "class": "ACCEPT",
       "decision": "ACCEPT",
-      "wer": 0,
-      "cer": 0,
-      "duration": 6501156500,
-      "ttft": 1325450900,
+      "wer": 0.07692307692307693,
+      "cer": 0.0196078431372549,
+      "duration": 6510019900,
+      "ttft": 1321895300,
       "endpoint_delay": 0,
-      "second_pass_latency": 290000000,
+      "second_pass_latency": 358000000,
       "key_term_hit": true
     },
     {
@@ -920,10 +917,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7202968200,
-      "ttft": 1410691500,
+      "duration": 7216004400,
+      "ttft": 1333408300,
       "endpoint_delay": 0,
-      "second_pass_latency": 376000000,
+      "second_pass_latency": 392000000,
       "key_term_hit": true
     },
     {
@@ -941,10 +938,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7047661100,
-      "ttft": 1350010500,
+      "duration": 7035426900,
+      "ttft": 1380099500,
       "endpoint_delay": 0,
-      "second_pass_latency": 352000000,
+      "second_pass_latency": 324000000,
       "key_term_hit": true
     },
     {
@@ -962,10 +959,10 @@
       "decision": "ACCEPT",
       "wer": 0.25,
       "cer": 0.11320754716981132,
-      "duration": 6932857000,
-      "ttft": 1336889600,
+      "duration": 6968339900,
+      "ttft": 1332698500,
       "endpoint_delay": 0,
-      "second_pass_latency": 345000000
+      "second_pass_latency": 313000000
     },
     {
       "id": "T2_CLEAN_DICT_PT_STATUS_PF",
@@ -982,10 +979,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6517626100,
-      "ttft": 1350001100,
+      "duration": 6543030600,
+      "ttft": 1352724200,
       "endpoint_delay": 0,
-      "second_pass_latency": 314000000,
+      "second_pass_latency": 295000000,
       "key_term_hit": true
     },
     {
@@ -1003,10 +1000,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7639033000,
-      "ttft": 1332213000,
+      "duration": 7616850000,
+      "ttft": 1306836300,
       "endpoint_delay": 0,
-      "second_pass_latency": 427000000,
+      "second_pass_latency": 332000000,
       "key_term_hit": true
     },
     {
@@ -1024,10 +1021,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7483744400,
-      "ttft": 1314011600,
+      "duration": 7459258800,
+      "ttft": 1356354000,
       "endpoint_delay": 0,
-      "second_pass_latency": 417000000,
+      "second_pass_latency": 385000000,
       "key_term_hit": true
     },
     {
@@ -1039,16 +1036,16 @@
       "noise_type": "clean",
       "accent": "fr-FR",
       "wav_file": "base_dict_fr_med_ff.wav",
-      "passed": false,
-      "transcript": "Administrez 2 mg de midazolam par vintraveineuse.",
+      "passed": true,
+      "transcript": "Administrez 2 mg de midazolam par vie intraveineuse.",
       "class": "ACCEPT",
       "decision": "ACCEPT",
-      "wer": 0.375,
-      "cer": 0.08888888888888889,
-      "duration": 7085777900,
-      "ttft": 1340350200,
+      "wer": 0.25,
+      "cer": 0.044444444444444446,
+      "duration": 7082421300,
+      "ttft": 1356757400,
       "endpoint_delay": 0,
-      "second_pass_latency": 361000000,
+      "second_pass_latency": 328000000,
       "key_term_hit": true
     },
     {
@@ -1066,10 +1063,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6568268300,
-      "ttft": 1380763400,
+      "duration": 6586300100,
+      "ttft": 1353361800,
       "endpoint_delay": 0,
-      "second_pass_latency": 344000000,
+      "second_pass_latency": 345000000,
       "key_term_hit": true
     },
     {
@@ -1087,10 +1084,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7676536200,
-      "ttft": 1322306600,
+      "duration": 7747819700,
+      "ttft": 1385130100,
       "endpoint_delay": 0,
-      "second_pass_latency": 383000000,
+      "second_pass_latency": 423000000,
       "key_term_hit": true
     },
     {
@@ -1108,10 +1105,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7619592900,
-      "ttft": 1338808400,
+      "duration": 7645375900,
+      "ttft": 1327705000,
       "endpoint_delay": 0,
-      "second_pass_latency": 422000000,
+      "second_pass_latency": 402000000,
       "key_term_hit": true
     },
     {
@@ -1129,10 +1126,10 @@
       "decision": "ACCEPT",
       "wer": 0.125,
       "cer": 0.023255813953488372,
-      "duration": 6863403100,
-      "ttft": 1331781600,
+      "duration": 6869465800,
+      "ttft": 1309798700,
       "endpoint_delay": 0,
-      "second_pass_latency": 382000000
+      "second_pass_latency": 350000000
     },
     {
       "id": "T2_CLEAN_DICT_IT_BENCH_IM",
@@ -1149,10 +1146,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6678771500,
-      "ttft": 1330206300,
+      "duration": 6683710700,
+      "ttft": 1314469400,
       "endpoint_delay": 0,
-      "second_pass_latency": 312000000,
+      "second_pass_latency": 336000000,
       "key_term_hit": true
     },
     {
@@ -1170,8 +1167,8 @@
       "decision": "ACCEPT",
       "wer": 0.15,
       "cer": 0.15,
-      "duration": 9100660800,
-      "ttft": 1331033000,
+      "duration": 9117054600,
+      "ttft": 1338571500,
       "endpoint_delay": 0,
       "second_pass_latency": 0,
       "key_term_hit": true
@@ -1191,8 +1188,8 @@
       "decision": "ACCEPT",
       "wer": 0.23809523809523808,
       "cer": 0.23809523809523808,
-      "duration": 8711321800,
-      "ttft": 1317533500,
+      "duration": 8768740300,
+      "ttft": 1324210500,
       "endpoint_delay": 0,
       "second_pass_latency": 0,
       "key_term_hit": true
@@ -1212,8 +1209,8 @@
       "decision": "ACCEPT",
       "wer": 0.8571428571428571,
       "cer": 0.8571428571428571,
-      "duration": 8438272800,
-      "ttft": 1314967700,
+      "duration": 8391489200,
+      "ttft": 1354030200,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1232,8 +1229,8 @@
       "decision": "ACCEPT",
       "wer": 0.3333333333333333,
       "cer": 0.3333333333333333,
-      "duration": 8592063800,
-      "ttft": 1364599300,
+      "duration": 8604673100,
+      "ttft": 1300855400,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1252,8 +1249,8 @@
       "decision": "ACCEPT",
       "wer": 0.09523809523809523,
       "cer": 0.09523809523809523,
-      "duration": 7496391000,
-      "ttft": 1371099300,
+      "duration": 7460701800,
+      "ttft": 1360412700,
       "endpoint_delay": 0,
       "second_pass_latency": 0,
       "key_term_hit": true
@@ -1273,8 +1270,8 @@
       "decision": "ACCEPT",
       "wer": 0.16666666666666666,
       "cer": 0.16666666666666666,
-      "duration": 8735563700,
-      "ttft": 1380390900,
+      "duration": 8776031900,
+      "ttft": 1299870200,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1293,8 +1290,8 @@
       "decision": "ACCEPT",
       "wer": 0.47368421052631576,
       "cer": 0.47368421052631576,
-      "duration": 8907322500,
-      "ttft": 1380492300,
+      "duration": 8935708300,
+      "ttft": 1353633500,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1313,8 +1310,8 @@
       "decision": "ACCEPT",
       "wer": 0.2,
       "cer": 0.2,
-      "duration": 8641356500,
-      "ttft": 1324416500,
+      "duration": 8624233200,
+      "ttft": 1349648400,
       "endpoint_delay": 0,
       "second_pass_latency": 0,
       "key_term_hit": true
@@ -1334,8 +1331,8 @@
       "decision": "ACCEPT",
       "wer": 0.5555555555555556,
       "cer": 0.5555555555555556,
-      "duration": 9311511100,
-      "ttft": 1350571300,
+      "duration": 9328734400,
+      "ttft": 1361290800,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1354,8 +1351,8 @@
       "decision": "ACCEPT",
       "wer": 0.3684210526315789,
       "cer": 0.3684210526315789,
-      "duration": 9325810800,
-      "ttft": 1359877900,
+      "duration": 9354687200,
+      "ttft": 1354821500,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1374,8 +1371,8 @@
       "decision": "ACCEPT",
       "wer": 0.7222222222222222,
       "cer": 0.7222222222222222,
-      "duration": 8733194500,
-      "ttft": 1380127300,
+      "duration": 8740418700,
+      "ttft": 1326098700,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1394,8 +1391,8 @@
       "decision": "ACCEPT",
       "wer": 0.19047619047619047,
       "cer": 0.19047619047619047,
-      "duration": 8170948900,
-      "ttft": 1305700700,
+      "duration": 8169099500,
+      "ttft": 1349206200,
       "endpoint_delay": 0,
       "second_pass_latency": 0,
       "key_term_hit": true
@@ -1415,8 +1412,8 @@
       "decision": "ACCEPT",
       "wer": 0.34782608695652173,
       "cer": 0.34782608695652173,
-      "duration": 8501900300,
-      "ttft": 1316453900,
+      "duration": 8546986300,
+      "ttft": 1380181100,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1435,8 +1432,8 @@
       "decision": "ACCEPT",
       "wer": 0.47619047619047616,
       "cer": 0.47619047619047616,
-      "duration": 9260818200,
-      "ttft": 1326145200,
+      "duration": 9255797400,
+      "ttft": 1328614400,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1458,9 +1455,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2512393000,
-      "ttft": 1352039200,
-      "endpoint_delay": 1231432000,
+      "duration": 2557358200,
+      "ttft": 1299465100,
+      "endpoint_delay": 1260869700,
       "second_pass_latency": 0
     },
     {
@@ -1481,9 +1478,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2513564900,
-      "ttft": 1335653900,
-      "endpoint_delay": 1230661100,
+      "duration": 2497633800,
+      "ttft": 1321110300,
+      "endpoint_delay": 1200623000,
       "second_pass_latency": 0
     },
     {
@@ -1504,9 +1501,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2482900600,
-      "ttft": 1316688600,
-      "endpoint_delay": 1170070300,
+      "duration": 2527982300,
+      "ttft": 1324175900,
+      "endpoint_delay": 1201118700,
       "second_pass_latency": 0
     },
     {
@@ -1527,8 +1524,8 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2513051600,
-      "ttft": 1328439300,
+      "duration": 2525377700,
+      "ttft": 1320455300,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1549,9 +1546,9 @@
       "reason": "LOW_CONFIDENCE",
       "wer": 0.5,
       "cer": 0.08333333333333333,
-      "duration": 3053120900,
-      "ttft": 1327693200,
-      "endpoint_delay": 481009400,
+      "duration": 3101200200,
+      "ttft": 1321451300,
+      "endpoint_delay": 511037300,
       "second_pass_latency": 0
     },
     {
@@ -1571,8 +1568,8 @@
       "reason": "LOW_CONFIDENCE",
       "wer": 0.5,
       "cer": 0.6666666666666666,
-      "duration": 1942805800,
-      "ttft": 1340753800,
+      "duration": 1980187000,
+      "ttft": 1357931400,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1594,9 +1591,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2482691100,
-      "ttft": 1380546700,
-      "endpoint_delay": 0,
+      "duration": 2519367100,
+      "ttft": 1322205800,
+      "endpoint_delay": 648100,
       "second_pass_latency": 0
     },
     {
@@ -1617,9 +1614,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2482549900,
-      "ttft": 1338217600,
-      "endpoint_delay": 60950100,
+      "duration": 2555826700,
+      "ttft": 1323944900,
+      "endpoint_delay": 120702700,
       "second_pass_latency": 0
     },
     {
@@ -1640,9 +1637,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2519974100,
-      "ttft": 1351775700,
-      "endpoint_delay": 1230765600,
+      "duration": 2525057800,
+      "ttft": 1352398800,
+      "endpoint_delay": 1231031700,
       "second_pass_latency": 0
     },
     {
@@ -1663,8 +1660,8 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2513466000,
-      "ttft": 1352063500,
+      "duration": 2527715900,
+      "ttft": 1347881400,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1686,9 +1683,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2482440400,
-      "ttft": 1350505300,
-      "endpoint_delay": 1170325500,
+      "duration": 2527323200,
+      "ttft": 1326328800,
+      "endpoint_delay": 1201046000,
       "second_pass_latency": 0
     },
     {
@@ -1709,9 +1706,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2482816700,
-      "ttft": 1331232500,
-      "endpoint_delay": 1200738700,
+      "duration": 2528205300,
+      "ttft": 1357506900,
+      "endpoint_delay": 1230830700,
       "second_pass_latency": 0
     },
     {
@@ -1732,9 +1729,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2512515400,
-      "ttft": 1334027600,
-      "endpoint_delay": 1230993600,
+      "duration": 2498441700,
+      "ttft": 1322988200,
+      "endpoint_delay": 1200680200,
       "second_pass_latency": 0
     },
     {
@@ -1755,8 +1752,8 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2486502700,
-      "ttft": 1333997100,
+      "duration": 2520113300,
+      "ttft": 1357191400,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1778,8 +1775,8 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2483164000,
-      "ttft": 1328299900,
+      "duration": 2525206600,
+      "ttft": 1353035000,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1801,8 +1798,8 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2513058900,
-      "ttft": 1331054800,
+      "duration": 2528100400,
+      "ttft": 1322946700,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1824,8 +1821,8 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2513621100,
-      "ttft": 1331601000,
+      "duration": 2527273200,
+      "ttft": 1375245200,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1847,9 +1844,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2484264200,
-      "ttft": 1353380700,
-      "endpoint_delay": 150908600,
+      "duration": 2497046200,
+      "ttft": 1326999900,
+      "endpoint_delay": 150737800,
       "second_pass_latency": 0
     },
     {
@@ -1870,9 +1867,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2482164500,
-      "ttft": 1339243600,
-      "endpoint_delay": 90894500,
+      "duration": 2526340700,
+      "ttft": 1351651300,
+      "endpoint_delay": 121122200,
       "second_pass_latency": 0
     },
     {
@@ -1893,9 +1890,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2482701100,
-      "ttft": 1380235300,
-      "endpoint_delay": 1201232600,
+      "duration": 2527548700,
+      "ttft": 1381333500,
+      "endpoint_delay": 1231036000,
       "second_pass_latency": 0
     },
     {
@@ -1916,8 +1913,8 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2512578300,
-      "ttft": 1352371900,
+      "duration": 2523422600,
+      "ttft": 1388600000,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -1939,9 +1936,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2483243100,
-      "ttft": 1352815500,
-      "endpoint_delay": 1110694800,
+      "duration": 2527531800,
+      "ttft": 1356417400,
+      "endpoint_delay": 1140689800,
       "second_pass_latency": 0
     },
     {
@@ -1960,10 +1957,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6361175600,
-      "ttft": 771798300,
+      "duration": 6396592600,
+      "ttft": 795749900,
       "endpoint_delay": 0,
-      "second_pass_latency": 276000000,
+      "second_pass_latency": 240000000,
       "key_term_hit": true
     },
     {
@@ -1982,10 +1979,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6373640100,
-      "ttft": 771169200,
+      "duration": 6436384900,
+      "ttft": 784047100,
       "endpoint_delay": 0,
-      "second_pass_latency": 343000000,
+      "second_pass_latency": 311000000,
       "key_term_hit": true
     },
     {
@@ -2004,10 +2001,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6381265000,
-      "ttft": 1341169900,
+      "duration": 6384981000,
+      "ttft": 1361132000,
       "endpoint_delay": 0,
-      "second_pass_latency": 280000000,
+      "second_pass_latency": 272000000,
       "key_term_hit": true
     },
     {
@@ -2026,10 +2023,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6393144700,
-      "ttft": 1352109000,
+      "duration": 6376782900,
+      "ttft": 1375886900,
       "endpoint_delay": 0,
-      "second_pass_latency": 316000000,
+      "second_pass_latency": 302000000,
       "key_term_hit": true
     },
     {
@@ -2048,10 +2045,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6394257200,
-      "ttft": 1351246300,
+      "duration": 6377755300,
+      "ttft": 1331792500,
       "endpoint_delay": 0,
-      "second_pass_latency": 336000000,
+      "second_pass_latency": 291000000,
       "key_term_hit": true
     },
     {
@@ -2065,15 +2062,15 @@
       "accent": "en-GB",
       "wav_file": "t2_dict_bench_bf_snrm05.wav",
       "passed": true,
-      "transcript": "The voice point manifestant is operational and ready.",
+      "transcript": "The voice point manifestment is operational and ready.",
       "class": "ACCEPT",
       "decision": "ACCEPT",
       "wer": 0.3333333333333333,
-      "cer": 0.2391304347826087,
-      "duration": 6379565800,
-      "ttft": 1307338200,
+      "cer": 0.21739130434782608,
+      "duration": 6400796600,
+      "ttft": 1330369500,
       "endpoint_delay": 0,
-      "second_pass_latency": 305000000
+      "second_pass_latency": 270000000
     },
     {
       "id": "T2_DICT_BENCH_BF_TYPING_15",
@@ -2091,10 +2088,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6371058500,
-      "ttft": 1320586500,
+      "duration": 6385755700,
+      "ttft": 1380118100,
       "endpoint_delay": 0,
-      "second_pass_latency": 252000000,
+      "second_pass_latency": 281000000,
       "key_term_hit": true
     },
     {
@@ -2113,10 +2110,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6379859800,
-      "ttft": 1339042300,
+      "duration": 6408607300,
+      "ttft": 1337815000,
       "endpoint_delay": 0,
-      "second_pass_latency": 313000000,
+      "second_pass_latency": 282000000,
       "key_term_hit": true
     },
     {
@@ -2135,10 +2132,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6412234000,
-      "ttft": 782325100,
+      "duration": 6375522500,
+      "ttft": 762884200,
       "endpoint_delay": 0,
-      "second_pass_latency": 267000000,
+      "second_pass_latency": 270000000,
       "key_term_hit": true
     },
     {
@@ -2157,10 +2154,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6369416900,
-      "ttft": 1314096900,
+      "duration": 6433812000,
+      "ttft": 1333541500,
       "endpoint_delay": 0,
-      "second_pass_latency": 308000000,
+      "second_pass_latency": 306000000,
       "key_term_hit": true
     },
     {
@@ -2179,10 +2176,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 6374272000,
-      "ttft": 1313239700,
+      "duration": 6407197100,
+      "ttft": 1339492300,
       "endpoint_delay": 0,
-      "second_pass_latency": 263000000,
+      "second_pass_latency": 313000000,
       "key_term_hit": true
     },
     {
@@ -2201,10 +2198,10 @@
       "decision": "ACCEPT",
       "wer": 0.2727272727272727,
       "cer": 0.17307692307692307,
-      "duration": 8033343000,
-      "ttft": 1338943600,
+      "duration": 8045844900,
+      "ttft": 1356791000,
       "endpoint_delay": 0,
-      "second_pass_latency": 297000000,
+      "second_pass_latency": 283000000,
       "key_term_hit": true
     },
     {
@@ -2223,10 +2220,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 8053248800,
-      "ttft": 1338961500,
+      "duration": 8041458800,
+      "ttft": 1299564800,
       "endpoint_delay": 0,
-      "second_pass_latency": 440000000,
+      "second_pass_latency": 401000000,
       "key_term_hit": true
     },
     {
@@ -2245,10 +2242,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 8053334300,
-      "ttft": 1312970600,
+      "duration": 8075502800,
+      "ttft": 1350885500,
       "endpoint_delay": 0,
-      "second_pass_latency": 424000000,
+      "second_pass_latency": 401000000,
       "key_term_hit": true
     },
     {
@@ -2267,10 +2264,10 @@
       "decision": "ACCEPT",
       "wer": 0.09090909090909091,
       "cer": 0.019230769230769232,
-      "duration": 8032095300,
-      "ttft": 1338124100,
+      "duration": 8038567700,
+      "ttft": 1357236300,
       "endpoint_delay": 0,
-      "second_pass_latency": 381000000,
+      "second_pass_latency": 340000000,
       "key_term_hit": true
     },
     {
@@ -2289,10 +2286,10 @@
       "decision": "ACCEPT",
       "wer": 0.2727272727272727,
       "cer": 0.17307692307692307,
-      "duration": 8061717400,
-      "ttft": 1339767100,
+      "duration": 8040560800,
+      "ttft": 1313008200,
       "endpoint_delay": 0,
-      "second_pass_latency": 333000000,
+      "second_pass_latency": 302000000,
       "key_term_hit": true
     },
     {
@@ -2311,10 +2308,10 @@
       "decision": "ACCEPT",
       "wer": 0.2727272727272727,
       "cer": 0.17307692307692307,
-      "duration": 8012197200,
-      "ttft": 1322707500,
+      "duration": 8095964200,
+      "ttft": 1381007300,
       "endpoint_delay": 0,
-      "second_pass_latency": 329000000,
+      "second_pass_latency": 275000000,
       "key_term_hit": true
     },
     {
@@ -2333,10 +2330,10 @@
       "decision": "ACCEPT",
       "wer": 0.2727272727272727,
       "cer": 0.17307692307692307,
-      "duration": 8032639600,
-      "ttft": 1337567600,
+      "duration": 8049163500,
+      "ttft": 1318608600,
       "endpoint_delay": 0,
-      "second_pass_latency": 329000000,
+      "second_pass_latency": 283000000,
       "key_term_hit": true
     },
     {
@@ -2355,10 +2352,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7039150000,
-      "ttft": 1332855600,
+      "duration": 7044174600,
+      "ttft": 1313656200,
       "endpoint_delay": 0,
-      "second_pass_latency": 368000000,
+      "second_pass_latency": 333000000,
       "key_term_hit": true
     },
     {
@@ -2377,10 +2374,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7060703900,
-      "ttft": 1313410800,
+      "duration": 7092464300,
+      "ttft": 1361576500,
       "endpoint_delay": 0,
-      "second_pass_latency": 340000000,
+      "second_pass_latency": 374000000,
       "key_term_hit": true
     },
     {
@@ -2400,9 +2397,9 @@
       "reason": "NEGATION_DETECTED",
       "wer": 0,
       "cer": 0,
-      "duration": 2482900300,
-      "ttft": 1384668800,
-      "endpoint_delay": 781031600,
+      "duration": 2490287200,
+      "ttft": 1326090600,
+      "endpoint_delay": 780376700,
       "second_pass_latency": 0
     },
     {
@@ -2422,8 +2419,8 @@
       "reason": "NEGATION_DETECTED",
       "wer": 0,
       "cer": 0,
-      "duration": 2516389200,
-      "ttft": 1349046300,
+      "duration": 2489998400,
+      "ttft": 1336732600,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -2444,9 +2441,9 @@
       "reason": "NEGATION_DETECTED",
       "wer": 0,
       "cer": 0,
-      "duration": 3054396100,
-      "ttft": 1350007700,
-      "endpoint_delay": 120691800,
+      "duration": 3067694800,
+      "ttft": 1340415500,
+      "endpoint_delay": 120572500,
       "second_pass_latency": 0
     },
     {
@@ -2467,9 +2464,9 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 2513081100,
-      "ttft": 1380383000,
-      "endpoint_delay": 1260633800,
+      "duration": 2496818100,
+      "ttft": 1314221100,
+      "endpoint_delay": 1230997900,
       "second_pass_latency": 0
     },
     {
@@ -2489,9 +2486,9 @@
       "reason": "LOW_CONFIDENCE",
       "wer": 0.5,
       "cer": 0.08333333333333333,
-      "duration": 2514619500,
-      "ttft": 1351753300,
-      "endpoint_delay": 660735700,
+      "duration": 2496688100,
+      "ttft": 1334049200,
+      "endpoint_delay": 630877300,
       "second_pass_latency": 0
     },
     {
@@ -2511,9 +2508,9 @@
       "reason": "LOW_CONFIDENCE",
       "wer": 0.5,
       "cer": 0.08333333333333333,
-      "duration": 2482753500,
-      "ttft": 1350198000,
-      "endpoint_delay": 31018900,
+      "duration": 2525784300,
+      "ttft": 1336888100,
+      "endpoint_delay": 61094400,
       "second_pass_latency": 0
     },
     {
@@ -2532,10 +2529,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7442092900,
-      "ttft": 1380335700,
+      "duration": 7455182100,
+      "ttft": 1315437100,
       "endpoint_delay": 0,
-      "second_pass_latency": 364000000,
+      "second_pass_latency": 331000000,
       "key_term_hit": true
     },
     {
@@ -2554,10 +2551,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7199088000,
-      "ttft": 1350943200,
+      "duration": 7235532800,
+      "ttft": 1351752800,
       "endpoint_delay": 0,
-      "second_pass_latency": 394000000,
+      "second_pass_latency": 355000000,
       "key_term_hit": true
     },
     {
@@ -2576,10 +2573,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7616839000,
-      "ttft": 1380555200,
+      "duration": 7646081400,
+      "ttft": 1350208200,
       "endpoint_delay": 0,
-      "second_pass_latency": 448000000,
+      "second_pass_latency": 406000000,
       "key_term_hit": true
     },
     {
@@ -2598,10 +2595,10 @@
       "decision": "ACCEPT",
       "wer": 0,
       "cer": 0,
-      "duration": 7677680600,
-      "ttft": 1327264500,
+      "duration": 7706535500,
+      "ttft": 1321382700,
       "endpoint_delay": 0,
-      "second_pass_latency": 389000000,
+      "second_pass_latency": 366000000,
       "key_term_hit": true
     },
     {
@@ -2620,8 +2617,8 @@
       "decision": "ACCEPT",
       "wer": 0.3,
       "cer": 0.3,
-      "duration": 9083947300,
-      "ttft": 1346751700,
+      "duration": 9110895500,
+      "ttft": 1351876200,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -2641,8 +2638,8 @@
       "decision": "ACCEPT",
       "wer": 0.35,
       "cer": 0.35,
-      "duration": 9093263100,
-      "ttft": 1380681200,
+      "duration": 9108249400,
+      "ttft": 1315666600,
       "endpoint_delay": 0,
       "second_pass_latency": 0
     },
@@ -2662,8 +2659,8 @@
       "decision": "ACCEPT",
       "wer": 0.23809523809523808,
       "cer": 0.23809523809523808,
-      "duration": 8698614700,
-      "ttft": 1352358100,
+      "duration": 8716715100,
+      "ttft": 1380633800,
       "endpoint_delay": 0,
       "second_pass_latency": 0,
       "key_term_hit": true
@@ -2684,8 +2681,8 @@
       "decision": "ACCEPT",
       "wer": 0.2857142857142857,
       "cer": 0.2857142857142857,
-      "duration": 8729564300,
-      "ttft": 1350471900,
+      "duration": 8745448800,
+      "ttft": 1351673400,
       "endpoint_delay": 0,
       "second_pass_latency": 0,
       "key_term_hit": true
@@ -2703,7 +2700,7 @@
       "decision": "SILENCE",
       "wer": 0,
       "cer": 0,
-      "duration": 3560660900,
+      "duration": 3591569900,
       "ttft": 0,
       "endpoint_delay": 0,
       "second_pass_latency": 0
@@ -2721,7 +2718,7 @@
       "decision": "SILENCE",
       "wer": 0,
       "cer": 0,
-      "duration": 3562967400,
+      "duration": 3628825200,
       "ttft": 0,
       "endpoint_delay": 0,
       "second_pass_latency": 0
