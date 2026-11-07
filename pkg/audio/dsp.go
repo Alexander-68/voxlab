@@ -75,6 +75,16 @@ func (p *DSPProcessor) SetGateFloor(db float64) {
 	}
 }
 
+// Reset clears adaptive state (filter memory, gate envelope, AGC gain) but keeps settings,
+// so what one utterance leaves behind cannot change how the next is processed.
+func (p *DSPProcessor) Reset() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.prevInput, p.prevOutput = 0, 0
+	p.gateGain, p.gateHoldLeft = 1.0, 0
+	p.currentGain = 1.0
+}
+
 // SetHighPassEnabled enables or disables the 80Hz de-rumble high-pass filter.
 func (p *DSPProcessor) SetHighPassEnabled(enabled bool) {
 	p.mu.Lock()

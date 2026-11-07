@@ -83,7 +83,7 @@ func main() {
 	}
 
 	srv.StartBackgroundLoops()
-	evalRunner := evaluation.NewEvalRunner(srv.HandleWebSocket)
+	evalRunner := srv.EvalRunner()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(*timeoutSec)*time.Second)
 	defer cancel()

@@ -217,7 +217,7 @@ func DefaultBaseUtterances() []BaseUtterance {
 			Accent:       "en-US",
 			Gender:       "male",
 			Category:     "distractor",
-			Expected:     "REJECT:OUT_OF_DOMAIN",
+			Expected:     "REJECT:OUT_OF_DOMAIN_CHATTER",
 		},
 		{
 			BaseID:       "CMD_ES_EF",

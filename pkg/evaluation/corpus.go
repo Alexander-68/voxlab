@@ -30,8 +30,27 @@ type EvalItem struct {
 	Accent       string       `json:"accent,omitempty"`
 	Category     string       `json:"category,omitempty"` // "command", "dictation", "negation", "distractor", "noise_gate"
 	Expected     string       `json:"expected"`
+	MaxErrorRate *float64     `json:"max_error_rate,omitempty"` // dictation pass limit; DefaultMaxErrorRate if unset
 	WavFile      string       `json:"wav_file"`
 	DurationSec  float64      `json:"duration_sec"`
+}
+
+// DefaultMaxErrorRate is the highest error rate at which a dictation item passes.
+const DefaultMaxErrorRate = 0.35
+
+// ScoreDictation grades a draft on one error rate: CER for CJK references, which have no word
+// boundaries, otherwise WER. A key term in the draft is reported but cannot rescue a bad transcript.
+func ScoreDictation(item EvalItem, draft string) (errorRate float64, passed, keyTermHit bool) {
+	errorRate = CalculateWER(item.Text, draft)
+	if strings.ContainsFunc(item.Text, isCJK) {
+		errorRate = CalculateCER(item.Text, draft)
+	}
+	limit := DefaultMaxErrorRate
+	if item.MaxErrorRate != nil {
+		limit = *item.MaxErrorRate
+	}
+	keyTermHit = item.Expected != "" && strings.Contains(strings.ToLower(draft), strings.ToLower(item.Expected))
+	return errorRate, draft != "" && errorRate <= limit, keyTermHit
 }
 
 // EvalManifest represents a suite of test items.

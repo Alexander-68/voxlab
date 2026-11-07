@@ -2,6 +2,7 @@ package evaluation_test
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -12,7 +13,17 @@ import (
 	"voxlab/pkg/server"
 )
 
+// requireDeepRun skips tests that feed Tier 2 audio in real time, which takes over 10 minutes.
+// Run them with: VOXLAB_TIER2=1 go test ./pkg/evaluation/ -timeout 40m
+func requireDeepRun(t *testing.T) {
+	t.Helper()
+	if os.Getenv("VOXLAB_TIER2") == "" {
+		t.Skip("on-demand tier: set VOXLAB_TIER2=1")
+	}
+}
+
 func TestTier2DeepAcousticMatrix(t *testing.T) {
+	requireDeepRun(t)
 	manifestPath := filepath.Join("..", "..", "data", "test_samples", "eval_tier2", "manifest.json")
 	manifest, err := evaluation.LoadManifest(manifestPath)
 	if err != nil {
@@ -55,13 +66,13 @@ func TestTier2DeepAcousticMatrix(t *testing.T) {
 			t.Fatalf("failed setting ASR engine mode: %v", err)
 		}
 	} else {
-		t.Log("[Notice] Sherpa native models not present; testing with simulator engine")
+		t.Skip("Sherpa models not installed; the simulator cannot transcribe real audio")
 	}
 
 	srv.StartBackgroundLoops()
 
 	evalDir := filepath.Join("..", "..", "data", "test_samples", "eval_tier2")
-	evalRunner := evaluation.NewEvalRunner(srv.HandleWebSocket)
+	evalRunner := srv.EvalRunner()
 
 	t.Logf("=== Starting Tier-2 Deep Acoustic Matrix Evaluation (%d cases) ===", len(itemsToTest))
 	subManifest := &evaluation.EvalManifest{
@@ -70,7 +81,7 @@ func TestTier2DeepAcousticMatrix(t *testing.T) {
 		Items:   itemsToTest,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
 	report, err := evalRunner.EvaluateSuite(ctx, subManifest, evalDir, func(res *evaluation.ItemResult, cur, tot int) {
@@ -118,6 +129,7 @@ func mathAbs(x float64) float64 {
 }
 
 func TestMultilingualDictations(t *testing.T) {
+	requireDeepRun(t)
 	manifestPath := filepath.Join("..", "..", "data", "test_samples", "eval_tier2", "manifest.json")
 	manifest, err := evaluation.LoadManifest(manifestPath)
 	if err != nil {
@@ -168,13 +180,13 @@ func TestMultilingualDictations(t *testing.T) {
 			t.Fatalf("failed setting ASR engine mode: %v", err)
 		}
 	} else {
-		t.Log("[Notice] Sherpa native models not present; testing with simulator engine")
+		t.Skip("Sherpa models not installed; the simulator cannot transcribe real audio")
 	}
 
 	srv.StartBackgroundLoops()
 
 	evalDir := filepath.Join("..", "..", "data", "test_samples", "eval_tier2")
-	evalRunner := evaluation.NewEvalRunner(srv.HandleWebSocket)
+	evalRunner := srv.EvalRunner()
 
 	t.Logf("=== Starting Multilingual Dictation Test (%d cases) ===", len(itemsToTest))
 	subManifest := &evaluation.EvalManifest{
@@ -183,7 +195,7 @@ func TestMultilingualDictations(t *testing.T) {
 		Items:   itemsToTest,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
 	report, err := evalRunner.EvaluateSuite(ctx, subManifest, evalDir, func(res *evaluation.ItemResult, cur, tot int) {
@@ -200,5 +212,14 @@ func TestMultilingualDictations(t *testing.T) {
 
 	t.Logf("=== Multilingual Dictation Test Finished: %d/%d Passed (PassRate=%.1f%%, AvgWER=%.2f, AvgCER=%.2f) ===",
 		report.Passed, report.TotalCases, report.PassRate*100.0, report.AvgWER, report.AvgCER)
+
+	if report.TotalCases != len(itemsToTest) {
+		t.Errorf("evaluated %d of %d items", report.TotalCases, len(itemsToTest))
+	}
+	for _, res := range report.Results {
+		if res.Transcript == "" {
+			t.Errorf("%s produced no transcript", res.ID)
+		}
+	}
 }
 

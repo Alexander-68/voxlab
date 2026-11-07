@@ -49,9 +49,28 @@ type DimensionGroup struct {
 	AvgCER   float64 `json:"avg_cer"`
 }
 
+// RunConfig records what produced a report, so its numbers can be compared and reproduced.
+type RunConfig struct {
+	Engine              string  `json:"engine"`
+	ASRModel            string  `json:"asr_model,omitempty"`
+	SecondPassModel     string  `json:"second_pass_model,omitempty"`
+	SecondPassCommand   bool    `json:"second_pass_command"`
+	SecondPassDictation bool    `json:"second_pass_dictation"`
+	Feed                string  `json:"feed"`
+	GateDBFS            float64 `json:"gate_dbfs"`
+	GateEnabled         bool    `json:"gate_enabled"`
+	AGC                 bool    `json:"agc"`
+	HighPass            bool    `json:"highpass"`
+	Enhancer            string  `json:"enhancer"`
+	InputLanguage       string  `json:"input_language"`
+	Commit              string  `json:"commit,omitempty"` // empty when the binary has no VCS stamp
+}
+
 // SuiteReport contains aggregated evaluation statistics for a benchmark run.
 type SuiteReport struct {
 	Tier              string                    `json:"tier"` // "tier-1-smoke" or "tier-2-deep-matrix"
+	Config            *RunConfig                `json:"config,omitempty"`
+	DroppedChunks     int                       `json:"dropped_chunks"` // audio lost to ASR queue overflow, across all items
 	TotalCases        int                       `json:"total_cases"`
 	Passed            int                       `json:"passed"`
 	Failed            int                       `json:"failed"`
@@ -178,6 +197,7 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 		} else {
 			report.Failed++
 		}
+		report.DroppedChunks += res.DroppedChunks
 
 		// Latency collections
 		totalDurVals = append(totalDurVals, float64(res.Duration.Milliseconds()))

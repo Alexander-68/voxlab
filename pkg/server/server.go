@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -45,6 +46,11 @@ type Server struct {
 	sourceMu      sync.Mutex
 	audioInChan   chan []float32
 	asrChan       chan asrWorkItem
+
+	// turn identifies the current listening turn. Bumped before the recognizer is reset, so
+	// audio and results from an abandoned turn can be recognized and dropped.
+	turn      atomic.Uint64
+	asrTurnMu sync.Mutex // serializes recognizer calls with turn resets
 
 	asrEngineMode string // "sherpa", "browser", "sim"
 	engineMu      sync.RWMutex
@@ -83,6 +89,7 @@ type Server struct {
 
 type asrWorkItem struct {
 	chunk       []float32
+	turn        uint64
 	state       statemachine.State
 	isDictation bool
 	flush       bool // finalize pending speech and end the dictation session
@@ -190,6 +197,7 @@ func NewServer(cfg *config.AppConfig) (*Server, error) {
 	})
 
 	s.evalRunner = evaluation.NewEvalRunner(s.HandleWebSocket)
+	s.evalRunner.Describe = s.evalRunConfig
 	return s, nil
 }
 
@@ -558,10 +566,19 @@ func (s *Server) processIncomingAudio(rawChunk []float32) {
 
 	// Forward to the decoupled ASR worker so metering is never blocked by inference.
 	select {
-	case s.asrChan <- asrWorkItem{chunk: cleanChunk, state: state, isDictation: state == statemachine.StateAnnotationListen}:
+	case s.asrChan <- asrWorkItem{chunk: cleanChunk, turn: s.turn.Load(), state: state, isDictation: state == statemachine.StateAnnotationListen}:
 	default:
 		log.Printf("[Warning] ASR queue full, dropping audio chunk")
+		s.BroadcastJSON(map[string]interface{}{"event": "asr.queue_overflow", "data": map[string]interface{}{}})
 	}
+}
+
+// newTurn abandons the current turn: its queued audio and in-flight results are dropped.
+func (s *Server) newTurn() {
+	s.turn.Add(1)
+	s.asrTurnMu.Lock()
+	defer s.asrTurnMu.Unlock()
+	s.currentEngine().ResetASR()
 }
 
 func (s *Server) asrPipelineLoop(ctx context.Context) {
@@ -580,13 +597,36 @@ func (s *Server) asrPipelineLoop(ctx context.Context) {
 
 func (s *Server) handleASRWorkItem(item asrWorkItem) {
 	// Chunks queued before a state change (endpoint, cancel, stop) belong to a finished turn.
-	if s.stateMachine.Current() != item.state {
+	// The state check alone misses a cancel followed by a new turn in the same state.
+	if s.stateMachine.Current() != item.state || item.turn != s.turn.Load() {
+		return
+	}
+
+	s.asrTurnMu.Lock()
+	if item.turn != s.turn.Load() {
+		s.asrTurnMu.Unlock()
 		return
 	}
 	eng := s.currentEngine()
+	var (
+		flushed string
+		res     *engine.ASRResult
+		err     error
+	)
+	if item.flush {
+		flushed = eng.FlushASR()
+	} else {
+		res, err = eng.ProcessASRChunk(item.chunk, item.isDictation)
+	}
+	s.asrTurnMu.Unlock()
+
+	// Recognition can take seconds with a second pass; the turn may have been cancelled meanwhile.
+	if item.turn != s.turn.Load() {
+		return
+	}
 
 	if item.flush {
-		s.appendDictation(eng.FlushASR())
+		s.appendDictation(flushed)
 		s.stateMachine.FinishReview(true)
 		return
 	}
@@ -595,7 +635,6 @@ func (s *Server) handleASRWorkItem(item asrWorkItem) {
 	if item.isDictation {
 		mode = "dictation"
 	}
-	res, err := eng.ProcessASRChunk(item.chunk, item.isDictation)
 	if err != nil {
 		log.Printf("[Error] %s ASR error: %v", mode, err)
 		return
@@ -762,6 +801,8 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		client.enqueue(wsFrame{websocket.TextMessage, data})
 	}
 
+	evalHarness := false // set by the bench harness; only this read loop touches it
+
 	for {
 		messageType, payload, err := conn.ReadMessage()
 		if err != nil {
@@ -769,8 +810,9 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if messageType == websocket.BinaryMessage {
-			// Binary PCM audio chunk from Web UI mic (16-bit PCM little endian)
-			if s.currentSource() == "web_ui_mic" {
+			// Binary PCM audio chunk from Web UI mic (16-bit PCM little endian).
+			// During a bench run only the harness feeds audio, so a live mic cannot mix in.
+			if s.currentSource() == "web_ui_mic" && (evalHarness || !s.EvalStatus().Running) {
 				samples := audio.BytesToFloat32PCM(payload)
 				s.webMicSource.PushChunk(samples)
 			}
@@ -790,26 +832,37 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 					s.dictationTarget = target
 					s.dictationDraft = ""
 					s.dictMu.Unlock()
-					s.currentEngine().ResetASR()
+					s.newTurn()
 					s.stateMachine.StartDictation(target)
 				} else {
-					s.currentEngine().ResetASR()
+					s.newTurn()
 					s.stateMachine.StartCommand()
 				}
 
 			case "cancel":
 				s.SetPlaybackActive(false)
+				s.turn.Add(1) // before the state change: nothing from this turn may land after it
 				s.stateMachine.Cancel()
-				s.currentEngine().ResetASR()
+				s.newTurn()
 
 			case "stop":
 				// End dictation but keep speech not yet endpointed. Queued behind pending
-				// audio so the recognizer sees every chunk before finalizing.
+				// audio so the recognizer sees every chunk before finalizing, which is
+				// why this keeps the turn rather than starting a new one.
 				if st := s.stateMachine.Current(); st == statemachine.StateAnnotationListen {
-					s.asrChan <- asrWorkItem{state: st, isDictation: true, flush: true}
+					s.asrChan <- asrWorkItem{turn: s.turn.Load(), state: st, isDictation: true, flush: true}
 				} else {
 					s.stateMachine.Cancel()
-					s.currentEngine().ResetASR()
+					s.newTurn()
+				}
+
+			case "eval_session":
+				// Marks this connection as the bench harness and starts its item from clean
+				// DSP state, so results do not depend on the order items run in.
+				evalHarness = true
+				s.dsp.Reset()
+				if s.enhancer != nil {
+					s.enhancer.Reset()
 				}
 
 			case "playback_status":

@@ -49,13 +49,13 @@ func TestTier1SmokeSuite(t *testing.T) {
 			t.Fatalf("failed setting ASR engine mode to sherpa: %v", err)
 		}
 	} else {
-		t.Log("[Notice] Sherpa native models not present; testing with simulator engine")
+		t.Skip("Sherpa models not installed; the simulator cannot transcribe real audio")
 	}
 
 	srv.StartBackgroundLoops()
 
 	evalDir := filepath.Join("..", "..", "data", "test_samples", "eval")
-	evalRunner := evaluation.NewEvalRunner(srv.HandleWebSocket)
+	evalRunner := srv.EvalRunner()
 
 	t.Logf("=== Starting Tier-1 Smoke Suite (%d cases) ===", len(manifest.Items))
 
@@ -63,7 +63,7 @@ func TestTier1SmokeSuite(t *testing.T) {
 	for _, item := range manifest.Items {
 		wavPath := evaluation.ResolveWavPath(evalDir, item)
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), evaluation.ItemTimeout(item))
 		res, err := evalRunner.EvaluateItem(ctx, item, wavPath)
 		cancel()
 

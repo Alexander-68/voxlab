@@ -39,6 +39,7 @@
       "text": "The voice pipeline test bench is operational and ready.",
       "voice": "bf_emma",
       "expected": "pipeline test bench",
+      "max_error_rate": 0,
       "wav_file": "t1_dict_bench.wav",
       "duration_sec": 4.5905625
     },

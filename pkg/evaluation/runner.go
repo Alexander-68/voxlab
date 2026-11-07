@@ -3,7 +3,9 @@ package evaluation
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -38,12 +40,38 @@ type ItemResult struct {
 	EndpointDelay     time.Duration `json:"endpoint_delay"`
 	SecondPassLatency time.Duration `json:"second_pass_latency"`
 	Error             string        `json:"error,omitempty"`
+	KeyTermHit        bool          `json:"key_term_hit,omitempty"`
+	DroppedChunks     int           `json:"dropped_chunks,omitempty"`
+}
+
+const (
+	sampleRate    = 16000
+	chunkSamples  = 480 // 30 ms
+	chunkDuration = 30 * time.Millisecond
+
+	// commandSettle bounds trailing silence for commands. The recognizer only reports results
+	// while audio arrives, like a live mic, so silence keeps flowing until an outcome or this limit.
+	commandSettle = 3 * time.Second
+	// dictationTail is the pause before stopping, long enough for a segment to endpoint.
+	dictationTail = 1500 * time.Millisecond
+	// flushWait covers the recognizer's finish timeout plus a second pass.
+	flushWait  = 15 * time.Second
+	stateWait  = 3 * time.Second
+	itemMargin = 25 * time.Second
+)
+
+// ItemTimeout bounds one item: audio is fed in real time, so it scales with the clip.
+func ItemTimeout(item EvalItem) time.Duration {
+	return time.Duration(item.DurationSec*float64(time.Second)) + itemMargin
 }
 
 // EvalRunner coordinates synthetic speech playback into the server pipeline and collects metrics.
 type EvalRunner struct {
 	handler http.HandlerFunc
 	wsURL   string
+
+	// Describe reports the pipeline configuration to stamp on reports.
+	Describe func() RunConfig
 }
 
 // NewEvalRunner creates a new evaluation runner attached to a WebSocket handler function.
@@ -61,19 +89,26 @@ func (r *EvalRunner) EvaluateSuite(ctx context.Context, manifest *EvalManifest, 
 	t0 := time.Now()
 	var results []ItemResult
 
+	finish := func() *SuiteReport {
+		report := ComputeSuiteReport(manifest.Tier, results, time.Since(t0))
+		if r.Describe != nil {
+			cfg := r.Describe()
+			report.Config = &cfg
+		}
+		return report
+	}
+
 	total := len(manifest.Items)
 	for i, item := range manifest.Items {
-		select {
-		case <-ctx.Done():
-			return ComputeSuiteReport(manifest.Tier, results, time.Since(t0)), ctx.Err()
-		default:
-		}
-
 		wavPath := ResolveWavPath(manifestDir, item)
-		itemCtx, cancel := context.WithTimeout(ctx, 12*time.Second)
+		itemCtx, cancel := context.WithTimeout(ctx, ItemTimeout(item))
 		res, err := r.EvaluateItem(itemCtx, item, wavPath)
 		cancel()
 
+		// A run stopped mid-item has no result for that item.
+		if ctx.Err() != nil {
+			return finish(), ctx.Err()
+		}
 		if err != nil {
 			res.Error = err.Error()
 		}
@@ -84,8 +119,31 @@ func (r *EvalRunner) EvaluateSuite(ctx context.Context, manifest *EvalManifest, 
 		}
 	}
 
-	report := ComputeSuiteReport(manifest.Tier, results, time.Since(t0))
-	return report, nil
+	return finish(), nil
+}
+
+// speechEnd locates the last chunk with speech-level energy; clips end in padding silence.
+// ponytail: energy relative to the loudest chunk, so at low SNR this drifts toward the clip end.
+func speechEnd(samples []float32) time.Duration {
+	var rms []float64
+	for i := 0; i < len(samples); i += chunkSamples {
+		var sum float64
+		chunk := samples[i:min(i+chunkSamples, len(samples))]
+		for _, v := range chunk {
+			sum += float64(v) * float64(v)
+		}
+		rms = append(rms, math.Sqrt(sum/float64(len(chunk))))
+	}
+	var peak float64
+	for _, v := range rms {
+		peak = max(peak, v)
+	}
+	for i := len(rms) - 1; i >= 0; i-- {
+		if rms[i] >= 0.1*peak {
+			return time.Duration(i+1) * chunkDuration
+		}
+	}
+	return 0
 }
 
 // EvaluateItem streams a single test item's WAV audio into the pipeline and evaluates the result.
@@ -108,13 +166,13 @@ func (r *EvalRunner) EvaluateItem(ctx context.Context, item EvalItem, wavPath st
 		return res, err
 	}
 
-	samples, sampleRate, err := audio.DecodeWAV(bytes.NewReader(wavData))
+	samples, wavRate, err := audio.DecodeWAV(bytes.NewReader(wavData))
 	if err != nil {
 		res.Error = fmt.Sprintf("cannot decode wav: %v", err)
 		return res, err
 	}
-	if sampleRate != 16000 {
-		samples = audio.Resample(samples, sampleRate, 16000)
+	if wavRate != sampleRate {
+		samples = audio.Resample(samples, wavRate, sampleRate)
 	}
 
 	var (
@@ -150,30 +208,44 @@ func (r *EvalRunner) EvaluateItem(ctx context.Context, item EvalItem, wavPath st
 	// Drain messages in background
 	var (
 		mu                 sync.Mutex
+		state              string
 		receivedIntent     string
 		receivedConf       float64
 		receivedReject     string
+		receivedClarify    string
 		finalTranscript    string
 		receivedDraft      string
+		droppedChunks      int
 		firstPartialTime   time.Time
 		finalRecvTime      time.Time
 		secondPassRecvTime time.Time
 	)
 
-	done := make(chan struct{})
 	go func() {
-		defer close(done)
 		for {
+			kind, payload, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			if kind != websocket.TextMessage { // monitor audio
+				continue
+			}
 			var msg struct {
 				Event string                 `json:"event"`
 				Data  map[string]interface{} `json:"data"`
 			}
-			if err := conn.ReadJSON(&msg); err != nil {
-				return
+			if json.Unmarshal(payload, &msg) != nil {
+				continue
 			}
 			mu.Lock()
 			now := time.Now()
 			switch msg.Event {
+			case "voice.state":
+				if to, ok := msg.Data["to_state"].(string); ok {
+					state = to
+				}
+			case "asr.queue_overflow":
+				droppedChunks++
 			case "transcript.partial":
 				if firstPartialTime.IsZero() {
 					firstPartialTime = now
@@ -184,6 +256,10 @@ func (r *EvalRunner) EvaluateItem(ctx context.Context, item EvalItem, wavPath st
 				}
 				if c, ok := msg.Data["confidence"].(float64); ok {
 					receivedConf = c
+				}
+			case "intent_clarification_required":
+				if r, ok := msg.Data["reason"].(string); ok {
+					receivedClarify = r
 				}
 			case "utterance_rejected":
 				if r, ok := msg.Data["reason"].(string); ok {
@@ -218,11 +294,45 @@ func (r *EvalRunner) EvaluateItem(ctx context.Context, item EvalItem, wavPath st
 		}
 	}()
 
-	// 1. Reset state to IDLE and activate mode
-	_ = conn.WriteJSON(map[string]interface{}{"action": "cancel"})
-	time.Sleep(40 * time.Millisecond)
+	inState := func(want string) func() bool {
+		return func() bool {
+			mu.Lock()
+			defer mu.Unlock()
+			return state == want
+		}
+	}
+	commandDone := func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return receivedIntent != "" || receivedReject != "" || receivedClarify != ""
+	}
+	waitFor := func(done func() bool, limit time.Duration) error {
+		deadline := time.Now().Add(limit)
+		for !done() {
+			if time.Now().After(deadline) {
+				return fmt.Errorf("timed out after %v", limit)
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(10 * time.Millisecond):
+			}
+		}
+		return nil
+	}
 
+	// 1. Claim the pipeline, return to IDLE and activate. Waiting for each state keeps the
+	// item's audio inside its own turn.
+	_ = conn.WriteJSON(map[string]interface{}{"action": "eval_session"})
+	_ = conn.WriteJSON(map[string]interface{}{"action": "cancel"})
+	defer func() { _ = conn.WriteJSON(map[string]interface{}{"action": "cancel"}) }()
+	if err := waitFor(inState("IDLE"), stateWait); err != nil {
+		return res, fmt.Errorf("waiting for IDLE: %w", err)
+	}
+
+	listenState := "COMMAND_LISTEN"
 	if item.Mode == ModeDictation {
+		listenState = "ANNOTATION_LISTEN"
 		_ = conn.WriteJSON(map[string]interface{}{
 			"action":    "activate",
 			"mode":      "dictation",
@@ -234,59 +344,58 @@ func (r *EvalRunner) EvaluateItem(ctx context.Context, item EvalItem, wavPath st
 			"mode":   "command",
 		})
 	}
+	if err := waitFor(inState(listenState), stateWait); err != nil {
+		return res, fmt.Errorf("waiting for %s: %w", listenState, err)
+	}
 
-	time.Sleep(40 * time.Millisecond)
-
-	// 2. Stream audio chunks
+	// 2. Stream audio at real time, as a microphone would. Latencies are only meaningful at
+	// this pace, and faster feeds overflow the ASR queue during a second pass.
 	streamStartTime := time.Now()
-	chunkSize := 480 // 30ms @ 16kHz
-	for i := 0; i < len(samples); i += chunkSize {
-		end := min(i+chunkSize, len(samples))
-		chunk := samples[i:end]
-		pcm := audio.Float32ToBytesPCM(chunk)
+	nextChunk := streamStartTime
+	send := func(pcm []byte) error {
 		if err := conn.WriteMessage(websocket.BinaryMessage, pcm); err != nil {
-			break
+			return err
 		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	speechEndTime := time.Now()
-
-	// 3. Follow with post-speech silence chunks to trigger ASR trailing-silence endpointing
-	silencePCM := make([]byte, chunkSize*2) // 480 int16 samples of zeroes
-	for k := 0; k < 45; k++ {               // ~1.35s additional silence to guarantee Sherpa rule2 endpointing
-		_ = conn.WriteMessage(websocket.BinaryMessage, silencePCM)
-		time.Sleep(10 * time.Millisecond)
+		nextChunk = nextChunk.Add(chunkDuration)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Until(nextChunk)):
+			return nil
+		}
 	}
 
-	// 4. For dictation, stop listening to trigger final flush
+	isGateItem := item.Expected == "DROPPED_BY_GATE"
+	stopEarly := func() bool { return item.Mode != ModeDictation && commandDone() }
+	for i := 0; i < len(samples) && !stopEarly(); i += chunkSamples {
+		if err := send(audio.Float32ToBytesPCM(samples[i:min(i+chunkSamples, len(samples))])); err != nil {
+			return res, err
+		}
+	}
+	speechEndTime := streamStartTime.Add(speechEnd(samples))
+
+	// 3. Follow with silence so the recognizer endpoints and reports its results.
+	silenceLimit := commandSettle
+	if item.Mode == ModeDictation || isGateItem {
+		silenceLimit = dictationTail
+	}
+	silencePCM := make([]byte, chunkSamples*2)
+	for end := time.Now().Add(silenceLimit); time.Now().Before(end) && !stopEarly(); {
+		if err := send(silencePCM); err != nil {
+			return res, err
+		}
+	}
+
+	// 4. For dictation, stop and wait for the flush to finish: the state returns to IDLE only
+	// after the last segment reached the draft.
 	if item.Mode == ModeDictation {
-		time.Sleep(100 * time.Millisecond)
 		_ = conn.WriteJSON(map[string]interface{}{
 			"action": "stop",
 			"mode":   "dictation",
 		})
-	}
-
-	// 5. Wait for processing or timeout
-	deadline := time.Now().Add(6 * time.Second)
-	for time.Now().Before(deadline) {
-		mu.Lock()
-		hasOutcome := false
-		if item.Mode == ModeDictation {
-			hasOutcome = receivedDraft != ""
-		} else if strings.HasPrefix(item.Expected, "REJECT") {
-			hasOutcome = receivedReject != ""
-		} else if item.Expected == "DROPPED_BY_GATE" {
-			hasOutcome = false
-		} else {
-			hasOutcome = receivedIntent != ""
+		if err := waitFor(inState("IDLE"), flushWait); err != nil {
+			return res, fmt.Errorf("waiting for dictation flush: %w", err)
 		}
-		mu.Unlock()
-
-		if hasOutcome {
-			break
-		}
-		time.Sleep(60 * time.Millisecond)
 	}
 
 	res.Duration = time.Since(t0)
@@ -297,6 +406,10 @@ func (r *EvalRunner) EvaluateItem(ctx context.Context, item EvalItem, wavPath st
 	res.IntentID = receivedIntent
 	res.Confidence = receivedConf
 	res.Reason = receivedReject
+	if res.Reason == "" {
+		res.Reason = receivedClarify
+	}
+	res.DroppedChunks = droppedChunks
 	if item.Mode == ModeDictation {
 		res.Transcript = receivedDraft
 	} else {
@@ -331,12 +444,9 @@ func (r *EvalRunner) EvaluateItem(ctx context.Context, item EvalItem, wavPath st
 		res.CER = CalculateCER(item.Text, finalTranscript)
 
 	case item.Mode == ModeDictation:
-		expectedSubstr := strings.ToLower(item.Expected)
 		res.WER = CalculateWER(item.Text, receivedDraft)
 		res.CER = CalculateCER(item.Text, receivedDraft)
-		res.Passed = (expectedSubstr != "" && strings.Contains(strings.ToLower(receivedDraft), expectedSubstr)) ||
-			(res.WER <= 0.35 && len(receivedDraft) > 0) ||
-			(res.CER <= 0.35 && len(receivedDraft) > 0)
+		_, res.Passed, res.KeyTermHit = ScoreDictation(item, receivedDraft)
 		res.Decision = "ACCEPT"
 
 	default: // Command intent match

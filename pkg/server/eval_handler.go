@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 
 	"voxlab/pkg/evaluation"
@@ -69,7 +70,9 @@ func (s *Server) StartEvaluation(tier string) error {
 	})
 
 	go func() {
+		restorePipeline := s.pinEvalPipeline()
 		defer func() {
+			restorePipeline()
 			s.evalMu.Lock()
 			s.evalRunning = false
 			s.evalCancel = nil
@@ -120,6 +123,63 @@ func (s *Server) StartEvaluation(tier string) error {
 	}()
 
 	return nil
+}
+
+// pinEvalPipeline routes host ASR to the harness for a run and returns a function restoring the
+// previous setup: harness audio only flows from the web mic source, and browser ASR ignores it.
+// ponytail: shares the live pipeline, so another tab's controls still reach it during a run.
+// A separate pipeline instance per run would remove that.
+func (s *Server) pinEvalPipeline() (restore func()) {
+	prevSource, prevEngine := s.currentSource(), s.ASREngineMode()
+	s.SwitchSource("web_ui_mic")
+	if prevEngine == "browser" {
+		mode := "sim"
+		if s.cfg.Engine.Mode == "sherpa" {
+			mode = "sherpa"
+		}
+		if err := s.SetASREngineMode(mode); err != nil {
+			log.Printf("[Evaluation] Could not switch ASR engine: %v", err)
+		}
+	}
+	return func() {
+		s.SwitchSource(prevSource)
+		if prevEngine == "browser" {
+			_ = s.SetASREngineMode(prevEngine)
+		}
+	}
+}
+
+// evalRunConfig records the pipeline settings a report's numbers depend on.
+func (s *Server) evalRunConfig() evaluation.RunConfig {
+	cfg := evaluation.RunConfig{
+		Engine:        s.ASREngineMode(),
+		Feed:          "realtime",
+		GateDBFS:      s.dsp.GateThreshold(),
+		GateEnabled:   s.dsp.IsGateEnabled(),
+		AGC:           s.dsp.IsAGCEnabled(),
+		HighPass:      s.dsp.IsHighPassEnabled(),
+		Enhancer:      s.enhancerName(),
+		InputLanguage: s.InputLanguage(),
+	}
+	if info := s.asrModelInfo(); info != nil && cfg.Engine == "sherpa" {
+		cfg.ASRModel, _ = info["asr_model"].(string)
+		cfg.SecondPassModel, _ = info["second_pass_model"].(string)
+		cfg.SecondPassCommand, _ = info["second_pass_command"].(bool)
+		cfg.SecondPassDictation, _ = info["second_pass_dictation"].(bool)
+	}
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		for _, setting := range bi.Settings {
+			if setting.Key == "vcs.revision" {
+				cfg.Commit = setting.Value
+			}
+		}
+	}
+	return cfg
+}
+
+// EvalRunner returns the harness, which stamps its reports with this server's configuration.
+func (s *Server) EvalRunner() *evaluation.EvalRunner {
+	return s.evalRunner
 }
 
 // CancelEvaluation terminates any in-progress benchmark run.

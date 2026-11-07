@@ -208,7 +208,7 @@
       "noise_type": "clean",
       "accent": "en-US",
       "category": "distractor",
-      "expected": "REJECT:OUT_OF_DOMAIN",
+      "expected": "REJECT:OUT_OF_DOMAIN_CHATTER",
       "wav_file": "base_dist_lunch_am.wav",
       "duration_sec": 4.0265
     },
