@@ -201,6 +201,9 @@ go run ./cmd/voxlab -engine=sherpa -models=models
 
 ```bash
 go test -v ./...
+
+# On-demand Tier 2 matrix (about 10 minutes, audio is fed at real time)
+VOXLAB_TIER2=1 go test ./pkg/evaluation/ -timeout 40m
 ```
 Tests cover:
 - Audio DSP (RMS calculation, high-pass filter, noise floor gating, half-duplex echo latch)
