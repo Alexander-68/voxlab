@@ -3,15 +3,20 @@
 Open issues and findings from the first whole-codebase review (2026-11-07, at `0a8a33f`) and the fixes that followed.
 IDs (C1, I6, ...) are the review's. Finished work is in the git log and is not repeated here.
 
-## After the reboot
+## Status (2026-11-07, second session)
 
-1. **Check free memory first.** Tier 2 plus its daemons need a few GB.
-2. **Rerun Tier 2 and compare with the first run.** `go run ./cmd/eval_bench -tier 2 -out <file>`
-   - Only one full run exists (`data/eval_report_tier2.json`, commit `7c3c29b`, 78/104). The second was killed for low system
-     memory before finishing an item, so the bench's run-to-run repeatability is **still unconfirmed**.
-   - That run predates `eec9ec0` and `1bc287c`. Those commits did not intend to change scoring, but the numbers are from older code.
-3. **Log memory during the run** (see Memory below), so a leak can be confirmed or ruled out.
-4. **Decide the language work below.** It needs the corpus fix first, or the effect cannot be measured.
+- **Repeatability confirmed.** Two Tier 2 runs on the same corpus (`7c3c29b`, `c208fa9`) gave identical transcripts on all 104 items, 78/104 each.
+- **No memory leak seen.** Sampled every 30 s across 8 minutes of a run: `eval_bench` 75 MB, streaming daemon 783 MB, second-pass daemon
+  842 to 846 MB, all flat. The earlier kill was system memory pressure, not VoxLab.
+- **The non-English corpus was invalid, now fixed (I17 of the language work).** Kokoro was never given a language, so es/pt/fr/it voices read
+  their text as English. With `--kokoro-lang`, the same model transcribes a Spanish and a French sentence word for word. VoxLab now sets
+  the language from the voice prefix (`e` es, `f` fr, `h` hi, `i` it, `p` pt-br) and drops the en/zh lexicons for those voices. `CMD_ES_EF` keeps
+  `Lang: "en"`, as it is English read in a Spanish voice on purpose.
+- **Tier 2 on the corrected corpus: 93/104 (89.4%)**, report in `data/eval_report_tier-2-deep-matrix.json`. The Tier 2 test's 80% bar now passes.
+- **Corpus diff note:** three Mandarin perturbation clips changed although their bases did not. The committed ones used noise seeds one
+  higher than the current generator (found by brute-force search), so they were stale. Regeneration is now idempotent (clips are
+  decoded after writing). `T2_DICT_ZH_VITALS_XB_SNR15_PINK` passing is from that new noise, not the language fix.
+  The sub-gate clips changed on purpose: they are now scaled to their labelled levels.
 
 ## Language support
 
@@ -32,67 +37,40 @@ IDs (C1, I6, ...) are the review's. Finished work is in the git log and is not r
 - **Likely route:** `SherpaOnnxOnlineStreamSetOption` is exported by `bin/sherpa-onnx-c-api.dll`, which we already load for TTS. That means running the
   streaming recognizer in-process instead of through the websocket daemon. It is a sizeable change: new C structs, and the 1.13.8 version coupling noted in I9.
 
-### Measured effect of a hint
+### Measured effect of a hint (valid corpus)
 
-`sherpa-onnx.exe`, first pass only, no second pass, 4 clean Tier 2 clips per language, `--language=<locale>` against none. Lower is better.
+`sherpa-onnx.exe`, first pass only, no second pass. Each language's Tier 2 dictation texts in every installed voice of that language, clean and
+with pink noise at +5 dB. WER, CER for Mandarin; lower is better. "Better/worse" counts clips.
 
-| Language | Metric | Auto | Hinted |
-| --- | --- | --- | --- |
-| Spanish | WER | 0.585 | 0.619 |
-| Portuguese | WER | 0.439 | 0.501 |
-| French | WER | 0.883 | 0.852 |
-| Italian | WER | 0.671 | 0.632 |
-| Mandarin | CER | 0.423 | 0.423 |
+| Language | Clips | Clean auto | Clean hinted | +5 dB auto | +5 dB hinted | Better / worse |
+| --- | --- | --- | --- | --- | --- | --- |
+| Spanish | 12 + 12 | 0.131 | 0.131 | 0.255 | 0.222 | 4 / 2 |
+| Portuguese | 12 + 12 | 0.010 | 0.035 | 0.079 | 0.083 | 1 / 3 |
+| Italian | 8 + 8 | 0.125 | 0.125 | 0.148 | 0.148 | 0 / 0 |
+| French | 4 + 4 | 0.056 | 0.102 | 0.164 | 0.164 | 0 / 1 |
+| Mandarin | 28 + 28 | 0.324 | 0.321 | 0.538 | 0.478 | 14 / 6 |
 
-The hint is live, since it changes the output, but on these clips it shows no clear gain: two better, two worse, one unchanged. Four clips is too few to
-separate that from noise, and see the next section for why these clips are the wrong test anyway.
-
-### The non-English corpus is probably invalid
-
-The same model transcribes its own bundled real-speech samples almost perfectly (no reference text, judged by reading):
-
-- `es.wav`: "No preguntes qué puede hacer tu país por ti..."
-- `fr.wav`: "Ne vous demandez pas ce que votre pays peut faire pour vous..."
-- `zh.wav`: "不要问你的国家能为你做什么..."
-
-Our Kokoro clips come out like English phonemes reading foreign text: "Los signos vitales" becomes "Los neus Vairs", and "El sitio de la incisión" becomes
-"El city of Lincion". This fits review item I17: Kokoro's `Lang` is never set and only en/zh lexicons load. Three samples are not proof, but until this is
-resolved, **treat every non-English figure in `NEXT.md` as a corpus measurement, not an ASR measurement.** Mandarin is less clear, as zh has a lexicon, and
-still scores 0.42 here.
+- Clean speech gains nothing. Portuguese and French get slightly worse, by one or two clips.
+- In noise the hint helps Mandarin clearly (CER -0.06, 9 clips better, 4 worse) and Spanish a little. Elsewhere it changes nothing.
+- French has one voice, so 8 clips; treat it as a hint only.
 
 ### Next steps
 
-- [ ] Listen to a few `base_dict_es_*` and `base_dict_fr_*` clips to confirm the mispronunciation. The new Listen toggle or Play button both work.
-- [ ] Fix the corpus first: set Kokoro's language per voice, or use real recordings such as Common Voice.
-      `GenerateTier2Corpus` reuses existing base WAVs, so they must be deleted to regenerate (I17).
-- [ ] Re-measure hint against auto on the valid corpus, with more than 4 clips per language.
-- [ ] Only if a hint helps: move streaming ASR in-process and wire the selector. If not, keep `auto` and make the selector browser-only.
+- [ ] **Decide:** the hint helps only noisy Mandarin and Spanish. Is that worth moving streaming ASR in-process (C structs, I9 version coupling)?
+      If not, keep `auto` and make the selector browser-only.
+- [ ] Mandarin stays at 8/14 clean (CER 0.37), while the model reads its own `zh.wav` almost perfectly. Errors are homophones
+      ("咪达唑仑两毫克" heard as "米打左轮量好课"), so suspect Kokoro's Mandarin tones before the ASR. Check by ear or with a real recording.
 - [ ] Try the same for Parakeet Ultra, and revisit the CJK guard in `refineLocked`.
-
-## Memory
-
-The Tier 2 rerun was killed by the harness for low system memory.
-
-- **At that point:** no `voxlab`, `eval_bench` or `sherpa-onnx` process was left, including daemons, so they were not holding memory after the kill.
-- **Biggest user:** Chrome, 49 processes with about 10 GB private, running since 2026-10-15. One process alone held 3.8 GB. RAM free was 2.8 of 15.6 GB.
-- **So:** the evidence points at long-running Chrome more than at VoxLab, but this does not clear VoxLab. Nothing measured its memory during a run.
-- [ ] During the next run, sample the working set of `eval_bench` and both daemons every 30 s. Flat means no leak; steady growth across items means a leak.
-- [ ] If it grows, suspects are per-item state in the harness, `segAudio`, and the daemons themselves. Child processes are also never reaped (I10).
 
 ## Bench accuracy
 
-- [ ] **Tier 2 test fails.** 75% is under its 80% threshold, which was deliberately not retuned. Revisit once the non-English corpus is valid.
-- [ ] **I16** WER does not normalize numbers: "2 mg" against "two milligrams" fails `T2_CLEAN_DICT_MED_BF`, a false failure.
-- [ ] **I12** Second-pass latency reads 0 for dictation. `latency_ms` from `transcript.refined` is ignored.
 - [ ] **I14** SNR curve mixes noise types in one row, varies utterances per level, and computes SNR over padding too.
-- [ ] **I15** Gate test is vacuous: clips measure below their labels (hiss -61 dBFS, not -48), and pass ignores partials. `Decision` records the expected class, not
-      the outcome, and accuracy KPIs default to 1.0 with no data.
-- [ ] **I17** `gen_eval_samples -tier 1` writes nothing, though `eval_bench` points users to it.
-- [ ] **I18** The CLI writes `eval_report_tier2.json` but the server reads `eval_report_tier-2-deep-matrix.json`. The CLI always exits 0.
 - [ ] **I19** No tests for reconnects or `pkg/config`.
 - [ ] Add spoken negation cases to the corpus. §13 is covered at text level only, so ASR plus matcher are untested together.
 - [ ] `res.Duration` includes real-time audio feed, so "Total Turnaround" and SNR-row latency now mostly reflect clip length.
 - [ ] Isolated pipeline per run. During a run another tab's controls still reach the live pipeline (`ponytail:` note in `pinEvalPipeline`).
+      Seen: TTS playing in an open page echo-mutes the mic, so a Tier 1 item heard silence and failed.
+- [ ] Second-pass latency is now measured (about 350 ms per segment). It runs inside the ASR worker (I2), so it adds to every dictation turn.
 
 ## Robustness
 
@@ -100,11 +78,10 @@ The Tier 2 rerun was killed by the harness for low system memory.
       stall for seconds, and the new `asrTurnMu` waits on the same work.
 - [ ] **I5** Unsynchronized shared state: `cfg.KWS.*`, `cfg.Engine.Kokoro*`, `s.wavSource`, `s.httpServer`, and check-then-act guards in `StateMachine`. Run `-race` once a
       C toolchain is installed; it cannot run here.
-- [ ] **I8** No `SetReadLimit`, `MaxBytesReader` or HTTP timeouts. `speak` spawns unbounded goroutines. `SwitchSource` accepts any string.
-- [ ] **I10** No `cmd.Wait`, and daemon stderr is discarded, so failures are undiagnosable. Daemons outlive a crash (no job object).
 - [ ] **I4 remainder** Disconnect cancels playback but not a listening turn (recipe §11). The TTS failsafe timer can unmute during later playback.
 - [ ] LAN mode (`-host 0.0.0.0`) has no authentication, only a warning.
 - [ ] `go vet` reports 5 `unsafe.Pointer` warnings, probably false positives on C-owned pointers.
+- [ ] Daemons are reaped and killed with VoxLab through a job object on Windows only. Elsewhere a crash still orphans them.
 
 ## Features missing against README and plan
 
@@ -119,12 +96,9 @@ Confirm whether each is intended before building.
 ## Install, UI and smaller items
 
 - [ ] **I27** `download_models.sh` glob fails silently on Linux.
-- [ ] **I28** A bind failure still prints "VoxLab is active".
 - [ ] **I29** Sherpa daemons start even in simulator mode, about 1.4 GB.
-- [ ] **I31** TTS and `eval.start` failures reach no client, leaving the UI stuck. Eval status is not restored on reload.
-- [ ] **I32** `capture.isRemoteMode` does not exist. T1 Play URLs 404 for two items. `ws://` is hard-coded.
 - [ ] New dictation clears the server draft, so unsaved text in the box is replaced by the first new phrase.
 - [ ] Second pass may drop speech: in a probe, "Findings colon clear lungs" was refined to "colon clear lungs common". Seen once, not investigated.
 - [ ] Formatter exists twice, in `dictation.go` and `bench-ui.js`, and must be kept in step. Chinese gets `。.` and word counts of 0 (`Tokenize` is ASCII-only).
 - [ ] `ref/` still describes a 5-panel UI and Zipformer, and the plan's `0.0.0.0` bind.
-- [ ] Remaining review minors: WAV parser edge cases, `Resample` has no anti-aliasing, `-port 8080` cannot override config, `go.mod` marks gorilla `// indirect`.
+- [ ] Remaining review minors: WAV parser edge cases, `Resample` has no anti-aliasing, `go.mod` marks gorilla `// indirect`.

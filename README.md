@@ -204,7 +204,15 @@ go test -v ./...
 
 # On-demand Tier 2 matrix (about 10 minutes, audio is fed at real time)
 VOXLAB_TIER2=1 go test ./pkg/evaluation/ -timeout 40m
+
+# Same matrix from the CLI. Writes data/eval_report_tier-2-deep-matrix.json, the report the web UI loads,
+# and exits 1 below the pass bar (Tier 1: 100%, Tier 2: 80%).
+go run ./cmd/eval_bench -tier 2
+
+# Regenerate missing corpus clips (existing WAVs are kept; delete one to resynthesize it)
+go run ./cmd/gen_eval_samples -tier all
 ```
+Dictation items may carry an `alt_text` with the same words in written form ("2 mg" for "two milligrams"); the closer of `text` and `alt_text` is scored.
 Tests cover:
 - Audio DSP (RMS calculation, high-pass filter, noise floor gating, half-duplex echo latch)
 - Circular Ring Buffer (overflow, snapshot ordering)
@@ -225,13 +233,13 @@ The VoxLab host daemon communicates with web clients over WebSocket (`ws://local
 - `{"action": "activate", "mode": "dictation", "target_id": "scope_1"}`: Enter dictation mode.
 - `{"action": "cancel"}`: Reset state to `IDLE`.
 - `{"action": "confirm", "approved": true}`: Confirm pending action.
-- `{"action": "speak", "payload": {"text": "Hello", "voice": "af_heart", "speed": 1.0}}`: Request Kokoro TTS.
+- `{"action": "speak", "payload": {"text": "Hello", "voice": "af_heart", "speed": 1.0}}`: Request Kokoro TTS. The voice prefix sets the language (`ef_`/`em_` Spanish, `ff_` French, `if_`/`im_` Italian, `pf_`/`pm_` Portuguese, `hf_`/`hm_` Hindi). At most 4 run at once; more get `tts.error`.
 - `{"action": "set_source", "source": "web_ui_mic" | "host_native_mic" | "wav_file_injection"}`: Switch audio source.
 - `{"action": "set_asr_model", "model": "sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11" | "sherpa-onnx-streaming-zipformer-en-20M-2023-02-17"}`: Switch streaming ASR model dynamically.
 - `{"action": "set_second_pass", "mode": "command" | "dictation", "enabled": true | false}`: Toggle offline second-pass refinement per mode.
 - `{"action": "set_language", "language": "en-US" | "en-GB" | "es-ES" | "auto"}`: Select voice input language.
 - `{"action": "inject_text", "text": "open settings", "mode": "command"}`: Inject text for zero-mic testing.
-- Binary Frames: 16kHz Float32 or Int16 mono PCM audio frames from the browser microphone.
+- Binary Frames: 16kHz Float32 or Int16 mono PCM audio frames from the browser microphone. Messages over 1 MiB close the connection (1009); HTTP bodies have the same limit.
 
 ### Server $\to$ Client Events (JSON)
 - `voice.state`: Emitted on state transitions (`IDLE`, `COMMAND_LISTEN`, `PROCESS`, `CONFIRM`, `ANNOTATION_LISTEN`, `REVIEW`, `SPEAKING`).
@@ -244,6 +252,10 @@ The VoxLab host daemon communicates with web clients over WebSocket (`ws://local
 - `utterance_rejected`: Quiet rejection (`reason`, `raw_transcript`, `confidence`).
 - `annotation.draft`: Finalized dictation text (`draft_text`, `word_count`, `target_id`).
 - `tts.started` / `tts.finished`: TTS generation notifications with base64 WAV payload and latency metrics.
+- `tts.error`: Synthesis failed or was refused (`text`, `message`).
+- `transcript.refined`: Second-pass result (`mode`, `first_pass`, `transcript`, `latency_ms`).
+- `eval.started` / `eval.item_started` / `eval.progress` / `eval.completed` / `eval.cancelled`: Benchmark run lifecycle.
+- `eval.error`: A run could not start (`message`, `running`: whether another run is in progress).
 - `telemetry.benchmark`: Latency breakdown (`intent_latency_ms`, `vad_latency_ms`, `tts_ttfa_ms`).
 
 ---

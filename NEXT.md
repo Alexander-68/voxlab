@@ -38,24 +38,25 @@ Goal: medical terms (drugs, conditions, acronyms) appear correctly spelled in di
 - **Synthetic Round-Trip Acoustic Evaluation (Tier 1 & Tier 2)**:
   - **Tier 1 Smoke Suite**: 5 golden test cases verifying zero-regression pipeline health (~25s). Runs on every `go test`; skips without models.
   - **Tier 2 Deep Acoustic Matrix**: On demand (`go run ./cmd/eval_bench -tier 2`, or `VOXLAB_TIER2=1 go test ./pkg/evaluation/ -timeout 40m`; about 10 minutes, audio is fed at real time). Full 104-clip acoustic benchmark matrix spanning 20+ Kokoro voices, British/American accents, and extended multilingual dictation suites across Spanish (`es-ES`), Brazilian Portuguese (`pt-BR`), French (`fr-FR`), Italian (`it-IT`), and Mandarin Chinese (`zh-CN` with 18 varied acoustic cases), speaking rates (0.8x - 1.3x), SNR degradation ladder (+20dB down to -5dB), mechanical typing clacks, room babble chatter, acoustic room reverb, and sub-gate noise suppression. (Japanese removed from supported matrix due to lack of native ASR dictionary in resident models).
-  - **Measured Results** (one full run at commit `7c3c29b`, report and settings in `data/eval_report_tier2.json`; not yet repeated, so run-to-run spread is unknown): **78/104 passed (75%)**, below the Tier 2 test's 80% threshold, which was left unchanged. 0 audio chunks dropped, 0 empty transcripts.
-    - A dictation item passes at an error rate of 0.35 or lower: CER for Chinese, WER otherwise.
-    - Earlier figures here came from reports that were not committed, under the old pass logic and with results leaking between items. They are not comparable.
+  - **Measured Results** (Tier 2 at `c208fa9` plus this session's uncommitted fixes, so stamped `-dirty`; report and settings in `data/eval_report_tier-2-deep-matrix.json`): **93/104 passed (89.4%)**, above the Tier 2 test's 80% bar. 0 audio chunks dropped. Second pass costs about 350 ms per dictation segment.
+    - A dictation item passes at an error rate of 0.35 or lower: CER for Chinese, WER otherwise. Items may list a written form (`alt_text`, e.g. "2 mg"), and the closer reference counts.
+    - Run-to-run repeatability is confirmed: two runs on the old corpus gave identical transcripts on all 104 items.
+    - The previous 78/104 used an invalid non-English corpus (Kokoro read es/pt/fr/it text as English), so it is not comparable.
 
     | Clean items | Passed | WER | CER |
     | --- | --- | --- | --- |
-    | English commands | 12/12 | 0.00 | 0.00 |
-    | English dictation | 3/4 | 0.21 | 0.14 |
-    | Spanish (`es-ES`) | 3/4 | 0.32 | 0.10 |
-    | Portuguese (`pt-BR`) | 2/4 | 0.33 | 0.18 |
-    | Italian (`it-IT`) | 1/4 | 0.65 | 0.19 |
-    | French (`fr-FR`) | 0/4 | 0.70 | 0.34 |
+    | English commands (incl. Spanish-accented) | 12/12 | 0.00 | 0.00 |
+    | English dictation | 4/4 | 0.11 | 0.05 |
+    | Spanish (`es-ES`) | 4/4 | 0.06 | 0.02 |
+    | Portuguese (`pt-BR`) | 4/4 | 0.06 | 0.03 |
+    | Italian (`it-IT`) | 4/4 | 0.03 | 0.01 |
+    | French (`fr-FR`) | 3/4 | 0.09 | 0.02 |
     | Mandarin (`zh-CN`) | 8/14 | 0.37 | 0.37 |
 
-    - **Known limits on these numbers**: the non-English corpus is probably invalid. The same model reads its own real-speech samples almost perfectly, while Kokoro clips come out as English phonemes reading foreign text (`Lang` is never set; see `TODO.md`). WER does not normalize numbers, so "2 mg" against "two milligrams" counts as errors. Second-pass latency still reads 0 for dictation.
+    - **Known limits on these numbers**: the corpus is synthetic Kokoro speech. Mandarin errors are mostly homophones, which points at Kokoro's tones as much as at the ASR (see `TODO.md`). "Total Turnaround" includes the real-time audio feed, so it mostly reflects clip length.
   - **Multilingual Tokenizer & Hallucination Guard**: Hanzi/CJK rune segmentation in `corpus.go` for standard Chinese WER & CER evaluation; CJK guard in `refineLocked` (`pkg/engine/sherpa_runner.go`) preventing English offline models from overwriting native streaming Hanzi transcripts.
   - **Metrics Engine**: Automated computation of WER, CER, Intent Accuracy, Rejection Precision, Gate Precision, SNR Degradation Curves, and acoustic latency percentiles (TTFT, silence endpoint delay, 2nd-pass refinement overhead, and round-trip turnaround).
   - **CLI & Web UI Harness**: On-demand CLI runner (`cmd/eval_bench`) and interactive Web UI Dashboard (`🧪 Acoustic Benchmark` tab) with live progress streaming, KPI cards, SNR degradation table, latency waterfall percentiles, and sample audio playback.
 - **Engine**: Resident in-memory streaming daemon (`sherpa-onnx-online-websocket-server`) and offline second pass (`sherpa-onnx-offline-websocket-server`) running on 4 inference threads.
 - **Audio Pipeline**: Real-time Go audio loop decoupled from ASR worker thread; continuous 30Hz metering; high-quality linear resampler.
-- **Tests**: `go test -p 1 ./pkg/...` passes with models installed. Tier 2 and the multilingual test are on demand. The Tier 2 test currently fails its 80% threshold (see Measured Results).
+- **Tests**: `go test -p 1 ./pkg/...` passes with models installed. Tier 2 and the multilingual test are on demand.
