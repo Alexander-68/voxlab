@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -190,6 +191,7 @@ func (w *windowsSpeechEnhancer) initModel(modelType string, preferredPath string
 	}
 
 	var keep [][]byte
+	defer runtime.KeepAlive(keep) // native calls only receive uintptrs, which do not retain the bytes
 	var cfg cOnlineSpeechDenoiserConfig
 	cfg.Model.NumThreads = int32(w.numThreads)
 	cfg.Model.Provider = toCStringEnhancer(w.provider, &keep)

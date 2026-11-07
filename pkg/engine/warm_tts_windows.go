@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -200,6 +201,7 @@ func (w *windowsWarmTTS) SynthesizeStream(text string, sid int, speed float64, o
 
 	startTime := time.Now()
 	var keep [][]byte
+	defer runtime.KeepAlive(keep) // native calls only receive uintptrs, which do not retain the bytes
 	textPtr := toCString(text, &keep)
 	speedBits := math.Float32bits(float32(speed))
 
@@ -409,6 +411,7 @@ func newPlatformWarmTTS(
 	}
 
 	var keep [][]byte
+	defer runtime.KeepAlive(keep) // native calls only receive uintptrs, which do not retain the bytes
 	var cfg cOfflineTtsConfig
 	cfg.Model.NumThreads = int32(numThreads)
 	cfg.Model.Provider = toCString(provider, &keep)

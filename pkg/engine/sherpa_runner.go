@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -553,7 +554,6 @@ func findKokoroModelDir(configured string) (string, bool) {
 				return p, true
 			}
 		}
-		return configured, false
 	}
 
 	candidates := []string{
@@ -755,8 +755,8 @@ func (r *SherpaRunner) SynthesizeStream(req TTSRequest, onChunk func(chunk TTSCh
 	modelDir, modelExists := findKokoroModelDir(r.cfg.Engine.KokoroModelDir)
 	ttsBin, binExists := findSherpaBin(r.cfg.Engine.SherpaTtsBin)
 
-	if !modelExists && !binExists {
-		// Gracefully fall back to simulator if real model/binary is not yet downloaded
+	if !modelExists {
+		// Gracefully fall back to simulator if the model is not yet downloaded
 		return r.simulator.SynthesizeStream(req, onChunk)
 	}
 
@@ -796,7 +796,7 @@ func (r *SherpaRunner) SynthesizeStream(req TTSRequest, onChunk func(chunk TTSCh
 	}
 
 	// 2. Fall back to CLI process execution
-	if !binExists || !modelExists {
+	if !binExists {
 		return r.simulator.SynthesizeStream(req, onChunk)
 	}
 
@@ -926,9 +926,7 @@ func (r *SherpaRunner) Close() error {
 // TTSModelInfo discovers and returns the current active Kokoro model name and neural status.
 func (r *SherpaRunner) TTSModelInfo() (string, bool) {
 	modelDir, modelExists := findKokoroModelDir(r.cfg.Engine.KokoroModelDir)
-	_, binExists := findSherpaBin(r.cfg.Engine.SherpaTtsBin)
-
-	if !binExists && !modelExists {
+	if !modelExists {
 		return "Simulator (Fallback: Model Not Found)", false
 	}
 
@@ -974,7 +972,11 @@ func (r *SherpaRunner) SetTTSModel(modelName string) error {
 		modelsRoot = "models"
 	}
 
+	// Only installed models: the name becomes a path that is loaded in-process.
 	clean := strings.TrimSpace(modelName)
+	if !slices.Contains(FindInstalledKokoroModels(modelsRoot), clean) {
+		return fmt.Errorf("TTS model not installed: %q", clean)
+	}
 	isFP16 := strings.Contains(strings.ToLower(clean), "fp16")
 	isINT8 := strings.Contains(strings.ToLower(clean), "int8")
 	baseName := clean
@@ -983,41 +985,32 @@ func (r *SherpaRunner) SetTTSModel(modelName string) error {
 
 	targetDir := filepath.Join(modelsRoot, baseName)
 	if !isValidKokoroDir(targetDir) {
-		if dir, ok := findKokoroModelDir(baseName); ok {
-			targetDir = dir
-		} else if isValidKokoroDir(baseName) {
-			targetDir = baseName
-		} else {
+		dir, ok := findKokoroModelDir(baseName)
+		if !ok {
 			return fmt.Errorf("model directory not found or invalid: %s", targetDir)
 		}
+		targetDir = dir
 	}
 
-	r.cfg.Engine.KokoroModelDir = targetDir
+	// Choose the file before touching the config, so a failed switch changes nothing.
+	candidates := []string{"model.onnx", "model.int8.onnx", "model.fp16.onnx"}
 	if isFP16 {
-		fp16Path := filepath.Join(targetDir, "model.fp16.onnx")
-		if _, err := os.Stat(fp16Path); err == nil {
-			r.cfg.Engine.KokoroModelFile = "model.fp16.onnx"
-		} else {
-			return fmt.Errorf("fp16 model not found in directory: %s", fp16Path)
-		}
+		candidates = []string{"model.fp16.onnx"}
 	} else if isINT8 {
-		int8Path := filepath.Join(targetDir, "model.int8.onnx")
-		if _, err := os.Stat(int8Path); err == nil {
-			r.cfg.Engine.KokoroModelFile = "model.int8.onnx"
-		} else {
-			return fmt.Errorf("int8 model not found in directory: %s", int8Path)
-		}
-	} else {
-		if _, err := os.Stat(filepath.Join(targetDir, "model.onnx")); err == nil {
-			r.cfg.Engine.KokoroModelFile = "model.onnx"
-		} else if _, err := os.Stat(filepath.Join(targetDir, "model.int8.onnx")); err == nil {
-			r.cfg.Engine.KokoroModelFile = "model.int8.onnx"
-		} else if _, err := os.Stat(filepath.Join(targetDir, "model.fp16.onnx")); err == nil {
-			r.cfg.Engine.KokoroModelFile = "model.fp16.onnx"
-		} else {
-			r.cfg.Engine.KokoroModelFile = ""
+		candidates = []string{"model.int8.onnx"}
+	}
+	modelFile := ""
+	for _, name := range candidates {
+		if isRegularFile(filepath.Join(targetDir, name)) {
+			modelFile = name
+			break
 		}
 	}
+	if modelFile == "" {
+		return fmt.Errorf("no %v in directory: %s", candidates, targetDir)
+	}
+	r.cfg.Engine.KokoroModelDir = targetDir
+	r.cfg.Engine.KokoroModelFile = modelFile
 
 	if r.warmTTS != nil {
 		r.warmTTS.Close()
