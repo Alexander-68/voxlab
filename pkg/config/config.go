@@ -14,7 +14,6 @@ type AudioConfig struct {
 	HighPassCutoffHz       float64        `json:"high_pass_cutoff_hz"`       // e.g. 80.0 Hz
 	AGCEnabled             bool           `json:"agc_enabled"`
 	TargetRMS              float64        `json:"target_rms"` // e.g. 0.12 (-18 dBFS)
-	InputLanguage          string         `json:"input_language"` // e.g. "en-US", "auto" (default "en-US")
 	Enhancer               EnhancerConfig `json:"enhancer"`
 }
 
@@ -50,20 +49,20 @@ type DictationConfig struct {
 
 // EngineConfig configures Sherpa-ONNX model paths and binaries.
 type EngineConfig struct {
-	Mode               string `json:"mode"`                        // "simulator" or "sherpa"
-	ModelDir           string `json:"model_dir"`                   // e.g. "models"
-	SherpaTtsBin       string `json:"sherpa_tts_bin"`              // e.g. "sherpa-onnx-offline-tts"
-	SherpaKwsBin       string `json:"sherpa_kws_bin"`              // e.g. "sherpa-onnx-keyword-spotter"
-	SherpaAsrBin       string `json:"sherpa_asr_bin"`              // e.g. "sherpa-onnx-online-websocket-server"
-	KokoroModelDir     string `json:"kokoro_model_dir"`            // e.g. "models/kokoro-multi-lang-v1_0"
-	KokoroModelFile    string `json:"kokoro_model_file,omitempty"` // e.g. "model.fp16.onnx", "model.onnx"
-	StreamingModelDir   string `json:"streaming_model_dir"`          // first-pass streaming transducer, e.g. "models/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11"
-	SecondPassModelDir  string `json:"second_pass_model_dir"`        // offline re-transcription model, e.g. "models/sherpa-onnx-nemo-parakeet-tdt-0.6b-ultra-int8"
-	SecondPass          bool   `json:"second_pass"`                  // re-transcribe endpointed segments with the second-pass model (backward compat)
-	SecondPassCommand   bool   `json:"second_pass_command"`          // enable second pass for command mode (default: false)
-	SecondPassDictation bool   `json:"second_pass_dictation"`        // enable second pass for dictation mode (default: true)
-	NumThreads          int    `json:"num_threads,omitempty"`        // Number of inference threads (default 4)
-	Provider           string `json:"provider,omitempty"`          // Execution provider: "cpu", "directml", "cuda" (default "cpu")
+	Mode                string `json:"mode"`                        // "simulator" or "sherpa"
+	ModelDir            string `json:"model_dir"`                   // e.g. "models"
+	SherpaTtsBin        string `json:"sherpa_tts_bin"`              // e.g. "sherpa-onnx-offline-tts"
+	SherpaKwsBin        string `json:"sherpa_kws_bin"`              // e.g. "sherpa-onnx-keyword-spotter"
+	SherpaAsrBin        string `json:"sherpa_asr_bin"`              // e.g. "sherpa-onnx-online-websocket-server"
+	KokoroModelDir      string `json:"kokoro_model_dir"`            // e.g. "models/kokoro-multi-lang-v1_0"
+	KokoroModelFile     string `json:"kokoro_model_file,omitempty"` // e.g. "model.fp16.onnx", "model.onnx"
+	StreamingModelDir   string `json:"streaming_model_dir"`         // first-pass streaming transducer, e.g. "models/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11"
+	SecondPassModelDir  string `json:"second_pass_model_dir"`       // offline re-transcription model, e.g. "models/sherpa-onnx-nemo-parakeet-tdt-0.6b-ultra-int8"
+	SecondPass          bool   `json:"second_pass"`                 // re-transcribe endpointed segments with the second-pass model (backward compat)
+	SecondPassCommand   bool   `json:"second_pass_command"`         // enable second pass for command mode (default: false)
+	SecondPassDictation bool   `json:"second_pass_dictation"`       // enable second pass for dictation mode (default: true)
+	NumThreads          int    `json:"num_threads,omitempty"`       // Number of inference threads (default 4)
+	Provider            string `json:"provider,omitempty"`          // Execution provider: "cpu", "directml", "cuda" (default "cpu")
 }
 
 // TTSConfig defines text-to-speech parameters.
@@ -106,7 +105,6 @@ func DefaultConfig() *AppConfig {
 			HighPassCutoffHz:       80.0,
 			AGCEnabled:             true,
 			TargetRMS:              0.12,
-			InputLanguage:          "en-US",
 			Enhancer: EnhancerConfig{
 				Enabled:    false,
 				ModelType:  "gtcrn",
@@ -131,11 +129,11 @@ func DefaultConfig() *AppConfig {
 			MaxDurationSec:    30.0,
 		},
 		Engine: EngineConfig{
-			Mode:               "simulator",
-			ModelDir:           "models",
-			SherpaTtsBin:       "sherpa-onnx-offline-tts",
-			SherpaKwsBin:       "sherpa-onnx-keyword-spotter",
-			SherpaAsrBin:       "sherpa-onnx-online-websocket-server",
+			Mode:                "simulator",
+			ModelDir:            "models",
+			SherpaTtsBin:        "sherpa-onnx-offline-tts",
+			SherpaKwsBin:        "sherpa-onnx-keyword-spotter",
+			SherpaAsrBin:        "sherpa-onnx-online-websocket-server",
 			KokoroModelDir:      "models/kokoro-multi-lang-v1_0",
 			StreamingModelDir:   "models/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11",
 			SecondPassModelDir:  "models/sherpa-onnx-nemo-parakeet-tdt-0.6b-ultra-int8",
@@ -143,7 +141,7 @@ func DefaultConfig() *AppConfig {
 			SecondPassCommand:   false,
 			SecondPassDictation: true,
 			NumThreads:          4,
-			Provider:           "cpu",
+			Provider:            "cpu",
 		},
 		TTS: TTSConfig{
 			DefaultVoice: "af",

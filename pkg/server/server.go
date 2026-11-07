@@ -73,9 +73,6 @@ type Server struct {
 	dictationDraft  string
 	dictationTarget string
 
-	inputLangMu   sync.RWMutex
-	inputLanguage string
-
 	meterMu       sync.Mutex
 	lastMeterTime time.Time
 
@@ -159,7 +156,6 @@ func NewServer(cfg *config.AppConfig) (*Server, error) {
 		activeSource:  "web_ui_mic",
 		audioInChan:   make(chan []float32, 200),
 		asrChan:       make(chan asrWorkItem, 200),
-		inputLanguage: cfg.Audio.InputLanguage,
 		ctx:           ctx,
 		cancel:        cancel,
 		clients:       make(map[*wsClient]struct{}),
@@ -1062,19 +1058,6 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 					log.Printf("[KWS] Wake-word threshold set to %.2f", th)
 				}
 
-			case "set_language":
-				lang, _ := req["language"].(string)
-				if lang != "" {
-					s.SetInputLanguage(lang)
-					log.Printf("[ASR] Input language set to: %s", lang)
-					s.BroadcastJSON(map[string]interface{}{
-						"event": "audio.language_changed",
-						"data": map[string]interface{}{
-							"language": lang,
-						},
-					})
-				}
-
 			case "eval.start":
 				tier, _ := req["tier"].(string)
 				go func() {
@@ -1347,24 +1330,6 @@ func (s *Server) IsMonitorEnabled() bool {
 	s.monitorMu.RLock()
 	defer s.monitorMu.RUnlock()
 	return s.monitorEnabled
-}
-
-// InputLanguage returns the active voice input language code.
-func (s *Server) InputLanguage() string {
-	s.inputLangMu.RLock()
-	defer s.inputLangMu.RUnlock()
-	if s.inputLanguage == "" {
-		return "en-US"
-	}
-	return s.inputLanguage
-}
-
-// SetInputLanguage updates the active voice input language code.
-func (s *Server) SetInputLanguage(lang string) {
-	s.inputLangMu.Lock()
-	defer s.inputLangMu.Unlock()
-	s.inputLanguage = lang
-	s.cfg.Audio.InputLanguage = lang
 }
 
 // SherpaEngine returns the Sherpa-ONNX speech engine instance.

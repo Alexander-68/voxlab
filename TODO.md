@@ -56,8 +56,8 @@ with pink noise at +5 dB. WER, CER for Mandarin; lower is better. "Better/worse"
 
 ### Next steps
 
-- [ ] **Decide:** the hint helps only noisy Mandarin and Spanish. Is that worth moving streaming ASR in-process (C structs, I9 version coupling)?
-      If not, keep `auto` and make the selector browser-only.
+- **Decided:** keep server ASR on `auto`. The selector now sets only the browser recognizer; `set_language` and `input_language` are gone.
+  Revisit in-process streaming ASR if noisy Mandarin matters.
 - [ ] Mandarin stays at 8/14 clean (CER 0.37), while the model reads its own `zh.wav` almost perfectly. Errors are homophones
       ("咪达唑仑两毫克" heard as "米打左轮量好课"), so suspect Kokoro's Mandarin tones before the ASR. Check by ear or with a real recording.
 - [ ] Try the same for Parakeet Ultra, and revisit the CJK guard in `refineLocked`.

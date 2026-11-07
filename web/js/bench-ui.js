@@ -90,6 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const asrLangSelect = document.getElementById('asr-lang-select');
   const asrLangLabel = document.getElementById('asr-lang-label');
   let activeInputLanguage = localStorage.getItem('voxlab_input_language') || 'en-US';
+  if (activeInputLanguage === 'auto') activeInputLanguage = 'en-US'; // old setting; server ASR is always auto
 
   // Commands Tab
   const btnPttCommand = document.getElementById('btn-ptt-command');
@@ -276,7 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
       browserRecognizer.continuous = false;
       browserRecognizer.interimResults = true;
       browserRecognizer.maxAlternatives = 1;
-      browserRecognizer.lang = (activeInputLanguage === 'auto') ? 'en-US' : activeInputLanguage;
+      browserRecognizer.lang = activeInputLanguage;
 
       browserRecognizer.onstart = () => {
         isBrowserRecognizing = true;
@@ -1550,29 +1551,12 @@ document.addEventListener('DOMContentLoaded', () => {
       activeInputLanguage = asrLangSelect.value;
       localStorage.setItem('voxlab_input_language', activeInputLanguage);
       updateLangLabel();
-      client.setInputLanguage(activeInputLanguage);
       if (browserRecognizer) {
-        browserRecognizer.lang = (activeInputLanguage === 'auto') ? 'en-US' : activeInputLanguage;
+        browserRecognizer.lang = activeInputLanguage;
       }
-      logEvent('asr.language_changed', `Voice input language set to: ${activeInputLanguage}`);
+      logEvent('asr.language_changed', `Browser speech language set to: ${activeInputLanguage}`);
     });
   }
-
-  client.on('audio.language_changed', (data) => {
-    if (data && data.language) {
-      activeInputLanguage = data.language;
-      localStorage.setItem('voxlab_input_language', data.language);
-      if (asrLangSelect) asrLangSelect.value = data.language;
-      if (asrLangLabel && asrLangSelect && asrLangSelect.selectedOptions.length > 0) {
-        const text = asrLangSelect.selectedOptions[0].text;
-        const shortName = text.split('(')[0].replace(/^[^\w\s]+/, '').trim();
-        asrLangLabel.textContent = shortName;
-      }
-      if (browserRecognizer) {
-        browserRecognizer.lang = (data.language === 'auto') ? 'en-US' : data.language;
-      }
-    }
-  });
 
   // The draft is only cleared once the server confirms it was stored.
   btnSaveDraft.addEventListener('click', () => {

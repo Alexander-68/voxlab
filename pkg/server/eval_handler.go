@@ -162,14 +162,13 @@ func (s *Server) pinEvalPipeline() (restore func()) {
 // evalRunConfig records the pipeline settings a report's numbers depend on.
 func (s *Server) evalRunConfig() evaluation.RunConfig {
 	cfg := evaluation.RunConfig{
-		Engine:        s.ASREngineMode(),
-		Feed:          "realtime",
-		GateDBFS:      s.dsp.GateThreshold(),
-		GateEnabled:   s.dsp.IsGateEnabled(),
-		AGC:           s.dsp.IsAGCEnabled(),
-		HighPass:      s.dsp.IsHighPassEnabled(),
-		Enhancer:      s.enhancerName(),
-		InputLanguage: s.InputLanguage(),
+		Engine:      s.ASREngineMode(),
+		Feed:        "realtime",
+		GateDBFS:    s.dsp.GateThreshold(),
+		GateEnabled: s.dsp.IsGateEnabled(),
+		AGC:         s.dsp.IsAGCEnabled(),
+		HighPass:    s.dsp.IsHighPassEnabled(),
+		Enhancer:    s.enhancerName(),
 	}
 	if info := s.asrModelInfo(); info != nil && cfg.Engine == "sherpa" {
 		cfg.ASRModel, _ = info["asr_model"].(string)

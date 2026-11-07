@@ -62,7 +62,6 @@ type RunConfig struct {
 	AGC                 bool    `json:"agc"`
 	HighPass            bool    `json:"highpass"`
 	Enhancer            string  `json:"enhancer"`
-	InputLanguage       string  `json:"input_language"`
 	Commit              string  `json:"commit,omitempty"` // empty when the binary has no VCS stamp
 }
 
@@ -142,15 +141,15 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 	}
 
 	var (
-		totalWER        float64
-		totalCER        float64
-		werCount        int
-		validCmdCount   int
-		validCmdPassed  int
-		adversarialCount int
+		totalWER          float64
+		totalCER          float64
+		werCount          int
+		validCmdCount     int
+		validCmdPassed    int
+		adversarialCount  int
 		adversarialPassed int
-		gateCount       int
-		gatePassed      int
+		gateCount         int
+		gatePassed        int
 
 		ttftVals       []float64
 		endpointVals   []float64

@@ -48,9 +48,6 @@ func TestServerRESTEndpoints(t *testing.T) {
 	if cfg.Version != config.Version {
 		t.Errorf("expected version %s, got %s", config.Version, cfg.Version)
 	}
-	if cfg.Audio.InputLanguage != "en-US" {
-		t.Errorf("expected default input language en-US, got %s", cfg.Audio.InputLanguage)
-	}
 
 	// 2. GET /api/catalog
 	reqCat := httptest.NewRequest(http.MethodGet, "/api/catalog", nil)
@@ -221,64 +218,6 @@ func TestServerSwitchSource(t *testing.T) {
 
 	if !foundSourceChanged {
 		t.Errorf("did not receive audio.source_changed event for host_native_mic")
-	}
-}
-
-func TestServerSetLanguage(t *testing.T) {
-	srv := setupTestServer(t)
-
-	if srv.InputLanguage() != "en-US" {
-		t.Errorf("expected initial language en-US, got %s", srv.InputLanguage())
-	}
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/ws", srv.handleWebSocket)
-	ts := httptest.NewServer(mux)
-	defer ts.Close()
-
-	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("WebSocket connection failed: %v", err)
-	}
-	defer conn.Close()
-
-	// Read initial state message
-	var initMsg map[string]interface{}
-	_ = conn.ReadJSON(&initMsg)
-
-	// Send set_language action
-	setLangAction := map[string]interface{}{
-		"action":   "set_language",
-		"language": "es-ES",
-	}
-	if err := conn.WriteJSON(setLangAction); err != nil {
-		t.Fatalf("failed sending set_language: %v", err)
-	}
-
-	// Wait for audio.language_changed event
-	receivedChange := false
-	for i := 0; i < 5; i++ {
-		var reply map[string]interface{}
-		_ = conn.SetReadDeadline(time.Now().Add(1 * time.Second))
-		if err := conn.ReadJSON(&reply); err != nil {
-			break
-		}
-		if reply["event"] == "audio.language_changed" {
-			data, _ := reply["data"].(map[string]interface{})
-			if data["language"] == "es-ES" {
-				receivedChange = true
-				break
-			}
-		}
-	}
-
-	if !receivedChange {
-		t.Errorf("expected audio.language_changed event with es-ES")
-	}
-
-	if srv.InputLanguage() != "es-ES" {
-		t.Errorf("expected server InputLanguage() to be es-ES, got %s", srv.InputLanguage())
 	}
 }
 

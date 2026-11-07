@@ -442,7 +442,6 @@ func DefaultBaseUtterances() []BaseUtterance {
 			Expected:     "riconoscimento vocale",
 		},
 
-
 		// Mandarin Chinese (zh-CN) Dictations (14 diverse clinical & technical samples)
 		{
 			BaseID:       "DICT_ZH_VITALS_XB",
@@ -913,5 +912,3 @@ func GenerateTier2Corpus(outDir string, runner engine.SpeechEngine) (*EvalManife
 	log.Printf("[Tier2 Generator] Successfully created %d test items in %s", len(manifest.Items), outDir)
 	return manifest, nil
 }
-
-
