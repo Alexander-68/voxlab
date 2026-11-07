@@ -178,11 +178,16 @@ func (s *Server) evalRunConfig() evaluation.RunConfig {
 		cfg.SecondPassDictation, _ = info["second_pass_dictation"].(bool)
 	}
 	if bi, ok := debug.ReadBuildInfo(); ok {
+		dirty := ""
 		for _, setting := range bi.Settings {
-			if setting.Key == "vcs.revision" {
+			switch {
+			case setting.Key == "vcs.revision":
 				cfg.Commit = setting.Value
+			case setting.Key == "vcs.modified" && setting.Value == "true":
+				dirty = "-dirty" // the revision alone would claim code this build does not match
 			}
 		}
+		cfg.Commit += dirty
 	}
 	return cfg
 }

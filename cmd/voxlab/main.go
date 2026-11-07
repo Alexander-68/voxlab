@@ -37,7 +37,7 @@ func main() {
 	}
 
 	// CLI flags override config file
-	if *portFlag != 8080 || cfg.Port == 0 {
+	if cfg.Port == 0 {
 		cfg.Port = *portFlag
 	}
 	if cfg.Host == "" {
@@ -50,6 +50,9 @@ func main() {
 		}
 		if f.Name == "host" {
 			cfg.Host = *hostFlag
+		}
+		if f.Name == "port" {
+			cfg.Port = *portFlag
 		}
 	})
 
@@ -89,15 +92,21 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	go func() {
-		if err := srv.Start(); err != nil {
-			log.Printf("[Server] Stopped: %v", err)
-		}
-	}()
+	ln, err := srv.Listen()
+	if err != nil {
+		_ = srv.Stop(context.Background()) // log.Fatal skips defers, and the ASR daemons would outlive us
+		log.Fatalf("[Fatal] %v", err)
+	}
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- srv.Serve(ln) }()
 
 	fmt.Printf("\n VoxLab v%s is active!\n Web UI:   http://localhost:%d\n Engine:   %s\n Press Ctrl+C to stop.\n\n", config.Version, cfg.Port, cfg.Engine.Mode)
 
-	<-sigChan
+	select {
+	case <-sigChan:
+	case err := <-serveErr:
+		log.Printf("[Server] Stopped: %v", err)
+	}
 	log.Println("[VoxLab] Shutting down...")
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()

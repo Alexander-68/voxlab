@@ -88,7 +88,14 @@ type Server struct {
 	lastEvalItem *evaluation.ItemResult
 	lastReport   *evaluation.SuiteReport
 	evalRunner   *evaluation.EvalRunner
+
+	speakSlots chan struct{} // bounds concurrent speak requests
 }
+
+const (
+	maxRequestBytes    = 1 << 20 // per HTTP body and per WebSocket message; audio chunks are a few KB
+	maxConcurrentSpeak = 4
+)
 
 type asrWorkItem struct {
 	chunk       []float32
@@ -156,6 +163,7 @@ func NewServer(cfg *config.AppConfig) (*Server, error) {
 		ctx:           ctx,
 		cancel:        cancel,
 		clients:       make(map[*wsClient]struct{}),
+		speakSlots:    make(chan struct{}, maxConcurrentSpeak),
 	}
 
 	// Surface each second-pass correction so the bench shows first-pass vs refined text and its cost.
@@ -249,21 +257,33 @@ func (s *Server) loopbackHostGuard(next http.Handler) http.Handler {
 	})
 }
 
-// Start begins listening and serving HTTP & WebSocket requests.
-func (s *Server) Start() error {
+// Listen binds the configured address, so a caller can report a taken port before announcing anything.
+func (s *Server) Listen() (net.Listener, error) {
+	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("cannot bind %s: %w", addr, err)
+	}
+	return ln, nil
+}
+
+// Serve runs the pipelines and handles HTTP & WebSocket requests on ln until Stop.
+func (s *Server) Serve(ln net.Listener) error {
 	s.StartBackgroundLoops()
 
-	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
+	addr := ln.Addr().String()
+	// No read or write timeout: hijacked WebSockets run for hours and TTS responses take seconds.
 	s.httpServer = &http.Server{
-		Addr:    addr,
-		Handler: s.routes(),
+		Handler:           s.routes(),
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       2 * time.Minute,
 	}
 
 	if !isLoopbackName(s.cfg.Host) {
 		log.Printf("[Warning] Bound to %s: the host microphone and all controls are reachable from the network without authentication", s.cfg.Host)
 	}
 	log.Printf("[VoxLab] Server listening on http://%s (Engine: %s, UI: %s)", addr, s.engine.Name(), s.cfg.StaticDir)
-	return s.httpServer.ListenAndServe()
+	return s.httpServer.Serve(ln)
 }
 
 // routes builds the HTTP handler with its cross-origin and Host protections.
@@ -288,7 +308,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/eval/cancel", s.handleEvalCancel)
 	mux.HandleFunc("/api/eval/report", s.handleEvalReport)
 
-	return s.loopbackHostGuard(http.NewCrossOriginProtection().Handler(mux))
+	return s.loopbackHostGuard(http.NewCrossOriginProtection().Handler(http.MaxBytesHandler(mux, maxRequestBytes)))
 }
 
 // Stop gracefully shuts down the server.
@@ -317,6 +337,11 @@ func (s *Server) Stop(ctx context.Context) error {
 
 // SwitchSource changes the active audio input source.
 func (s *Server) SwitchSource(source string) {
+	if source != "web_ui_mic" && source != "host_native_mic" && source != "wav_file_injection" {
+		log.Printf("[Error] Ignoring unknown audio source %q", source)
+		return
+	}
+
 	s.sourceMu.Lock()
 	defer s.sourceMu.Unlock()
 
@@ -826,6 +851,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[Error] WS Upgrade: %v", err)
 		return
 	}
+	conn.SetReadLimit(maxRequestBytes)
 	client := newWSClient(conn)
 	defer client.close()
 	go client.writeLoop()
@@ -956,7 +982,15 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 					if st, ok := p["streaming"].(bool); ok {
 						streaming = st
 					}
-					go s.executeTTS(text, voice, speed, streaming)
+					select {
+					case s.speakSlots <- struct{}{}:
+						go func() {
+							defer func() { <-s.speakSlots }()
+							s.executeTTS(text, voice, speed, streaming)
+						}()
+					default:
+						s.broadcastTTSError(text, "too many speak requests in progress")
+					}
 				}
 
 			case "set_source":
@@ -1046,6 +1080,13 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				go func() {
 					if err := s.StartEvaluation(tier); err != nil {
 						log.Printf("[Evaluation] Could not start evaluation: %v", err)
+						s.BroadcastJSON(map[string]interface{}{
+							"event": "eval.error",
+							"data": map[string]interface{}{
+								"message": err.Error(),
+								"running": s.EvalStatus().Running,
+							},
+						})
 					}
 				}()
 
@@ -1182,6 +1223,16 @@ func (s *Server) SetPlaybackActive(playing bool) {
 }
 
 // executeTTS executes Kokoro TTS and broadcasts audio waveform and metrics.
+func (s *Server) broadcastTTSError(text, message string) {
+	s.BroadcastJSON(map[string]interface{}{
+		"event": "tts.error",
+		"data": map[string]interface{}{
+			"text":    text,
+			"message": message,
+		},
+	})
+}
+
 func (s *Server) executeTTS(text, voice string, speed float64, streaming bool) {
 	if text == "" {
 		return
@@ -1250,6 +1301,7 @@ func (s *Server) executeTTS(text, voice string, speed float64, streaming bool) {
 
 	if err != nil {
 		log.Printf("[Error] TTS error: %v", err)
+		s.broadcastTTSError(text, err.Error())
 		return
 	}
 

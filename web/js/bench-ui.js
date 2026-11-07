@@ -499,7 +499,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (sourceStatusText) {
         sourceStatusText.textContent = 'Active: Browser Web Audio Mic (Fixed for Browser ASR)';
       }
-      if (capture && capture.isRemoteMode) {
+      if (capture && capture.isRemote) {
         capture.setRemoteMode(false);
         if (btnMicToggle) {
           btnMicToggle.disabled = false;
@@ -1077,6 +1077,12 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {
       console.warn('[TTS] Failed to decode/schedule stream chunk:', e);
     }
+  });
+
+  client.on('tts.error', (data) => {
+    logEvent('tts.error', `Speech failed: ${data.message}`);
+    metricTtsLatency.textContent = 'failed';
+    metricTtsDur.textContent = '--';
   });
 
   client.on('tts.finished', (data) => {
@@ -1779,7 +1785,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (evalKpiPassRate) evalKpiPassRate.textContent = `${(rep.pass_rate * 100).toFixed(1)}%`;
     if (evalKpiWer) evalKpiWer.textContent = rep.avg_wer.toFixed(2);
     if (evalKpiCer) evalKpiCer.textContent = rep.avg_cer.toFixed(2);
-    if (evalKpiIntentAcc) evalKpiIntentAcc.textContent = `${(rep.intent_accuracy * 100).toFixed(1)}%`;
+    if (evalKpiIntentAcc) evalKpiIntentAcc.textContent = rep.intent_accuracy == null ? 'n/a' : `${(rep.intent_accuracy * 100).toFixed(1)}%`;
     if (evalKpiTtft) {
       const p95 = rep.latency_stats && rep.latency_stats.ttft ? rep.latency_stats.ttft.p95_ms : 0;
       evalKpiTtft.textContent = `${p95} ms`;
@@ -1860,7 +1866,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <td>${Math.round(r.duration / 1000000)} ms</td>
         <td>${verdictBadge}</td>
         <td>
-          <button class="btn-play-sample" onclick="new Audio('/data/test_samples/${subDir}/' + ('${escapeHtml(r.id)}'.toLowerCase().includes('t1_') ? '${escapeHtml(r.id)}'.toLowerCase() : ('${escapeHtml(r.id)}'.startsWith('T2_CLEAN_') ? 'base_' + '${escapeHtml(r.id)}'.replace('T2_CLEAN_', '').toLowerCase() : '${escapeHtml(r.id)}'.toLowerCase())) + '.wav').play()">▶️ Play</button>
+          ${r.wav_file ? `<button class="btn-play-sample" data-src="/data/test_samples/${subDir}/${escapeHtml(r.wav_file)}" onclick="new Audio(this.dataset.src).play()">▶️ Play</button>` : ''}
         </td>
       </tr>`;
     }).join('');
@@ -1925,6 +1931,16 @@ document.addEventListener('DOMContentLoaded', () => {
     logEvent('eval.cancelled', 'Active evaluation cancelled.');
   });
 
+  client.on('eval.error', (data) => {
+    logEvent('eval.error', `Could not start evaluation: ${data.message}`);
+    if (data.running) return; // a run is already going, so its progress keeps the UI correct
+    setEvalRunningUI(false, 0, 0, 'Failed to start');
+    if (evalStatusBadge) {
+      evalStatusBadge.className = 'badge badge-disconnected';
+      evalStatusBadge.textContent = 'Failed';
+    }
+  });
+
   // Load initial evaluation report if available on server
   fetch('/api/eval/report?tier=tier-2-deep-matrix')
     .then(r => r.ok ? r.json() : null)
@@ -1936,6 +1952,14 @@ document.addEventListener('DOMContentLoaded', () => {
           evalStatusBadge.textContent = 'Report Loaded';
         }
       }
+    })
+    .catch(() => {});
+
+  // A reload during a run has missed eval.started, so pick the run up from the server.
+  fetch('/api/eval/status')
+    .then(r => r.ok ? r.json() : null)
+    .then(st => {
+      if (st && st.running) setEvalRunningUI(true, st.current, st.total, st.tier);
     })
     .catch(() => {});
 

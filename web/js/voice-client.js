@@ -3,7 +3,7 @@
  */
 class VoiceClient {
   constructor(url) {
-    this.url = url || `ws://${window.location.host}/ws`;
+    this.url = url || `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`;
     this.ws = null;
     this.listeners = new Map();
     this.reconnectTimer = null;

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -153,5 +154,60 @@ func TestStalledClientDoesNotBlockBroadcast(t *testing.T) {
 			t.Fatalf("stalled client was not dropped: %d clients", clientCount())
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestListenReportsATakenPort(t *testing.T) {
+	first := setupTestServer(t)
+	first.cfg.Port = 0
+	ln, err := first.Listen()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+
+	second := setupTestServer(t)
+	second.cfg.Port = ln.Addr().(*net.TCPAddr).Port
+	if ln2, err := second.Listen(); err == nil {
+		ln2.Close()
+		t.Fatal("binding a taken port must fail")
+	}
+}
+
+func TestOversizedRequestsAreRefused(t *testing.T) {
+	ts := httptest.NewServer(setupTestServer(t).routes())
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/api/tts", "application/json", strings.NewReader(`{"text":"`+strings.Repeat("a", maxRequestBytes)+`"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("HTTP body over the limit: status %d", resp.StatusCode)
+	}
+
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	_ = conn.WriteMessage(websocket.BinaryMessage, make([]byte, maxRequestBytes+1))
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	for {
+		if _, _, err := conn.ReadMessage(); err != nil {
+			if !websocket.IsCloseError(err, websocket.CloseMessageTooBig) {
+				t.Fatalf("want close 1009, got %v", err)
+			}
+			return
+		}
+	}
+}
+
+func TestSwitchSourceIgnoresUnknownNames(t *testing.T) {
+	s := setupTestServer(t)
+	s.SwitchSource("not_a_source")
+	if got := s.currentSource(); got != "web_ui_mic" {
+		t.Fatalf("source = %q", got)
 	}
 }
