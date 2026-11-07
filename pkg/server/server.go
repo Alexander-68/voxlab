@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -24,6 +25,8 @@ import (
 	"voxlab/pkg/statemachine"
 	"voxlab/pkg/tts"
 )
+
+var annotationLogPath = filepath.Join("data", "annotation_log.jsonl")
 
 // upgrader keeps gorilla's default CheckOrigin: browsers may only connect from the same origin.
 var upgrader = websocket.Upgrader{}
@@ -198,6 +201,17 @@ func NewServer(cfg *config.AppConfig) (*Server, error) {
 
 	s.evalRunner = evaluation.NewEvalRunner(s.HandleWebSocket)
 	s.evalRunner.Describe = s.evalRunConfig
+	s.evalRunner.OnItemStart = func(item evaluation.EvalItem, current, total int) {
+		s.BroadcastJSON(map[string]interface{}{
+			"event": "eval.item_started",
+			"data": map[string]interface{}{
+				"id":      item.ID,
+				"text":    item.Text,
+				"current": current,
+				"total":   total,
+			},
+		})
+	}
 	return s, nil
 }
 
@@ -693,6 +707,55 @@ func (s *Server) appendDictation(text string) {
 	})
 }
 
+// saveDraft appends an approved draft to the annotation log and clears the working draft.
+func (s *Server) saveDraft(text string) {
+	s.dictMu.Lock()
+	target := s.dictationTarget
+	s.dictMu.Unlock()
+
+	err := appendJSONLine(annotationLogPath, map[string]interface{}{
+		"saved_at":  time.Now().Format(time.RFC3339),
+		"target_id": target,
+		"text":      text,
+	})
+	if err != nil {
+		log.Printf("[Error] Failed saving annotation: %v", err)
+		s.BroadcastJSON(map[string]interface{}{
+			"event": "annotation.save_failed",
+			"data":  map[string]interface{}{"error": err.Error()},
+		})
+		return
+	}
+
+	s.dictMu.Lock()
+	s.dictationDraft = ""
+	s.dictMu.Unlock()
+	s.BroadcastJSON(map[string]interface{}{
+		"event": "annotation.saved",
+		"data": map[string]interface{}{
+			"target_id":  target,
+			"word_count": len(strings.Fields(text)),
+			"path":       annotationLogPath,
+		},
+	})
+}
+
+func appendJSONLine(path string, v interface{}) error {
+	line, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(append(line, '\n')); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
+}
+
 // handleFinalCommandTranscript evaluates a finalized phrase through Intent Matcher and State Machine.
 func (s *Server) handleFinalCommandTranscript(transcript string) {
 	start := time.Now()
@@ -803,6 +866,14 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	evalHarness := false // set by the bench harness; only this read loop touches it
 
+	// Echo muting follows this client's playback reports, so it must not outlive the client.
+	clientPlaying := false
+	defer func() {
+		if clientPlaying {
+			s.SetPlaybackActive(false)
+		}
+	}()
+
 	for {
 		messageType, payload, err := conn.ReadMessage()
 		if err != nil {
@@ -866,8 +937,8 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				}
 
 			case "playback_status":
-				playing, _ := req["playing"].(bool)
-				s.SetPlaybackActive(playing)
+				clientPlaying, _ = req["playing"].(bool)
+				s.SetPlaybackActive(clientPlaying)
 
 			case "confirm":
 				approved, _ := req["approved"].(bool)
@@ -1031,6 +1102,8 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 							"word_count": len(intent.Tokenize(draft)),
 						},
 					})
+				} else if s.stateMachine.Current() == statemachine.StateAnnotationListen {
+					log.Printf("[VoxLab] Ignoring injected command during dictation: %q", text)
 				} else {
 					s.BroadcastJSON(map[string]interface{}{
 						"event": "transcript.final",
@@ -1041,6 +1114,17 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 					})
 					s.handleFinalCommandTranscript(text)
 				}
+
+			case "set_draft":
+				// Manual edits; later phrases append to them instead of replacing them.
+				text, _ := req["text"].(string)
+				s.dictMu.Lock()
+				s.dictationDraft = text
+				s.dictMu.Unlock()
+
+			case "save_draft":
+				text, _ := req["text"].(string)
+				s.saveDraft(text)
 
 			case "set_tts_model":
 				model, _ := req["model"].(string)

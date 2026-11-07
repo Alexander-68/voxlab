@@ -71,13 +71,6 @@ func (s *Server) StartEvaluation(tier string) error {
 
 	go func() {
 		restorePipeline := s.pinEvalPipeline()
-		defer func() {
-			restorePipeline()
-			s.evalMu.Lock()
-			s.evalRunning = false
-			s.evalCancel = nil
-			s.evalMu.Unlock()
-		}()
 
 		report, err := s.evalRunner.EvaluateSuite(evalCtx, manifest, manifestDir, func(res *evaluation.ItemResult, cur, tot int) {
 			s.evalMu.Lock()
@@ -100,10 +93,27 @@ func (s *Server) StartEvaluation(tier string) error {
 		if err != nil && err != context.Canceled {
 			log.Printf("[Evaluation] Suite completed with note: %v", err)
 		}
+		restorePipeline()
 
+		// A run is over only here, so a new one cannot start while this one is stopping.
+		cancelled := evalCtx.Err() != nil
+		evalCancel()
 		s.evalMu.Lock()
-		s.lastReport = report
+		s.evalRunning = false
+		s.evalCancel = nil
+		if !cancelled {
+			s.lastReport = report
+		}
 		s.evalMu.Unlock()
+
+		if cancelled {
+			s.BroadcastJSON(map[string]interface{}{
+				"event": "eval.cancelled",
+				"data":  map[string]interface{}{},
+			})
+			log.Println("[Evaluation] Active evaluation cancelled by user request.")
+			return
+		}
 
 		// Persist report JSON to data directory
 		reportFile := filepath.Join("data", fmt.Sprintf("eval_report_%s.json", tier))
@@ -182,20 +192,13 @@ func (s *Server) EvalRunner() *evaluation.EvalRunner {
 	return s.evalRunner
 }
 
-// CancelEvaluation terminates any in-progress benchmark run.
+// CancelEvaluation asks an in-progress run to stop. The run announces eval.cancelled once stopped.
 func (s *Server) CancelEvaluation() {
 	s.evalMu.Lock()
-	if s.evalRunning && s.evalCancel != nil {
+	defer s.evalMu.Unlock()
+	if s.evalCancel != nil {
 		s.evalCancel()
-		s.evalRunning = false
 	}
-	s.evalMu.Unlock()
-
-	s.BroadcastJSON(map[string]interface{}{
-		"event": "eval.cancelled",
-		"data":  map[string]interface{}{},
-	})
-	log.Println("[Evaluation] Active evaluation cancelled by user request.")
 }
 
 // EvalStatus returns the current state of the evaluation harness.
@@ -276,10 +279,14 @@ func (s *Server) handleEvalReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Try reading from disk fallback
+	// Try reading from disk fallback. The tier becomes part of a path, so only known tiers pass.
 	tier := r.URL.Query().Get("tier")
 	if tier == "" {
 		tier = "tier-2-deep-matrix"
+	}
+	if tier != "tier-1-smoke" && tier != "tier-2-deep-matrix" {
+		http.Error(w, "unknown tier", http.StatusBadRequest)
+		return
 	}
 	reportFile := filepath.Join("data", fmt.Sprintf("eval_report_%s.json", tier))
 	if data, err := os.ReadFile(reportFile); err == nil {

@@ -174,6 +174,14 @@ class VoiceClient {
     this.sendAction('playback_status', { playing });
   }
 
+  setDraft(text) {
+    this.sendAction('set_draft', { text });
+  }
+
+  saveDraft(text) {
+    this.sendAction('save_draft', { text });
+  }
+
   injectText(text, mode = 'command') {
     this.sendAction('inject_text', { text, mode });
   }

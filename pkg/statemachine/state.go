@@ -136,6 +136,9 @@ func (sm *StateMachine) RequestConfirmation(intentID string) bool {
 
 // ConfirmAction completes confirmation and returns to IDLE.
 func (sm *StateMachine) ConfirmAction(approved bool) bool {
+	if sm.Current() != StateConfirm {
+		return false
+	}
 	trigger := "ACTION_DECLINED"
 	if approved {
 		trigger = "ACTION_CONFIRMED"
@@ -160,6 +163,10 @@ func (sm *StateMachine) FinishReview(saved bool) bool {
 // SetSpeaking transitions to/from SPEAKING state for half-duplex TTS.
 func (sm *StateMachine) SetSpeaking(speaking bool) bool {
 	if speaking {
+		// Playback during a listening turn must not end it; echo muting applies regardless.
+		if sm.Current() != StateIdle {
+			return false
+		}
 		return sm.transition(StateSpeaking, "TTS_START", nil)
 	}
 	// Playback-stopped reports also arrive when nothing was playing (e.g. UI resets);

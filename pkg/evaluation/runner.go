@@ -72,6 +72,8 @@ type EvalRunner struct {
 
 	// Describe reports the pipeline configuration to stamp on reports.
 	Describe func() RunConfig
+	// OnItemStart announces the clip about to be fed, for anyone listening along.
+	OnItemStart func(item EvalItem, current, total int)
 }
 
 // NewEvalRunner creates a new evaluation runner attached to a WebSocket handler function.
@@ -100,6 +102,9 @@ func (r *EvalRunner) EvaluateSuite(ctx context.Context, manifest *EvalManifest, 
 
 	total := len(manifest.Items)
 	for i, item := range manifest.Items {
+		if r.OnItemStart != nil {
+			r.OnItemStart(item, i+1, total)
+		}
 		wavPath := ResolveWavPath(manifestDir, item)
 		itemCtx, cancel := context.WithTimeout(ctx, ItemTimeout(item))
 		res, err := r.EvaluateItem(itemCtx, item, wavPath)

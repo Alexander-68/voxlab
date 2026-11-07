@@ -16,3 +16,4 @@ Thumbs.db
 # Logs
 log.txt
 *.log
+data/annotation_log.jsonl

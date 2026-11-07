@@ -59,6 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnRunTier2 = document.getElementById('btn-run-tier2');
   const btnRunTier1 = document.getElementById('btn-run-tier1');
   const btnCancelEval = document.getElementById('btn-cancel-eval');
+  const chkEvalListen = document.getElementById('chk-eval-listen');
   const evalStatusBadge = document.getElementById('eval-status-badge');
   const evalProgressBox = document.getElementById('eval-progress-box');
   const evalProgressBar = document.getElementById('eval-progress-bar');
@@ -1567,10 +1568,26 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // The draft is only cleared once the server confirms it was stored.
   btnSaveDraft.addEventListener('click', () => {
-    alert('Annotation draft approved and persisted to procedure log!');
+    const text = dictationDraftText.value.trim();
+    if (text) client.saveDraft(text);
+  });
+
+  client.on('annotation.saved', (data) => {
     dictationDraftText.value = '';
     draftWordCount.textContent = '0';
+    logEvent('annotation.saved', `Saved ${data.word_count} words to ${data.path}`);
+  });
+
+  client.on('annotation.save_failed', (data) => {
+    logEvent('annotation.save_failed', `Draft NOT saved: ${data.error}`);
+  });
+
+  // Keep the server draft in step, so the next phrase appends to the edited text.
+  dictationDraftText.addEventListener('input', () => {
+    draftWordCount.textContent = dictationDraftText.value.trim().split(/\s+/).filter(Boolean).length;
+    client.setDraft(dictationDraftText.value);
   });
 
   btnCopyDraft.addEventListener('click', () => {
@@ -1853,8 +1870,36 @@ document.addEventListener('DOMContentLoaded', () => {
     evalFilterVerdict.addEventListener('change', renderCasesTable);
   }
 
+  // Drops the previous run's results, so nothing on screen can be mistaken for this run's.
+  function clearEvalResults() {
+    cachedEvalReport = null;
+    [evalKpiPassRate, evalKpiWer, evalKpiCer, evalKpiIntentAcc, evalKpiTtft].forEach((el) => {
+      if (el) el.textContent = '--';
+    });
+    [evalSnrTbody, evalLatencyTbody, evalCasesTbody].forEach((el) => {
+      if (el) el.innerHTML = '';
+    });
+  }
+
+  // Listening along uses the headphone monitor, which plays what ASR hears after DSP.
+  if (chkEvalListen && chkMonitor) {
+    chkEvalListen.checked = chkMonitor.checked;
+    chkEvalListen.addEventListener('change', () => {
+      chkMonitor.checked = chkEvalListen.checked;
+      chkMonitor.dispatchEvent(new Event('change'));
+    });
+    chkMonitor.addEventListener('change', () => {
+      chkEvalListen.checked = chkMonitor.checked;
+    });
+  }
+
   // WebSocket IPC Event Listeners for Benchmark
+  client.on('eval.item_started', (data) => {
+    setEvalRunningUI(true, data.current - 1, data.total, data.text ? `${data.id}: "${data.text}"` : data.id);
+  });
+
   client.on('eval.started', (data) => {
+    clearEvalResults();
     setEvalRunningUI(true, 0, data.total, 'Initializing...');
     logEvent('eval.started', `Evaluation started: ${data.tier} (${data.total} items)`);
   });
