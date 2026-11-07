@@ -62,3 +62,14 @@ func TestMissingModelIsNotReportedAsNeural(t *testing.T) {
 		t.Fatalf("reported %q as neural with no model installed", name)
 	}
 }
+
+func TestKokoroLang(t *testing.T) {
+	for voice, want := range map[string]string{
+		"ef_dora": "es", "em_santa": "es", "ff_siwis": "fr", "hf_alpha": "hi", "if_sara": "it", "pm_alex": "pt-br",
+		"af_heart": "", "bm_george": "", "zf_xiaobei": "", "zf_001": "", "default": "", "": "",
+	} {
+		if got := kokoroLang(voice); got != want {
+			t.Errorf("kokoroLang(%q) = %q, want %q", voice, got, want)
+		}
+	}
+}

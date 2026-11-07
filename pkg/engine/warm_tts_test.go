@@ -16,7 +16,7 @@ func TestWarmTTSSentenceSplitting(t *testing.T) {
 	dataDirPath := filepath.Join(modelDir, "espeak-ng-data")
 	lexPath := filepath.Join(modelDir, "lexicon-us-en.txt")
 
-	warm, err := newPlatformWarmTTS(dllDir, modelFile, voicesPath, tokensPath, dataDirPath, lexPath, "", 4, "cpu")
+	warm, err := newPlatformWarmTTS(dllDir, modelFile, voicesPath, tokensPath, dataDirPath, lexPath, "", "", 4, "cpu")
 	if err != nil {
 		t.Skipf("Warm TTS not available: %v", err)
 		return

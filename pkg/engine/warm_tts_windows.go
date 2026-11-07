@@ -355,6 +355,7 @@ func newPlatformWarmTTS(
 	dataDirPath string,
 	lexPath string,
 	ruleFsts string,
+	lang string,
 	numThreads int,
 	provider string,
 ) (WarmTTS, error) {
@@ -421,6 +422,9 @@ func newPlatformWarmTTS(
 	cfg.Model.Kokoro.DataDir = toCString(absDataDirPath, &keep)
 	cfg.Model.Kokoro.Lexicon = toCString(absLexPath, &keep)
 	cfg.Model.Kokoro.LengthScale = 1.0
+	if lang != "" {
+		cfg.Model.Kokoro.Lang = toCString(lang, &keep)
+	}
 	if ruleFsts != "" {
 		parts := strings.Split(ruleFsts, ",")
 		for i, p := range parts {
@@ -439,7 +443,7 @@ func newPlatformWarmTTS(
 		return nil, fmt.Errorf("SherpaOnnxCreateOfflineTts returned NULL: %v", callErr)
 	}
 
-	key := fmt.Sprintf("%s|t%d|%s", modelFile, numThreads, provider)
+	key := warmTTSKey(modelFile, lang, numThreads, provider)
 	log.Printf("[WarmTTS] Preloaded Kokoro TTS into resident RAM in %v (file: %s, threads: %d, provider: %s)",
 		time.Since(t0), filepath.Base(modelFile), numThreads, provider)
 

@@ -278,8 +278,7 @@ func (r *SherpaRunner) refineLocked(res *ASRResult, seg []float32, isDictation b
 	ms := time.Since(t0).Milliseconds()
 	res.Transcript = text
 	if r.OnRefine != nil {
-		cb := r.OnRefine
-		go cb(isDictation, first, text, ms)
+		r.OnRefine(isDictation, first, text, ms) // synchronous, so clients see it before the turn ends
 	}
 }
 
@@ -644,13 +643,13 @@ func (r *SherpaRunner) resolveKokoroModelFile(modelDir string) string {
 }
 
 // getWarmTTS returns or initializes the resident in-memory TTS engine if the C-API DLL is available.
-func (r *SherpaRunner) getWarmTTS(modelDir string, modelFile string) WarmTTS {
+func (r *SherpaRunner) getWarmTTS(modelDir, modelFile, lang string) WarmTTS {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.getWarmTTSLocked(modelDir, modelFile)
+	return r.getWarmTTSLocked(modelDir, modelFile, lang)
 }
 
-func (r *SherpaRunner) getWarmTTSLocked(modelDir string, modelFile string) WarmTTS {
+func (r *SherpaRunner) getWarmTTSLocked(modelDir, modelFile, lang string) WarmTTS {
 
 	numThreads := r.cfg.Engine.NumThreads
 	if numThreads <= 0 {
@@ -661,7 +660,7 @@ func (r *SherpaRunner) getWarmTTSLocked(modelDir string, modelFile string) WarmT
 		provider = "cpu"
 	}
 
-	key := fmt.Sprintf("%s|t%d|%s", modelFile, numThreads, provider)
+	key := warmTTSKey(modelFile, lang, numThreads, provider)
 	if r.warmTTS != nil && r.warmTTS.IsWarm() && r.warmTTS.ModelKey() == key {
 		return r.warmTTS
 	}
@@ -689,7 +688,7 @@ func (r *SherpaRunner) getWarmTTSLocked(modelDir string, modelFile string) WarmT
 	dataDirPath := filepath.Join(modelDir, "espeak-ng-data")
 
 	var lexicons []string
-	for _, lexName := range []string{"lexicon-us-en.txt", "lexicon-gb-en.txt", "lexicon-zh.txt"} {
+	for _, lexName := range kokoroLexicons(lang) {
 		lp := filepath.Join(modelDir, lexName)
 		if isRegularFile(lp) {
 			absL, _ := filepath.Abs(lp)
@@ -708,7 +707,7 @@ func (r *SherpaRunner) getWarmTTSLocked(modelDir string, modelFile string) WarmT
 	}
 	ruleFstsStr := strings.Join(ruleFsts, ",")
 
-	warm, err := newPlatformWarmTTS(dllDir, modelFile, voicesPath, tokensPath, dataDirPath, lexPath, ruleFstsStr, numThreads, provider)
+	warm, err := newPlatformWarmTTS(dllDir, modelFile, voicesPath, tokensPath, dataDirPath, lexPath, ruleFstsStr, lang, numThreads, provider)
 	if err != nil {
 		log.Printf("[SherpaRunner] In-process warm TTS init notice: %v (will use CLI fallback)", err)
 		return nil
@@ -730,7 +729,7 @@ func (r *SherpaRunner) WarmUp() {
 	if !modelExists || !isRegularFile(modelFile) {
 		return
 	}
-	warm := r.getWarmTTS(modelDir, modelFile)
+	warm := r.getWarmTTS(modelDir, modelFile, "")
 	if warm == nil {
 		return
 	}
@@ -764,6 +763,10 @@ func (r *SherpaRunner) SynthesizeStream(req TTSRequest, onChunk func(chunk TTSCh
 	base := filepath.Base(modelDir)
 	version := detectKokoroVersion(base)
 	sid := mapVoiceToSID(req.Voice, version)
+	lang := kokoroLang(req.Voice)
+	if req.Lang == "en" {
+		lang = ""
+	}
 	cleanText := normalizeTTSText(req.Text)
 	if onChunk != nil {
 		cleanText = optimizeStreamingClauses(cleanText)
@@ -782,7 +785,7 @@ func (r *SherpaRunner) SynthesizeStream(req TTSRequest, onChunk func(chunk TTSCh
 
 	// 1. Try In-Memory Warm Engine (sub-second latency with chunk-by-chunk streaming)
 	if isRegularFile(modelFile) {
-		if warm := r.getWarmTTS(modelDir, modelFile); warm != nil {
+		if warm := r.getWarmTTS(modelDir, modelFile, lang); warm != nil {
 			log.Printf("[SherpaRunner] Synthesizing speech (WARM in-memory, streaming=%v): voice='%s' -> sid=%d, speed=%.2f",
 				onChunk != nil, req.Voice, sid, speed)
 			result, err := warm.SynthesizeStream(cleanText, sid, speed, onChunk)
@@ -829,7 +832,7 @@ func (r *SherpaRunner) SynthesizeStream(req TTSRequest, onChunk func(chunk TTSCh
 	}
 
 	var lexicons []string
-	for _, lexName := range []string{"lexicon-us-en.txt", "lexicon-gb-en.txt", "lexicon-zh.txt"} {
+	for _, lexName := range kokoroLexicons(lang) {
 		lexPath := filepath.Join(modelDir, lexName)
 		if isRegularFile(lexPath) {
 			lexicons = append(lexicons, lexPath)
@@ -850,6 +853,9 @@ func (r *SherpaRunner) SynthesizeStream(req TTSRequest, onChunk func(chunk TTSCh
 		args = append(args, fmt.Sprintf("--tts-rule-fsts=%s", strings.Join(ruleFsts, ",")))
 	}
 
+	if lang != "" {
+		args = append(args, "--kokoro-lang="+lang)
+	}
 	args = append(args, fmt.Sprintf("--speed=%.2f", speed))
 	args = append(args, fmt.Sprintf("--sid=%d", sid))
 	args = append(args, cleanText)
@@ -1357,4 +1363,41 @@ func optimizeStreamingClauses(text string) string {
 	}
 
 	return text
+}
+
+// kokoroLang returns the espeak-ng language for a voice from its Kokoro prefix (ef_dora is Spanish).
+// Without one, sherpa-onnx reads the text with the English and Mandarin lexicons, so a Spanish voice
+// speaks Spanish words as English phonemes. English and Mandarin voices stay on those lexicons.
+// ponytail: the language is fixed when the engine loads, so changing language reloads the model.
+// One resident engine per language would remove the pause, at the cost of RAM.
+func kokoroLang(voice string) string {
+	if len(voice) < 3 || voice[2] != '_' {
+		return ""
+	}
+	switch voice[0] {
+	case 'e':
+		return "es"
+	case 'f':
+		return "fr"
+	case 'h':
+		return "hi"
+	case 'i':
+		return "it"
+	case 'p':
+		return "pt-br"
+	}
+	return ""
+}
+
+func warmTTSKey(modelFile, lang string, numThreads int, provider string) string {
+	return fmt.Sprintf("%s|%s|t%d|%s", modelFile, lang, numThreads, provider)
+}
+
+// kokoroLexicons lists the lexicon files for a language. With a language set, espeak-ng reads every
+// word: an English lexicon would still claim Spanish words that look English, like "son" or "normal".
+func kokoroLexicons(lang string) []string {
+	if lang != "" {
+		return nil
+	}
+	return []string{"lexicon-us-en.txt", "lexicon-gb-en.txt", "lexicon-zh.txt"}
 }

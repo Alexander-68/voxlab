@@ -17,7 +17,7 @@ import (
 // model (Parakeet TDT). It re-transcribes endpointed segments for a punctuated, more
 // accurate final text while the streaming model keeps providing live partials.
 type WarmOffline struct {
-	cmd  *exec.Cmd
+	*daemon
 	port int
 }
 
@@ -42,11 +42,12 @@ func StartWarmOffline(tok, enc, dec, joi string, numThreads int) (*WarmOffline, 
 		fmt.Sprintf("--num-threads=%d", numThreads),
 		fmt.Sprintf("--port=%d", port),
 	)
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start sherpa-onnx offline websocket server: %w", err)
+	d, err := startDaemon("sherpa-onnx-offline-websocket-server", cmd)
+	if err != nil {
+		return nil, err
 	}
 	log.Printf("[SherpaRunner] Starting warm second-pass ASR server on port %d (%d threads, %s)", port, numThreads, enc)
-	return &WarmOffline{cmd: cmd, port: port}, nil
+	return &WarmOffline{daemon: d, port: port}, nil
 }
 
 // WaitReady polls until the server accepts connections; on timeout it kills the process.
@@ -56,14 +57,6 @@ func (w *WarmOffline) WaitReady() error {
 	}
 	_ = w.Close()
 	return fmt.Errorf("sherpa-onnx-offline-websocket-server failed to bind port %d within timeout", w.port)
-}
-
-// Close kills the server process.
-func (w *WarmOffline) Close() error {
-	if w.cmd.Process != nil {
-		return w.cmd.Process.Kill()
-	}
-	return nil
 }
 
 // Transcribe decodes one complete utterance. Wire format of the sherpa offline server:

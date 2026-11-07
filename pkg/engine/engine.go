@@ -16,6 +16,7 @@ type TTSRequest struct {
 	Voice      string  `json:"voice"`
 	Speed      float64 `json:"speed"`
 	SampleRate int     `json:"sample_rate"`
+	Lang       string  `json:"lang,omitempty"` // "" follows the voice; "en" reads English text in a foreign voice
 }
 
 // TTSResult holds synthesized audio waveform and metrics.

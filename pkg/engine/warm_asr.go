@@ -20,7 +20,7 @@ import (
 // WarmASR is a resident sherpa-onnx-online-websocket-server process. Models load once;
 // each listening session opens one ASRStream and feeds audio to it in real time.
 type WarmASR struct {
-	cmd  *exec.Cmd
+	*daemon
 	port int
 }
 
@@ -65,12 +65,13 @@ func StartWarmASR(tok, enc, dec, joi string, numThreads int, endpointSilenceSec 
 		fmt.Sprintf("--rule2-min-trailing-silence=%.2f", endpointSilenceSec),
 		fmt.Sprintf("--port=%d", port),
 	)
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start sherpa-onnx websocket server: %w", err)
+	d, err := startDaemon("sherpa-onnx-online-websocket-server", cmd)
+	if err != nil {
+		return nil, err
 	}
 	log.Printf("[SherpaRunner] Starting warm streaming ASR server on port %d (%d threads, endpoint pause %.2fs)",
 		port, numThreads, endpointSilenceSec)
-	return &WarmASR{cmd: cmd, port: port}, nil
+	return &WarmASR{daemon: d, port: port}, nil
 }
 
 // WaitReady polls until the server accepts connections; on timeout it kills the process.
@@ -131,14 +132,6 @@ func getFreeTCPPort() (int, error) {
 	}
 	defer l.Close()
 	return l.Addr().(*net.TCPAddr).Port, nil
-}
-
-// Close kills the server process.
-func (w *WarmASR) Close() error {
-	if w.cmd.Process != nil {
-		return w.cmd.Process.Kill()
-	}
-	return nil
 }
 
 // Open starts a new recognition stream.

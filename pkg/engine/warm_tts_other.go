@@ -27,6 +27,6 @@ func (s *stubWarmTTS) Close() error {
 }
 
 // newPlatformWarmTTS returns nil on non-Windows platforms.
-func newPlatformWarmTTS(dllDir string, modelFile string, voicesPath string, tokensPath string, dataDirPath string, lexPath string, ruleFsts string, numThreads int, provider string) (WarmTTS, error) {
+func newPlatformWarmTTS(dllDir string, modelFile string, voicesPath string, tokensPath string, dataDirPath string, lexPath string, ruleFsts string, lang string, numThreads int, provider string) (WarmTTS, error) {
 	return nil, fmt.Errorf("in-process warm TTS is not supported on this platform")
 }
