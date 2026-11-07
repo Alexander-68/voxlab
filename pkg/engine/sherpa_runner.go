@@ -269,12 +269,29 @@ func (r *SherpaRunner) refineLocked(res *ASRResult, seg []float32, isDictation b
 	if text == "" {
 		return // streaming model heard words the offline model did not; keep them rather than lose speech
 	}
-	ms := time.Since(t0).Milliseconds()
 	first := res.Transcript
+	if containsCJK(first) && !containsCJK(text) {
+		log.Printf("[SherpaRunner] Skipping second pass: streaming result contains CJK (%q) while offline model produced non-CJK (%q)", first, text)
+		return
+	}
+	ms := time.Since(t0).Milliseconds()
 	res.Transcript = text
 	if r.OnRefine != nil {
-		r.OnRefine(isDictation, first, text, ms)
+		cb := r.OnRefine
+		go cb(isDictation, first, text, ms)
 	}
+}
+
+func containsCJK(s string) bool {
+	for _, r := range s {
+		if unicode.Is(unicode.Han, r) ||
+			unicode.Is(unicode.Hiragana, r) ||
+			unicode.Is(unicode.Katakana, r) ||
+			unicode.Is(unicode.Hangul, r) {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *SherpaRunner) Name() string {

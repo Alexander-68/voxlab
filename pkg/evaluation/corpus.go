@@ -135,10 +135,21 @@ func CalculateCER(reference, hypothesis string) float64 {
 	return float64(d[len(refRunes)][len(hypRunes)]) / float64(len(refRunes))
 }
 
+func isCJK(r rune) bool {
+	return unicode.Is(unicode.Han, r) ||
+		unicode.Is(unicode.Hiragana, r) ||
+		unicode.Is(unicode.Katakana, r) ||
+		unicode.Is(unicode.Hangul, r)
+}
+
 func normalizeAndSplitWords(s string) []string {
 	var clean strings.Builder
 	for _, r := range strings.ToLower(s) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsSpace(r) {
+		if isCJK(r) {
+			clean.WriteRune(' ')
+			clean.WriteRune(r)
+			clean.WriteRune(' ')
+		} else if unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsSpace(r) {
 			clean.WriteRune(r)
 		}
 	}

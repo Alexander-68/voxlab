@@ -79,7 +79,7 @@ Multilingual voice input support is decoupled into two complementary layers:
 
 1. **Browser Web Speech API (`SpeechRecognition`)**:
    - Standard browser recognition requires an explicit language tag (`recognition.lang`).
-   - The UI provides a dynamic selector supporting `auto`, `en-US`, `en-GB`, `es-ES`, `fr-FR`, `de-DE`, `it-IT`, `pt-BR`, `ja-JP`, `zh-CN`, and `hi-IN`.
+   - The UI provides a dynamic selector supporting `auto`, `en-US`, `en-GB`, `es-ES`, `fr-FR`, `de-DE`, `it-IT`, `pt-BR`, `zh-CN`, and `hi-IN`.
 2. **Sherpa-ONNX Streaming Recognizer (Nemotron-3.5)**:
    - Trained on 40+ languages natively.
    - The active language code is communicated over WebSocket via `{"action": "set_language", "language": "es-ES"}` and synchronized across the host daemon and UI.

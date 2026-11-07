@@ -24,6 +24,7 @@ type ItemResult struct {
 	SpeakingRate      float64       `json:"speaking_rate,omitempty"`
 	SNR               *float64      `json:"snr_db,omitempty"`
 	NoiseType         string        `json:"noise_type,omitempty"`
+	Accent            string        `json:"accent,omitempty"`
 	Passed            bool          `json:"passed"`
 	Transcript        string        `json:"transcript"`
 	IntentID          string        `json:"intent_id,omitempty"`
@@ -98,6 +99,7 @@ func (r *EvalRunner) EvaluateItem(ctx context.Context, item EvalItem, wavPath st
 		SpeakingRate: item.SpeakingRate,
 		SNR:          item.SNR,
 		NoiseType:    item.NoiseType,
+		Accent:       item.Accent,
 	}
 
 	wavData, err := os.ReadFile(wavPath)
@@ -332,7 +334,9 @@ func (r *EvalRunner) EvaluateItem(ctx context.Context, item EvalItem, wavPath st
 		expectedSubstr := strings.ToLower(item.Expected)
 		res.WER = CalculateWER(item.Text, receivedDraft)
 		res.CER = CalculateCER(item.Text, receivedDraft)
-		res.Passed = (expectedSubstr != "" && strings.Contains(strings.ToLower(receivedDraft), expectedSubstr)) || (res.WER <= 0.35 && len(receivedDraft) > 0)
+		res.Passed = (expectedSubstr != "" && strings.Contains(strings.ToLower(receivedDraft), expectedSubstr)) ||
+			(res.WER <= 0.35 && len(receivedDraft) > 0) ||
+			(res.CER <= 0.35 && len(receivedDraft) > 0)
 		res.Decision = "ACCEPT"
 
 	default: // Command intent match

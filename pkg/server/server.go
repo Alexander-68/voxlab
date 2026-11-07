@@ -704,10 +704,10 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		s.clientsMu.Unlock()
 	}()
 
-	// Send initial state snapshot safely under connMu
+	// Send initial state snapshot safely under connMu (gather state outside connMu to avoid lock inversion)
 	ttsModel, isNeural := s.ttsMgr.ActiveModel()
-	connMu.Lock()
-	_ = conn.WriteJSON(map[string]interface{}{
+	asrInfo := s.asrModelInfo()
+	stateMsg := map[string]interface{}{
 		"event": "voice.state",
 		"data": map[string]interface{}{
 			"to_state":        s.stateMachine.Current(),
@@ -721,9 +721,11 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			"enhancer_on":     s.enhancer != nil && s.enhancer.IsEnabled(),
 			"enhancer_type":   s.enhancerModelType(),
 			"enhancer_name":   s.enhancerName(),
-			"asr_models":      s.asrModelInfo(),
+			"asr_models":      asrInfo,
 		},
-	})
+	}
+	connMu.Lock()
+	_ = conn.WriteJSON(stateMsg)
 	connMu.Unlock()
 
 	for {

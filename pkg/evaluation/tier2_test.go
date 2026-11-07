@@ -117,3 +117,88 @@ func mathAbs(x float64) float64 {
 	return x
 }
 
+func TestMultilingualDictations(t *testing.T) {
+	manifestPath := filepath.Join("..", "..", "data", "test_samples", "eval_tier2", "manifest.json")
+	manifest, err := evaluation.LoadManifest(manifestPath)
+	if err != nil {
+		t.Fatalf("failed loading Tier-2 manifest: %v", err)
+	}
+
+	// Select representative clean multilingual items
+	selectedIDs := map[string]bool{
+		"T2_CLEAN_DICT_ES_VITALS_EF":   true,
+		"T2_CLEAN_DICT_PT_VITALS_PF":   true,
+		"T2_CLEAN_DICT_FR_VITALS_FF":   true,
+		"T2_CLEAN_DICT_IT_VITALS_IF":   true,
+		"T2_CLEAN_DICT_ZH_VITALS_XB":   true,
+		"T2_CLEAN_DICT_ZH_INCISION_YJ": true,
+	}
+
+	var itemsToTest []evaluation.EvalItem
+	for _, item := range manifest.Items {
+		if selectedIDs[item.ID] {
+			itemsToTest = append(itemsToTest, item)
+		}
+	}
+
+	if len(itemsToTest) == 0 {
+		t.Fatalf("no multilingual items found in manifest")
+	}
+
+	cfg := config.DefaultConfig()
+	cfg.StaticDir = filepath.Join("..", "..", "web")
+	cfg.Intent.CatalogPath = filepath.Join("..", "..", "data", "commands.json")
+
+	srv, err := server.NewServer(cfg)
+	if err != nil {
+		t.Fatalf("failed creating server: %v", err)
+	}
+	defer func() { _ = srv.Stop(context.Background()) }()
+
+	runner, ok := srv.SherpaEngine().(*engine.SherpaRunner)
+	isSherpa := ok && runner.Name() == "sherpa_onnx_native"
+	if isSherpa {
+		for i := 0; i < 300 && !(runner.ASRReady() && runner.ASRModelInfo()["second_pass_loaded"] == true); i++ {
+			time.Sleep(100 * time.Millisecond)
+		}
+		if !runner.ASRReady() {
+			t.Skip("Sherpa warm ASR not ready within timeout")
+		}
+		if err := srv.SetASREngineMode("sherpa"); err != nil {
+			t.Fatalf("failed setting ASR engine mode: %v", err)
+		}
+	} else {
+		t.Log("[Notice] Sherpa native models not present; testing with simulator engine")
+	}
+
+	srv.StartBackgroundLoops()
+
+	evalDir := filepath.Join("..", "..", "data", "test_samples", "eval_tier2")
+	evalRunner := evaluation.NewEvalRunner(srv.HandleWebSocket)
+
+	t.Logf("=== Starting Multilingual Dictation Test (%d cases) ===", len(itemsToTest))
+	subManifest := &evaluation.EvalManifest{
+		Version: manifest.Version,
+		Tier:    manifest.Tier,
+		Items:   itemsToTest,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	report, err := evalRunner.EvaluateSuite(ctx, subManifest, evalDir, func(res *evaluation.ItemResult, cur, tot int) {
+		status := "PASS"
+		if !res.Passed {
+			status = "FAIL"
+		}
+		t.Logf("[%d/%d] %s [%s] lang=%s wer=%.2f cer=%.2f latency=%v (ref=%q -> hyp=%q)",
+			cur, tot, status, res.ID, res.Accent, res.WER, res.CER, res.Duration, res.Description, res.Transcript)
+	})
+	if err != nil && err != context.Canceled {
+		t.Fatalf("Multilingual evaluation failed with error: %v", err)
+	}
+
+	t.Logf("=== Multilingual Dictation Test Finished: %d/%d Passed (PassRate=%.1f%%, AvgWER=%.2f, AvgCER=%.2f) ===",
+		report.Passed, report.TotalCases, report.PassRate*100.0, report.AvgWER, report.AvgCER)
+}
+
