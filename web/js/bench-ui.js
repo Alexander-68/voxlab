@@ -177,18 +177,39 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- Dictation Punctuation & Formatting Helpers ---
+  // "period" and "colon" are also clinical nouns; mirrors pkg/server/dictation.go.
+  const PERIOD_MODIFIERS = new Set(['the', 'a', 'an', 'this', 'each', 'postoperative', 'postop', 'preoperative',
+    'perioperative', 'recovery', 'observation', 'washout', 'menstrual', 'refractory', 'incubation', 'latency', 'neonatal']);
+  const COLON_MODIFIERS = new Set(['the', 'a', 'an', 'this', 'ascending', 'descending', 'transverse', 'sigmoid',
+    'right', 'left', 'distal', 'proximal', 'spastic']);
+
+  function replaceSpokenWord(text, regex, symbol, modifiers) {
+    return text.replace(regex, (match, offset) => {
+      const before = text.slice(0, offset).trim().split(/\s+/).filter(Boolean);
+      const after = text.slice(offset + match.length).trim().split(/\s+/).filter(Boolean);
+      const isNoun = (before.length === 0 && after.length > 0)
+        || (before.length > 0 && modifiers.has(before[before.length - 1].toLowerCase()))
+        || (after.length > 0 && after[0].toLowerCase() === 'of');
+      return isNoun ? match : symbol;
+    });
+  }
+
   function formatDictationPhrase(rawText, isContinuation = false) {
     if (!rawText) return '';
-    let text = rawText.trim().toLowerCase();
+    let text = rawText.trim();
     if (!text) return '';
 
+    // In already punctuated text, "period" and "colon" are ordinary words.
+    if (!/[.,;:?!](?:\s|$)/.test(text)) {
+      text = replaceSpokenWord(text, /\b(?:period|full stop)\b/gi, '.', PERIOD_MODIFIERS);
+      text = replaceSpokenWord(text, /\bcolon\b/gi, ':', COLON_MODIFIERS);
+    }
+
     const punctuationMap = [
-      { regex: /\b(period|full stop)\b/gi, replacement: '.' },
       { regex: /\bcomma\b/gi, replacement: ',' },
       { regex: /\bquestion mark\b/gi, replacement: '?' },
       { regex: /\bexclamation (?:mark|point)\b/gi, replacement: '!' },
       { regex: /\bsemicolon\b/gi, replacement: ';' },
-      { regex: /\bcolon\b/gi, replacement: ':' },
       { regex: /\bnew paragraph\b/gi, replacement: '\n\n' },
       { regex: /\bnew line\b/gi, replacement: '\n' },
     ];
@@ -199,7 +220,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Adjust spacing around punctuation and clean newlines
     text = text.replace(/[ \t]+([.,;:?!])/g, '$1');
-    text = text.replace(/([.,;:?!])([a-zA-Z0-9])/g, '$1 $2');
     text = text.replace(/[ \t]*\n[ \t]*/g, '\n');
     text = text.replace(/\n{3,}/g, '\n\n');
     text = text.replace(/[ \t]{2,}/g, ' ');

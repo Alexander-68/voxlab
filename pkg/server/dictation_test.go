@@ -95,6 +95,61 @@ func TestFormatDictationPhrase(t *testing.T) {
 			input:    "heart rate normal period blood pressure 120 over 80 period",
 			expected: "Heart rate normal. Blood pressure 120 over 80.",
 		},
+		{
+			name:     "Decimal dose and time survive",
+			input:    "Give 2.5 mg at 10:30.",
+			expected: "Give 2.5 mg at 10:30.",
+		},
+		{
+			name:     "Thousands separator survives",
+			input:    "Dose was 1,000 units.",
+			expected: "Dose was 1,000 units.",
+		},
+		{
+			name:     "Abbreviation is not split",
+			input:    "Use a mild analgesic, e.g. paracetamol.",
+			expected: "Use a mild analgesic, e.g. Paracetamol.",
+		},
+		{
+			name:     "Spoken period after a decimal still converts",
+			input:    "give 2.5 mg period",
+			expected: "Give 2.5 mg.",
+		},
+		{
+			name:     "Punctuated text keeps the organ",
+			input:    "Colon biopsy taken.",
+			expected: "Colon biopsy taken.",
+		},
+		{
+			name:     "Punctuated text keeps the noun period",
+			input:    "The postoperative period was uneventful.",
+			expected: "The postoperative period was uneventful.",
+		},
+		{
+			name:     "Unpunctuated noun period after a modifier",
+			input:    "the postoperative period was uneventful",
+			expected: "The postoperative period was uneventful.",
+		},
+		{
+			name:     "Unpunctuated noun period before of",
+			input:    "after a long period of observation",
+			expected: "After a long period of observation.",
+		},
+		{
+			name:     "Unpunctuated organ at phrase start",
+			input:    "colon biopsy taken",
+			expected: "Colon biopsy taken.",
+		},
+		{
+			name:     "Unpunctuated organ after an anatomical modifier",
+			input:    "polyp in the sigmoid colon period",
+			expected: "Polyp in the sigmoid colon.",
+		},
+		{
+			name:     "Lone spoken keyword still converts",
+			input:    "period",
+			expected: ".",
+		},
 	}
 
 	for _, tc := range tests {
