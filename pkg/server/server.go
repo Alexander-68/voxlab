@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -23,11 +24,8 @@ import (
 	"voxlab/pkg/tts"
 )
 
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins for local test bench development
-	},
-}
+// upgrader keeps gorilla's default CheckOrigin: browsers may only connect from the same origin.
+var upgrader = websocket.Upgrader{}
 
 // Server is the main VoxLab web and voice API server.
 type Server struct {
@@ -202,10 +200,52 @@ func (s *Server) StartBackgroundLoops() {
 	_ = s.webMicSource.Start(s.ctx, s.audioInChan)
 }
 
+func isLoopbackName(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(strings.Trim(host, "[]"))
+	return ip != nil && ip.IsLoopback()
+}
+
+// loopbackHostGuard refuses non-loopback Host headers while bound to loopback. Same-origin checks
+// alone pass under DNS rebinding, where evil.example resolves to 127.0.0.1 and is its own origin.
+func (s *Server) loopbackHostGuard(next http.Handler) http.Handler {
+	if !isLoopbackName(s.cfg.Host) {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host, _, err := net.SplitHostPort(r.Host)
+		if err != nil {
+			host = r.Host
+		}
+		if !isLoopbackName(host) {
+			http.Error(w, "forbidden host", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // Start begins listening and serving HTTP & WebSocket requests.
 func (s *Server) Start() error {
 	s.StartBackgroundLoops()
 
+	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
+	s.httpServer = &http.Server{
+		Addr:    addr,
+		Handler: s.routes(),
+	}
+
+	if !isLoopbackName(s.cfg.Host) {
+		log.Printf("[Warning] Bound to %s: the host microphone and all controls are reachable from the network without authentication", s.cfg.Host)
+	}
+	log.Printf("[VoxLab] Server listening on http://%s (Engine: %s, UI: %s)", addr, s.engine.Name(), s.cfg.StaticDir)
+	return s.httpServer.ListenAndServe()
+}
+
+// routes builds the HTTP handler with its cross-origin and Host protections.
+func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
 
 	// Static Web UI & Evaluation Assets
@@ -226,14 +266,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/eval/cancel", s.handleEvalCancel)
 	mux.HandleFunc("/api/eval/report", s.handleEvalReport)
 
-	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
-	s.httpServer = &http.Server{
-		Addr:    addr,
-		Handler: mux,
-	}
-
-	log.Printf("[VoxLab] Server listening on http://%s (Engine: %s, UI: %s)", addr, s.engine.Name(), s.cfg.StaticDir)
-	return s.httpServer.ListenAndServe()
+	return s.loopbackHostGuard(http.NewCrossOriginProtection().Handler(mux))
 }
 
 // Stop gracefully shuts down the server.

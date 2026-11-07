@@ -166,7 +166,7 @@ Open your browser to: **http://localhost:8080**
 ### 2. Command-Line Options
 ```text
   -port int        HTTP and WebSocket server port (default 8080)
-  -host string     Host address to bind (default "0.0.0.0")
+  -host string     Host address to bind (default "127.0.0.1"; 0.0.0.0 exposes the mic and controls to the LAN, unauthenticated)
   -engine string   Speech engine: 'simulator' or 'sherpa' (default "simulator")
   -models string   Directory containing Sherpa-ONNX model files (default "models")
   -ui string       Directory containing static web UI assets (default "web")

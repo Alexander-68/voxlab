@@ -17,7 +17,7 @@ import (
 
 func main() {
 	portFlag := flag.Int("port", 8080, "HTTP and WebSocket server port")
-	hostFlag := flag.String("host", "0.0.0.0", "Host address to bind")
+	hostFlag := flag.String("host", "127.0.0.1", "Host address to bind (0.0.0.0 exposes the mic and controls to the LAN, unauthenticated)")
 	configFlag := flag.String("config", "config.json", "Path to config file")
 	engineFlag := flag.String("engine", "simulator", "Speech engine: 'simulator' or 'sherpa'")
 	modelsFlag := flag.String("models", "models", "Directory containing Sherpa-ONNX model files")
@@ -40,13 +40,16 @@ func main() {
 	if *portFlag != 8080 || cfg.Port == 0 {
 		cfg.Port = *portFlag
 	}
-	if *hostFlag != "0.0.0.0" || cfg.Host == "" {
+	if cfg.Host == "" {
 		cfg.Host = *hostFlag
 	}
 	engineExplicit := false
 	flag.Visit(func(f *flag.Flag) {
 		if f.Name == "engine" {
 			engineExplicit = true
+		}
+		if f.Name == "host" {
+			cfg.Host = *hostFlag
 		}
 	})
 
