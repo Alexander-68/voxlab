@@ -17,6 +17,7 @@ import (
 	"voxlab/pkg/audio"
 	"voxlab/pkg/config"
 	"voxlab/pkg/engine"
+	"voxlab/pkg/evaluation"
 	"voxlab/pkg/intent"
 	"voxlab/pkg/statemachine"
 	"voxlab/pkg/tts"
@@ -70,6 +71,16 @@ type Server struct {
 
 	meterMu       sync.Mutex
 	lastMeterTime time.Time
+
+	evalMu       sync.Mutex
+	evalRunning  bool
+	evalCancel   context.CancelFunc
+	evalTier     string
+	evalProgress int
+	evalTotal    int
+	lastEvalItem *evaluation.ItemResult
+	lastReport   *evaluation.SuiteReport
+	evalRunner   *evaluation.EvalRunner
 }
 
 type asrWorkItem struct {
@@ -180,6 +191,7 @@ func NewServer(cfg *config.AppConfig) (*Server, error) {
 		})
 	})
 
+	s.evalRunner = evaluation.NewEvalRunner(s.HandleWebSocket)
 	return s, nil
 }
 
@@ -196,7 +208,8 @@ func (s *Server) Start() error {
 
 	mux := http.NewServeMux()
 
-	// Static Web UI
+	// Static Web UI & Evaluation Assets
+	mux.Handle("/data/", http.StripPrefix("/data/", http.FileServer(http.Dir("data"))))
 	mux.Handle("/", http.FileServer(http.Dir(s.cfg.StaticDir)))
 
 	// WebSocket IPC
@@ -208,6 +221,10 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/voices", s.handleVoices)
 	mux.HandleFunc("/api/models", s.handleModels)
 	mux.HandleFunc("/api/tts", s.handleTTS)
+	mux.HandleFunc("/api/eval/status", s.handleEvalStatus)
+	mux.HandleFunc("/api/eval/start", s.handleEvalStart)
+	mux.HandleFunc("/api/eval/cancel", s.handleEvalCancel)
+	mux.HandleFunc("/api/eval/report", s.handleEvalReport)
 
 	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
 	s.httpServer = &http.Server{
@@ -863,6 +880,17 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 						},
 					})
 				}
+
+			case "eval.start":
+				tier, _ := req["tier"].(string)
+				go func() {
+					if err := s.StartEvaluation(tier); err != nil {
+						log.Printf("[Evaluation] Could not start evaluation: %v", err)
+					}
+				}()
+
+			case "eval.cancel":
+				s.CancelEvaluation()
 
 			case "set_kws_enable":
 				if en, ok := req["enabled"].(bool); ok {

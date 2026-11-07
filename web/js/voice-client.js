@@ -189,4 +189,12 @@ class VoiceClient {
   setAsrEngine(engine) {
     this.sendAction('set_asr_engine', { engine });
   }
+
+  startEvaluation(tier = 'tier-2-deep-matrix') {
+    this.sendAction('eval.start', { tier });
+  }
+
+  cancelEvaluation() {
+    this.sendAction('eval.cancel');
+  }
 }

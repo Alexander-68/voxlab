@@ -35,7 +35,11 @@ Goal: medical terms (drugs, conditions, acronyms) appear correctly spelled in di
 - **ASR Second-Pass Engine**: Upgraded to **Parakeet Ultra** (`nemo-parakeet-tdt-0.6b-ultra-int8`).
 - **Second-Pass Mode Policy**: Independent controls for Command mode (disabled by default for instant 0ms execution) and Dictation mode (enabled by default for full-utterance refinement).
 - **Voice Input Language Selector**: Dynamic language selector (`auto`, `en-US`, `en-GB`, `es-ES`, `fr-FR`, `de-DE`, `it-IT`, `pt-BR`, `ja-JP`, `zh-CN`, `hi-IN`) wired to both Browser `SpeechRecognition.lang` and server ASR pipelines.
-- **Synthetic Round-Trip Acoustic Evaluation**: Implemented Tier-1 smoke test suite (`pkg/evaluation`) with 5 golden test cases testing Kokoro TTS audio round-trip against Nemotron-3.5 streaming, Parakeet Ultra 2nd pass, Intent Router, negation detection, and noise-floor gating.
+- **Synthetic Round-Trip Acoustic Evaluation (Tier 1 & Tier 2)**:
+  - **Tier 1 Smoke Suite**: 5 golden test cases verifying zero-regression pipeline health (~17s).
+  - **Tier 2 Deep Acoustic Matrix**: Full 66-clip acoustic benchmark matrix spanning 12+ Kokoro voices, British/American/Multilingual accents, speaking rates (0.8x - 1.3x), SNR degradation ladder (+20dB down to -5dB), mechanical typing clacks, room babble chatter, acoustic room reverb, and sub-gate noise suppression.
+  - **Metrics Engine**: Automated computation of WER, CER, Intent Accuracy, Rejection Precision, Gate Precision, SNR Degradation Curves, and acoustic latency percentiles (TTFT, silence endpoint delay, 2nd-pass refinement overhead, and round-trip turnaround).
+  - **CLI & Web UI Harness**: On-demand CLI runner (`cmd/eval_bench`) and interactive Web UI Dashboard (`🧪 Acoustic Benchmark` tab) with live progress streaming, KPI cards, SNR degradation table, latency waterfall percentiles, and sample audio playback.
 - **Engine**: Resident in-memory streaming daemon (`sherpa-onnx-online-websocket-server`) and offline second pass (`sherpa-onnx-offline-websocket-server`) running on 4 inference threads.
 - **Audio Pipeline**: Real-time Go audio loop decoupled from ASR worker thread; continuous 30Hz metering; high-quality linear resampler.
 - **Tests**: 100% of repository tests passing (`go test ./pkg/...`), including the new `pkg/evaluation` suite.

@@ -50,8 +50,30 @@ document.addEventListener('DOMContentLoaded', () => {
   // Tabs
   const tabBtnCommands = document.getElementById('tab-btn-commands');
   const tabBtnDictation = document.getElementById('tab-btn-dictation');
+  const tabBtnEval = document.getElementById('tab-btn-eval');
   const tabContentCommands = document.getElementById('tab-content-commands');
   const tabContentDictation = document.getElementById('tab-content-dictation');
+  const tabContentEval = document.getElementById('tab-content-eval');
+
+  // Benchmark Tab Elements
+  const btnRunTier2 = document.getElementById('btn-run-tier2');
+  const btnRunTier1 = document.getElementById('btn-run-tier1');
+  const btnCancelEval = document.getElementById('btn-cancel-eval');
+  const evalStatusBadge = document.getElementById('eval-status-badge');
+  const evalProgressBox = document.getElementById('eval-progress-box');
+  const evalProgressBar = document.getElementById('eval-progress-bar');
+  const evalCaseName = document.getElementById('eval-case-name');
+  const evalProgressText = document.getElementById('eval-progress-text');
+  const evalKpiPassRate = document.getElementById('eval-kpi-pass-rate');
+  const evalKpiWer = document.getElementById('eval-kpi-wer');
+  const evalKpiCer = document.getElementById('eval-kpi-cer');
+  const evalKpiIntentAcc = document.getElementById('eval-kpi-intent-acc');
+  const evalKpiTtft = document.getElementById('eval-kpi-ttft');
+  const evalSnrTbody = document.getElementById('eval-snr-tbody');
+  const evalLatencyTbody = document.getElementById('eval-latency-tbody');
+  const evalCasesTbody = document.getElementById('eval-cases-tbody');
+  const evalFilterVerdict = document.getElementById('eval-filter-verdict');
+  let cachedEvalReport = null;
 
   // ASR Engine Selector
   const asrEngineSelect = document.getElementById('asr-engine-select');
@@ -1632,54 +1654,223 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Tabs
-  tabBtnCommands.addEventListener('click', () => {
-    tabBtnCommands.classList.add('active');
-    tabBtnDictation.classList.remove('active');
-    tabContentCommands.classList.add('active');
-    tabContentDictation.classList.remove('active');
-    if (btnPttCommand) btnPttCommand.style.display = '';
-    // Re-enable Wake-Word Detector (KWS) in commands mode
-    if (kwsSettingsBox) {
-      kwsSettingsBox.classList.remove('section-disabled');
-      kwsSettingsBox.querySelectorAll('input, select, button').forEach((el) => { el.disabled = false; });
-      updateKwsValidation();
+  const setTabActive = (tab) => {
+    [tabBtnCommands, tabBtnDictation, tabBtnEval].forEach(b => { if (b) b.classList.remove('active'); });
+    [tabContentCommands, tabContentDictation, tabContentEval].forEach(c => { if (c) c.classList.remove('active'); });
+
+    if (tab === 'commands') {
+      if (tabBtnCommands) tabBtnCommands.classList.add('active');
+      if (tabContentCommands) tabContentCommands.classList.add('active');
+      if (btnPttCommand) btnPttCommand.style.display = '';
+      if (kwsSettingsBox) {
+        kwsSettingsBox.classList.remove('section-disabled');
+        kwsSettingsBox.querySelectorAll('input, select, button').forEach((el) => { el.disabled = false; });
+        updateKwsValidation();
+      }
+      if (kwsDisabledBadge) kwsDisabledBadge.classList.add('hidden');
+    } else if (tab === 'dictation') {
+      if (tabBtnDictation) tabBtnDictation.classList.add('active');
+      if (tabContentDictation) tabContentDictation.classList.add('active');
+      if (btnPttCommand) btnPttCommand.style.display = 'none';
+      if (kwsSettingsBox) {
+        kwsSettingsBox.classList.add('section-disabled');
+        kwsSettingsBox.querySelectorAll('input, select, button').forEach((el) => { el.disabled = true; });
+      }
+      if (kwsDisabledBadge) kwsDisabledBadge.classList.remove('hidden');
+    } else if (tab === 'eval') {
+      if (tabBtnEval) tabBtnEval.classList.add('active');
+      if (tabContentEval) tabContentEval.classList.add('active');
+      if (btnPttCommand) btnPttCommand.style.display = 'none';
     }
-    if (kwsDisabledBadge) {
-      kwsDisabledBadge.classList.add('hidden');
+  };
+
+  if (tabBtnCommands) tabBtnCommands.addEventListener('click', () => setTabActive('commands'));
+  if (tabBtnDictation) tabBtnDictation.addEventListener('click', () => setTabActive('dictation'));
+  if (tabBtnEval) tabBtnEval.addEventListener('click', () => setTabActive('eval'));
+
+  // Benchmark UI Actions
+  if (btnRunTier2) {
+    btnRunTier2.addEventListener('click', () => {
+      client.startEvaluation('tier-2-deep-matrix');
+    });
+  }
+  if (btnRunTier1) {
+    btnRunTier1.addEventListener('click', () => {
+      client.startEvaluation('tier-1-smoke');
+    });
+  }
+  if (btnCancelEval) {
+    btnCancelEval.addEventListener('click', () => {
+      client.cancelEvaluation();
+    });
+  }
+
+  function setEvalRunningUI(running, current = 0, total = 0, caseName = '') {
+    if (btnRunTier2) btnRunTier2.disabled = running;
+    if (btnRunTier1) btnRunTier1.disabled = running;
+    if (btnCancelEval) {
+      if (running) btnCancelEval.classList.remove('hidden');
+      else btnCancelEval.classList.add('hidden');
     }
-    // If browser mode and KWS is enabled, resume continuous wake word spotting
-    const currAsr = asrEngineSelect ? asrEngineSelect.value : 'sherpa';
-    if (currAsr === 'browser' && chkKwsEnable && chkKwsEnable.checked && (kwsKeywordInput ? kwsKeywordInput.value.trim().length > 0 : false)) {
-      browserTargetMode = 'command';
-      isPttActive = false;
-      try {
-        if (!isBrowserRecognizing && browserRecognizer) {
-          browserRecognizer.continuous = true;
-          browserRecognizer.start();
-        }
-      } catch (_) {}
+    if (evalProgressBox) {
+      if (running) evalProgressBox.classList.remove('hidden');
+      else setTimeout(() => evalProgressBox.classList.add('hidden'), 2500);
     }
+    if (evalStatusBadge) {
+      if (running) {
+        evalStatusBadge.className = 'badge badge-listen';
+        evalStatusBadge.textContent = `Running (${current}/${total})`;
+      } else {
+        evalStatusBadge.className = 'badge badge-ready';
+        evalStatusBadge.textContent = 'Completed';
+      }
+    }
+    if (evalCaseName && caseName) evalCaseName.textContent = caseName;
+    if (total > 0 && evalProgressBar && evalProgressText) {
+      const pct = Math.round((current / total) * 100);
+      evalProgressBar.style.width = `${pct}%`;
+      evalProgressText.textContent = `${current} / ${total} (${pct}%)`;
+    }
+  }
+
+  function renderEvalReport(rep) {
+    if (!rep) return;
+    cachedEvalReport = rep;
+
+    if (evalKpiPassRate) evalKpiPassRate.textContent = `${(rep.pass_rate * 100).toFixed(1)}%`;
+    if (evalKpiWer) evalKpiWer.textContent = rep.avg_wer.toFixed(2);
+    if (evalKpiCer) evalKpiCer.textContent = rep.avg_cer.toFixed(2);
+    if (evalKpiIntentAcc) evalKpiIntentAcc.textContent = `${(rep.intent_accuracy * 100).toFixed(1)}%`;
+    if (evalKpiTtft) {
+      const p95 = rep.latency_stats && rep.latency_stats.ttft ? rep.latency_stats.ttft.p95_ms : 0;
+      evalKpiTtft.textContent = `${p95} ms`;
+    }
+
+    // Render SNR Ladder
+    if (evalSnrTbody && rep.snr_curve) {
+      evalSnrTbody.innerHTML = rep.snr_curve.map(pt => {
+        let badgeClass = 'snr-clean';
+        if (pt.label.includes('+20') || pt.label.includes('+15')) badgeClass = 'snr-high';
+        else if (pt.label.includes('+10') || pt.label.includes('+5')) badgeClass = 'snr-mid';
+        else if (pt.label.includes('0') || pt.label.includes('-5')) badgeClass = 'snr-low';
+
+        return `<tr>
+          <td><span class="snr-badge ${badgeClass}">${escapeHtml(pt.label)}</span></td>
+          <td>${pt.count}</td>
+          <td style="color: ${pt.pass_rate >= 0.8 ? 'var(--success)' : 'var(--danger)'}; font-weight: 600;">${(pt.pass_rate * 100).toFixed(1)}%</td>
+          <td>${pt.avg_wer.toFixed(3)}</td>
+          <td>${pt.avg_cer.toFixed(3)}</td>
+          <td>${(pt.intent_accuracy * 100).toFixed(1)}%</td>
+          <td>${Math.round(pt.avg_latency_ms)} ms</td>
+        </tr>`;
+      }).join('');
+    }
+
+    // Render Latencies Table
+    if (evalLatencyTbody && rep.latency_stats) {
+      const ls = rep.latency_stats;
+      const rows = [
+        { name: 'TTFT (Time to First Token)', stats: ls.ttft },
+        { name: 'Silence Endpoint Delay', stats: ls.endpoint_delay },
+        { name: '2nd-Pass Refinement Overhead', stats: ls.second_pass },
+        { name: 'Total Turnaround Time', stats: ls.total_duration },
+      ];
+      evalLatencyTbody.innerHTML = rows.map(r => `<tr>
+        <td><strong>${escapeHtml(r.name)}</strong></td>
+        <td>${r.stats.avg_ms} ms</td>
+        <td>${r.stats.p50_ms} ms</td>
+        <td>${r.stats.p90_ms} ms</td>
+        <td style="color: var(--cyan); font-weight: 600;">${r.stats.p95_ms} ms</td>
+        <td>${r.stats.p99_ms} ms</td>
+        <td>${r.stats.max_ms} ms</td>
+      </tr>`).join('');
+    }
+
+    renderCasesTable();
+  }
+
+  function renderCasesTable() {
+    if (!evalCasesTbody || !cachedEvalReport || !cachedEvalReport.results) return;
+    const filter = evalFilterVerdict ? evalFilterVerdict.value : 'all';
+    const tier = cachedEvalReport.tier || 'tier-2-deep-matrix';
+    const subDir = (tier === 'tier-1-smoke') ? 'eval' : 'eval_tier2';
+
+    let items = cachedEvalReport.results;
+    if (filter === 'passed') items = items.filter(r => r.passed);
+    else if (filter === 'failed') items = items.filter(r => !r.passed);
+
+    evalCasesTbody.innerHTML = items.map((r, i) => {
+      const verdictBadge = r.passed
+        ? '<span class="badge badge-ready">PASS</span>'
+        : '<span class="badge badge-disconnected">FAIL</span>';
+
+      let conditionDesc = r.noise_type || 'clean';
+      if (r.snr_db !== undefined && r.snr_db !== null) {
+        conditionDesc = `${r.snr_db > 0 ? '+' : ''}${r.snr_db}dB (${r.noise_type || 'noise'})`;
+      }
+
+      const voiceDesc = `${r.voice || '--'} ${r.speaking_rate ? '(' + r.speaking_rate + 'x)' : ''}`;
+
+      return `<tr>
+        <td>${i + 1}</td>
+        <td><strong>${escapeHtml(r.id)}</strong></td>
+        <td><span class="badge badge-subtle">${escapeHtml(r.mode)}</span></td>
+        <td>${escapeHtml(voiceDesc)}</td>
+        <td><span class="snr-badge snr-clean">${escapeHtml(conditionDesc)}</span></td>
+        <td>WER: ${(r.wer || 0).toFixed(2)} / CER: ${(r.cer || 0).toFixed(2)}</td>
+        <td>${Math.round(r.duration / 1000000)} ms</td>
+        <td>${verdictBadge}</td>
+        <td>
+          <button class="btn-play-sample" onclick="new Audio('/data/test_samples/${subDir}/' + ('${escapeHtml(r.id)}'.toLowerCase().includes('t1_') ? '${escapeHtml(r.id)}'.toLowerCase() : ('${escapeHtml(r.id)}'.startsWith('T2_CLEAN_') ? 'base_' + '${escapeHtml(r.id)}'.replace('T2_CLEAN_', '').toLowerCase() : '${escapeHtml(r.id)}'.toLowerCase())) + '.wav').play()">▶️ Play</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  if (evalFilterVerdict) {
+    evalFilterVerdict.addEventListener('change', renderCasesTable);
+  }
+
+  // WebSocket IPC Event Listeners for Benchmark
+  client.on('eval.started', (data) => {
+    setEvalRunningUI(true, 0, data.total, 'Initializing...');
+    logEvent('eval.started', `Evaluation started: ${data.tier} (${data.total} items)`);
   });
 
-  tabBtnDictation.addEventListener('click', () => {
-    tabBtnDictation.classList.add('active');
-    tabBtnCommands.classList.remove('active');
-    tabContentDictation.classList.add('active');
-    tabContentCommands.classList.remove('active');
-    if (btnPttCommand) btnPttCommand.style.display = 'none';
-    // Visibly disable Wake-Word Detector (KWS) in dictation mode
-    if (kwsSettingsBox) {
-      kwsSettingsBox.classList.add('section-disabled');
-      kwsSettingsBox.querySelectorAll('input, select, button').forEach((el) => { el.disabled = true; });
-    }
-    if (kwsDisabledBadge) {
-      kwsDisabledBadge.classList.remove('hidden');
-    }
-    // Stop continuous command wake-word recognizer if running
-    if (browserTargetMode === 'command' && isBrowserRecognizing && browserRecognizer && !isDictationActive) {
-      try { browserRecognizer.stop(); } catch (_) {}
-    }
+  client.on('eval.progress', (data) => {
+    const res = data.result;
+    const desc = res ? `${res.id} (${res.passed ? 'PASS' : 'FAIL'})` : '';
+    setEvalRunningUI(true, data.current, data.total, desc);
   });
+
+  client.on('eval.completed', (data) => {
+    setEvalRunningUI(false, data.report.total_cases, data.report.total_cases, 'Completed');
+    renderEvalReport(data.report);
+    logEvent('eval.completed', `Benchmark finished: ${data.report.passed}/${data.report.total_cases} passed (${(data.report.pass_rate * 100).toFixed(1)}%)`);
+  });
+
+  client.on('eval.cancelled', () => {
+    setEvalRunningUI(false, 0, 0, 'Cancelled');
+    if (evalStatusBadge) {
+      evalStatusBadge.className = 'badge badge-disconnected';
+      evalStatusBadge.textContent = 'Cancelled';
+    }
+    logEvent('eval.cancelled', 'Active evaluation cancelled.');
+  });
+
+  // Load initial evaluation report if available on server
+  fetch('/api/eval/report?tier=tier-2-deep-matrix')
+    .then(r => r.ok ? r.json() : null)
+    .then(rep => {
+      if (rep) {
+        renderEvalReport(rep);
+        if (evalStatusBadge) {
+          evalStatusBadge.className = 'badge badge-ready';
+          evalStatusBadge.textContent = 'Report Loaded';
+        }
+      }
+    })
+    .catch(() => {});
 
   btnClearLog.addEventListener('click', () => {
     eventLog.innerHTML = '';

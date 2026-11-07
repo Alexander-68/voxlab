@@ -183,6 +183,7 @@
           <div class="tabs-nav">
             <button id="tab-btn-commands" class="tab-btn active">Voice Commands</button>
             <button id="tab-btn-dictation" class="tab-btn">Voice Dictations</button>
+            <button id="tab-btn-eval" class="tab-btn">🧪 Acoustic Benchmark</button>
           </div>
         </div>
 
@@ -359,6 +360,148 @@
                   <button id="btn-save-draft" class="btn btn-success">💾 Approve & Save</button>
                   <button id="btn-copy-draft" class="btn btn-secondary">📋 Copy</button>
                   <button id="btn-clear-draft" class="btn btn-danger">🗑️ Discard</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Acoustic Benchmark Tab Content -->
+          <div id="tab-content-eval" class="tab-content">
+            <!-- Benchmark Control Bar -->
+            <div class="eval-ctrl-bar mb-3">
+              <div class="eval-btn-group">
+                <button id="btn-run-tier2" class="btn btn-accent" title="Run 66-case Deep Acoustic Matrix">🚀 Run Tier 2 (Deep Matrix)</button>
+                <button id="btn-run-tier1" class="btn btn-secondary" title="Run 5-case Golden Smoke Suite">⚡ Run Tier 1 (Smoke)</button>
+                <button id="btn-cancel-eval" class="btn btn-danger hidden" title="Cancel running evaluation">⏹️ Cancel</button>
+              </div>
+              <div class="eval-status-display">
+                <span id="eval-status-badge" class="badge badge-idle">Ready</span>
+              </div>
+            </div>
+
+            <!-- Active Progress Indicator -->
+            <div id="eval-progress-box" class="eval-progress-container mb-3 hidden">
+              <div class="slider-header mb-1">
+                <span>Evaluating Acoustic Matrix: <strong id="eval-case-name" style="color: var(--cyan);">--</strong></span>
+                <span id="eval-progress-text" style="font-family: var(--font-mono); font-size: 11px;">0 / 66 (0%)</span>
+              </div>
+              <div class="eval-progress-track">
+                <div id="eval-progress-bar" class="eval-progress-fill"></div>
+              </div>
+            </div>
+
+            <!-- Executive KPI Cards -->
+            <div class="eval-kpi-grid mb-3">
+              <div class="eval-kpi-card">
+                <div class="eval-kpi-val" id="eval-kpi-pass-rate">--%</div>
+                <div class="eval-kpi-label">Pass Rate</div>
+              </div>
+              <div class="eval-kpi-card">
+                <div class="eval-kpi-val" id="eval-kpi-wer">--</div>
+                <div class="eval-kpi-label">Mean WER</div>
+              </div>
+              <div class="eval-kpi-card">
+                <div class="eval-kpi-val" id="eval-kpi-cer">--</div>
+                <div class="eval-kpi-label">Mean CER</div>
+              </div>
+              <div class="eval-kpi-card">
+                <div class="eval-kpi-val" id="eval-kpi-intent-acc">--%</div>
+                <div class="eval-kpi-label">Intent Acc</div>
+              </div>
+              <div class="eval-kpi-card">
+                <div class="eval-kpi-val" id="eval-kpi-ttft">-- ms</div>
+                <div class="eval-kpi-label">TTFT (p95)</div>
+              </div>
+            </div>
+
+            <!-- SNR Degradation Ladder Matrix -->
+            <div class="card mb-3">
+              <div class="card-header">
+                <span class="card-title">Acoustic SNR Degradation Ladder (+20dB down to -5dB)</span>
+                <span class="badge badge-subtle">Robo-Perturbation</span>
+              </div>
+              <div class="card-body p-0">
+                <div class="eval-table-container">
+                  <table class="eval-table" id="eval-snr-table">
+                    <thead>
+                      <tr>
+                        <th>SNR Tier</th>
+                        <th>Samples</th>
+                        <th>Pass Rate</th>
+                        <th>Avg WER</th>
+                        <th>Avg CER</th>
+                        <th>Intent Acc</th>
+                        <th>Avg Latency</th>
+                      </tr>
+                    </thead>
+                    <tbody id="eval-snr-tbody">
+                      <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 12px;">Run Tier 2 benchmark to compute SNR degradation curves.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Latency Waterfall Percentiles -->
+            <div class="card mb-3">
+              <div class="card-header">
+                <span class="card-title">Acoustic Latencies & Percentile Distribution</span>
+                <span class="badge badge-subtle">p50 / p90 / p95 / p99</span>
+              </div>
+              <div class="card-body p-0">
+                <div class="eval-table-container">
+                  <table class="eval-table" id="eval-latency-table">
+                    <thead>
+                      <tr>
+                        <th>Pipeline Stage</th>
+                        <th>Avg</th>
+                        <th>p50 (Median)</th>
+                        <th>p90</th>
+                        <th>p95</th>
+                        <th>p99</th>
+                        <th>Max</th>
+                      </tr>
+                    </thead>
+                    <tbody id="eval-latency-tbody">
+                      <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 12px;">Run benchmark to compute latency percentiles.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Test Cases Results Explorer -->
+            <div class="card mb-3">
+              <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="card-title">Detailed Evaluation Results Log</span>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <select id="eval-filter-verdict" class="form-control" style="font-size: 10px; height: 22px; padding: 1px 4px;">
+                    <option value="all">All Verdicts</option>
+                    <option value="passed">Passed Only</option>
+                    <option value="failed">Failed Only</option>
+                  </select>
+                </div>
+              </div>
+              <div class="card-body p-0">
+                <div class="eval-table-container eval-log-scroll">
+                  <table class="eval-table" id="eval-cases-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Test ID</th>
+                        <th>Mode</th>
+                        <th>Voice & Speed</th>
+                        <th>Acoustic Condition</th>
+                        <th>WER / CER</th>
+                        <th>Latency</th>
+                        <th>Verdict</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody id="eval-cases-tbody">
+                      <tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 12px;">No evaluation results yet. Click a button above to run.</td></tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>

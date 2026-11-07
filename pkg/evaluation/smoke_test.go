@@ -1,4 +1,4 @@
-package evaluation
+package evaluation_test
 
 import (
 	"context"
@@ -8,12 +8,13 @@ import (
 
 	"voxlab/pkg/config"
 	"voxlab/pkg/engine"
+	"voxlab/pkg/evaluation"
 	"voxlab/pkg/server"
 )
 
 func TestTier1SmokeSuite(t *testing.T) {
 	manifestPath := filepath.Join("..", "..", "data", "test_samples", "eval", "manifest.json")
-	manifest, err := LoadManifest(manifestPath)
+	manifest, err := evaluation.LoadManifest(manifestPath)
 	if err != nil {
 		t.Fatalf("failed loading Tier-1 manifest: %v", err)
 	}
@@ -54,13 +55,13 @@ func TestTier1SmokeSuite(t *testing.T) {
 	srv.StartBackgroundLoops()
 
 	evalDir := filepath.Join("..", "..", "data", "test_samples", "eval")
-	evalRunner := NewEvalRunner(srv)
+	evalRunner := evaluation.NewEvalRunner(srv.HandleWebSocket)
 
 	t.Logf("=== Starting Tier-1 Smoke Suite (%d cases) ===", len(manifest.Items))
 
 	passedCount := 0
 	for _, item := range manifest.Items {
-		wavPath := ResolveWavPath(evalDir, item)
+		wavPath := evaluation.ResolveWavPath(evalDir, item)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		res, err := evalRunner.EvaluateItem(ctx, item, wavPath)
@@ -89,17 +90,17 @@ func TestTier1SmokeSuite(t *testing.T) {
 
 func TestCalculateWER(t *testing.T) {
 	// Identical
-	if wer := CalculateWER("open settings", "open settings"); wer != 0.0 {
+	if wer := evaluation.CalculateWER("open settings", "open settings"); wer != 0.0 {
 		t.Errorf("expected 0.0 WER for identical strings, got %f", wer)
 	}
 
 	// 1 substitution out of 2 words = 0.5
-	if wer := CalculateWER("open settings", "open window"); wer != 0.5 {
+	if wer := evaluation.CalculateWER("open settings", "open window"); wer != 0.5 {
 		t.Errorf("expected 0.5 WER for 1 substitution, got %f", wer)
 	}
 
 	// Case & punctuation normalization
-	if wer := CalculateWER("Open settings!", "open settings"); wer != 0.0 {
+	if wer := evaluation.CalculateWER("Open settings!", "open settings"); wer != 0.0 {
 		t.Errorf("expected 0.0 WER after normalization, got %f", wer)
 	}
 }

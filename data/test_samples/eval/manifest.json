@@ -10,7 +10,7 @@
       "voice": "af_heart",
       "expected": "NAV_SETTINGS",
       "wav_file": "t1_cmd_settings.wav",
-      "duration_sec": 2.4944375
+      "duration_sec": 2.4939375
     },
     {
       "id": "T1_CMD_START_REC",
@@ -30,7 +30,7 @@
       "voice": "af_heart",
       "expected": "REJECT:NEGATION_DETECTED",
       "wav_file": "t1_cmd_negation.wav",
-      "duration_sec": 2.8771875
+      "duration_sec": 2.8711875
     },
     {
       "id": "T1_DICT_BENCH",
