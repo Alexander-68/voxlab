@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -85,5 +86,72 @@ func TestRESTRejectsCrossSiteRequests(t *testing.T) {
 	}
 	if got := do(http.MethodGet, "/api/config", map[string]string{"Host": "localhost:8080"}); got != http.StatusOK {
 		t.Errorf("localhost Host: got %d, want 200", got)
+	}
+}
+
+// A client that stops reading must be dropped without delaying broadcasts to anyone else.
+func TestStalledClientDoesNotBlockBroadcast(t *testing.T) {
+	srv := setupTestServer(t)
+	ts := httptest.NewServer(srv.routes())
+	defer ts.Close()
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
+
+	stalled, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stalled.Close() // never read from
+
+	healthy, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer healthy.Close()
+
+	gotSentinel := make(chan struct{})
+	go func() {
+		for {
+			kind, data, err := healthy.ReadMessage()
+			if err != nil {
+				return
+			}
+			if kind == websocket.TextMessage && strings.Contains(string(data), "sentinel") {
+				close(gotSentinel)
+				return
+			}
+		}
+	}()
+
+	clientCount := func() int {
+		srv.clientsMu.RLock()
+		defer srv.clientsMu.RUnlock()
+		return len(srv.clients)
+	}
+	for clientCount() < 2 {
+		time.Sleep(time.Millisecond)
+	}
+
+	frame := make([]byte, 128*1024)
+	start := time.Now()
+	for range 1000 {
+		srv.BroadcastBinary(frame)
+		time.Sleep(time.Millisecond)
+	}
+	srv.BroadcastJSON(map[string]string{"event": "sentinel"})
+	if d := time.Since(start); d > 10*time.Second {
+		t.Fatalf("broadcasts took %v", d)
+	}
+
+	select {
+	case <-gotSentinel:
+	case <-time.After(5 * time.Second):
+		t.Fatal("healthy client stopped receiving")
+	}
+	deadline := time.Now().Add(wsWriteTimeout + time.Second)
+	for clientCount() != 1 {
+		if time.Now().After(deadline) {
+			t.Fatalf("stalled client was not dropped: %d clients", clientCount())
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

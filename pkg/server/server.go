@@ -55,7 +55,7 @@ type Server struct {
 	cancel context.CancelFunc
 
 	clientsMu sync.RWMutex
-	clients   map[*websocket.Conn]*sync.Mutex
+	clients   map[*wsClient]struct{}
 
 	monitorMu      sync.RWMutex
 	monitorEnabled bool
@@ -145,7 +145,7 @@ func NewServer(cfg *config.AppConfig) (*Server, error) {
 		inputLanguage: cfg.Audio.InputLanguage,
 		ctx:           ctx,
 		cancel:        cancel,
-		clients:       make(map[*websocket.Conn]*sync.Mutex),
+		clients:       make(map[*wsClient]struct{}),
 	}
 
 	// Surface each second-pass correction so the bench shows first-pass vs refined text and its cost.
@@ -724,20 +724,21 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[Error] WS Upgrade: %v", err)
 		return
 	}
-	defer conn.Close()
+	client := newWSClient(conn)
+	defer client.close()
+	go client.writeLoop()
 
-	connMu := &sync.Mutex{}
 	s.clientsMu.Lock()
-	s.clients[conn] = connMu
+	s.clients[client] = struct{}{}
 	s.clientsMu.Unlock()
 
 	defer func() {
 		s.clientsMu.Lock()
-		delete(s.clients, conn)
+		delete(s.clients, client)
 		s.clientsMu.Unlock()
 	}()
 
-	// Send initial state snapshot safely under connMu (gather state outside connMu to avoid lock inversion)
+	// Send initial state snapshot
 	ttsModel, isNeural := s.ttsMgr.ActiveModel()
 	asrInfo := s.asrModelInfo()
 	stateMsg := map[string]interface{}{
@@ -757,9 +758,9 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			"asr_models":      asrInfo,
 		},
 	}
-	connMu.Lock()
-	_ = conn.WriteJSON(stateMsg)
-	connMu.Unlock()
+	if data, err := json.Marshal(stateMsg); err == nil {
+		client.enqueue(wsFrame{websocket.TextMessage, data})
+	}
 
 	for {
 		messageType, payload, err := conn.ReadMessage()
@@ -1191,44 +1192,84 @@ func (s *Server) ActiveEngine() engine.SpeechEngine {
 	return s.engine
 }
 
+const (
+	wsSendQueue    = 256 // about 4 s of meter and monitor traffic
+	wsWriteTimeout = 5 * time.Second
+)
+
+type wsFrame struct {
+	kind int
+	data []byte
+}
+
+// wsClient owns all writes to one connection. Broadcasters only enqueue, so a client
+// that stops reading can never stall the audio, ASR, or TTS goroutines.
+type wsClient struct {
+	conn      *websocket.Conn
+	send      chan wsFrame
+	done      chan struct{}
+	closeOnce sync.Once
+}
+
+func newWSClient(conn *websocket.Conn) *wsClient {
+	return &wsClient{conn: conn, send: make(chan wsFrame, wsSendQueue), done: make(chan struct{})}
+}
+
+// close also unblocks the connection's read loop, which then deregisters the client.
+func (c *wsClient) close() {
+	c.closeOnce.Do(func() {
+		close(c.done)
+		_ = c.conn.Close()
+	})
+}
+
+// enqueue disconnects a client whose queue is full. The UI reconnects by itself,
+// whereas silently dropping frames would lose state events.
+func (c *wsClient) enqueue(f wsFrame) {
+	select {
+	case c.send <- f:
+	default:
+		log.Printf("[Warning] Disconnecting slow WebSocket client %s", c.conn.RemoteAddr())
+		c.close()
+	}
+}
+
+func (c *wsClient) writeLoop() {
+	for {
+		select {
+		case <-c.done:
+			return
+		case f := <-c.send:
+			_ = c.conn.SetWriteDeadline(time.Now().Add(wsWriteTimeout))
+			if err := c.conn.WriteMessage(f.kind, f.data); err != nil {
+				c.close()
+				return
+			}
+		}
+	}
+}
+
+func (s *Server) broadcast(f wsFrame) {
+	s.clientsMu.RLock()
+	defer s.clientsMu.RUnlock()
+	for c := range s.clients {
+		c.enqueue(f)
+	}
+}
+
 // BroadcastJSON sends a JSON event to all connected WebSocket clients.
 func (s *Server) BroadcastJSON(v interface{}) {
-	s.clientsMu.RLock()
-	type clientTarget struct {
-		conn *websocket.Conn
-		mu   *sync.Mutex
+	data, err := json.Marshal(v)
+	if err != nil {
+		log.Printf("[Error] Failed encoding broadcast: %v", err)
+		return
 	}
-	targets := make([]clientTarget, 0, len(s.clients))
-	for client, mu := range s.clients {
-		targets = append(targets, clientTarget{conn: client, mu: mu})
-	}
-	s.clientsMu.RUnlock()
-
-	for _, t := range targets {
-		t.mu.Lock()
-		_ = t.conn.WriteJSON(v)
-		t.mu.Unlock()
-	}
+	s.broadcast(wsFrame{websocket.TextMessage, data})
 }
 
 // BroadcastBinary sends raw binary message (e.g. PCM audio) to all connected WebSocket clients.
 func (s *Server) BroadcastBinary(data []byte) {
-	s.clientsMu.RLock()
-	type clientTarget struct {
-		conn *websocket.Conn
-		mu   *sync.Mutex
-	}
-	targets := make([]clientTarget, 0, len(s.clients))
-	for client, mu := range s.clients {
-		targets = append(targets, clientTarget{conn: client, mu: mu})
-	}
-	s.clientsMu.RUnlock()
-
-	for _, t := range targets {
-		t.mu.Lock()
-		_ = t.conn.WriteMessage(websocket.BinaryMessage, data)
-		t.mu.Unlock()
-	}
+	s.broadcast(wsFrame{websocket.BinaryMessage, data})
 }
 
 // REST Handlers
