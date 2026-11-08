@@ -17,3 +17,7 @@ Thumbs.db
 log.txt
 *.log
 data/annotation_log.jsonl
+
+# Graphify cache and machine-local sidecars
+graphify-out/cache/
+graphify-out/.*
