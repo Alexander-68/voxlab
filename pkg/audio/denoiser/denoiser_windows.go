@@ -1,6 +1,6 @@
 //go:build windows
 
-package audio
+package denoiser
 
 import (
 	"fmt"
@@ -143,7 +143,6 @@ func newPlatformSpeechEnhancer(dllDir string, modelDir string, cfg config.Enhanc
 
 	// Attempt to initialize model
 	if err := enhancer.initModel(modelType, cfg.ModelPath); err != nil {
-		// Log warning, but keep enhancer initialized so user can toggle later
 		log.Printf("[SpeechEnhancer] Initial model load failed (%v); will stay standby", err)
 	}
 
@@ -191,7 +190,7 @@ func (w *windowsSpeechEnhancer) initModel(modelType string, preferredPath string
 	}
 
 	var keep [][]byte
-	defer runtime.KeepAlive(keep) // native calls only receive uintptrs, which do not retain the bytes
+	defer runtime.KeepAlive(keep)
 	var cfg cOnlineSpeechDenoiserConfig
 	cfg.Model.NumThreads = int32(w.numThreads)
 	cfg.Model.Provider = toCStringEnhancer(w.provider, &keep)
@@ -243,7 +242,6 @@ func (w *windowsSpeechEnhancer) primeWithSilence() {
 	}
 	w.fifo = w.fifo[:0]
 
-	// Feed 2 * frameShift of silence so network receptive field is warmed
 	primeSamples := make([]float32, 2*w.frameShift)
 	outPtr, _, _ := w.runFn.Call(
 		w.handle,
@@ -356,8 +354,6 @@ func (w *windowsSpeechEnhancer) ProcessChunk(chunk []float32) []float32 {
 		return out
 	}
 
-	// If FIFO doesn't yet have enough samples (warming phase), pad with available samples
-	// and fallback to original chunk elements to guarantee no sample starvation
 	out := make([]float32, needed)
 	have := len(w.fifo)
 	if have > 0 {
@@ -389,6 +385,4 @@ func (w *windowsSpeechEnhancer) Close() error {
 	return nil
 }
 
-// cPtr views a C-owned address as *T. Going through &p keeps go vet quiet: the
-// memory is not Go heap, so the uintptr-to-pointer rule it enforces does not apply.
 func cPtr[T any](p uintptr) *T { return *(**T)(unsafe.Pointer(&p)) }

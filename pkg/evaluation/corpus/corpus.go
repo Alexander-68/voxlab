@@ -1,4 +1,4 @@
-package evaluation
+package corpus
 
 import (
 	"encoding/json"
@@ -6,15 +6,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"unicode"
+
+	"voxlab/pkg/evaluation/metrics"
 )
 
 // TestCaseMode specifies whether audio is evaluated as a command or dictation.
-type TestCaseMode string
+type TestCaseMode = metrics.TestCaseMode
 
 const (
-	ModeCommand   TestCaseMode = "command"
-	ModeDictation TestCaseMode = "dictation"
+	ModeCommand   = metrics.ModeCommand
+	ModeDictation = metrics.ModeDictation
 )
 
 // EvalItem matches manifest item structure.
@@ -43,9 +44,9 @@ const DefaultMaxErrorRate = 0.35
 // boundaries, otherwise WER. A key term in the draft is reported but cannot rescue a bad transcript.
 func ScoreDictation(item EvalItem, draft string) (errorRate float64, passed, keyTermHit bool) {
 	ref := BestReference(item, draft)
-	errorRate = CalculateWER(ref, draft)
-	if strings.ContainsFunc(ref, isCJK) {
-		errorRate = CalculateCER(ref, draft)
+	errorRate = metrics.CalculateWER(ref, draft)
+	if strings.ContainsFunc(ref, metrics.IsCJK) {
+		errorRate = metrics.CalculateCER(ref, draft)
 	}
 	limit := DefaultMaxErrorRate
 	if item.MaxErrorRate != nil {
@@ -58,7 +59,7 @@ func ScoreDictation(item EvalItem, draft string) (errorRate float64, passed, key
 // BestReference picks the accepted wording closest to the hypothesis. Models write numbers and units
 // their own way, and "2 mg" for "two milligrams" is not a recognition error.
 func BestReference(item EvalItem, hypothesis string) string {
-	if item.AltText != "" && CalculateWER(item.AltText, hypothesis) < CalculateWER(item.Text, hypothesis) {
+	if item.AltText != "" && metrics.CalculateWER(item.AltText, hypothesis) < metrics.CalculateWER(item.Text, hypothesis) {
 		return item.AltText
 	}
 	return item.Text
@@ -87,111 +88,4 @@ func LoadManifest(path string) (*EvalManifest, error) {
 // ResolveWavPath gets the full path to a test WAV file relative to a manifest directory.
 func ResolveWavPath(manifestDir string, item EvalItem) string {
 	return filepath.Join(manifestDir, item.WavFile)
-}
-
-// CalculateWER computes Word Error Rate between a reference string and hypothesis string.
-func CalculateWER(reference, hypothesis string) float64 {
-	refWords := normalizeAndSplitWords(reference)
-	hypWords := normalizeAndSplitWords(hypothesis)
-
-	if len(refWords) == 0 {
-		if len(hypWords) == 0 {
-			return 0.0
-		}
-		return 1.0
-	}
-
-	d := make([][]int, len(refWords)+1)
-	for i := range d {
-		d[i] = make([]int, len(hypWords)+1)
-		d[i][0] = i
-	}
-	for j := range d[0] {
-		d[0][j] = j
-	}
-
-	for i := 1; i <= len(refWords); i++ {
-		for j := 1; j <= len(hypWords); j++ {
-			cost := 1
-			if refWords[i-1] == hypWords[j-1] {
-				cost = 0
-			}
-			d[i][j] = min(
-				d[i-1][j]+1,      // deletion
-				d[i][j-1]+1,      // insertion
-				d[i-1][j-1]+cost, // substitution
-			)
-		}
-	}
-
-	return float64(d[len(refWords)][len(hypWords)]) / float64(len(refWords))
-}
-
-// CalculateCER computes Character Error Rate between a reference string and hypothesis string.
-func CalculateCER(reference, hypothesis string) float64 {
-	refRunes := normalizeAndFilterRunes(reference)
-	hypRunes := normalizeAndFilterRunes(hypothesis)
-
-	if len(refRunes) == 0 {
-		if len(hypRunes) == 0 {
-			return 0.0
-		}
-		return 1.0
-	}
-
-	d := make([][]int, len(refRunes)+1)
-	for i := range d {
-		d[i] = make([]int, len(hypRunes)+1)
-		d[i][0] = i
-	}
-	for j := range d[0] {
-		d[0][j] = j
-	}
-
-	for i := 1; i <= len(refRunes); i++ {
-		for j := 1; j <= len(hypRunes); j++ {
-			cost := 1
-			if refRunes[i-1] == hypRunes[j-1] {
-				cost = 0
-			}
-			d[i][j] = min(
-				d[i-1][j]+1,      // deletion
-				d[i][j-1]+1,      // insertion
-				d[i-1][j-1]+cost, // substitution
-			)
-		}
-	}
-
-	return float64(d[len(refRunes)][len(hypRunes)]) / float64(len(refRunes))
-}
-
-func isCJK(r rune) bool {
-	return unicode.Is(unicode.Han, r) ||
-		unicode.Is(unicode.Hiragana, r) ||
-		unicode.Is(unicode.Katakana, r) ||
-		unicode.Is(unicode.Hangul, r)
-}
-
-func normalizeAndSplitWords(s string) []string {
-	var clean strings.Builder
-	for _, r := range strings.ToLower(s) {
-		if isCJK(r) {
-			clean.WriteRune(' ')
-			clean.WriteRune(r)
-			clean.WriteRune(' ')
-		} else if unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsSpace(r) {
-			clean.WriteRune(r)
-		}
-	}
-	return strings.Fields(clean.String())
-}
-
-func normalizeAndFilterRunes(s string) []rune {
-	var out []rune
-	for _, r := range strings.ToLower(s) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			out = append(out, r)
-		}
-	}
-	return out
 }

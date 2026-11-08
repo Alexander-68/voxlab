@@ -18,6 +18,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"voxlab/pkg/audio"
+	"voxlab/pkg/audio/denoiser"
 	"voxlab/pkg/config"
 	"voxlab/pkg/engine"
 	"voxlab/pkg/evaluation"
@@ -36,7 +37,7 @@ type Server struct {
 	cfg           *config.AppConfig
 	httpServer    *http.Server
 	dsp           *audio.DSPProcessor
-	enhancer      audio.SpeechEnhancer
+	enhancer      denoiser.SpeechEnhancer
 	ringBuffer    *audio.RingBuffer
 	stateMachine  *statemachine.StateMachine
 	engine        engine.SpeechEngine
@@ -135,7 +136,7 @@ func NewServer(cfg *config.AppConfig) (*Server, error) {
 	ttsMgr := tts.NewTTSManager(sherpaRunner, dsp)
 	webMic := audio.NewWebSocketSource()
 	hostMic := audio.NewHostNativeSource(cfg.Audio.SampleRate, cfg.Audio.ChunkSamples)
-	enhancer := audio.NewSpeechEnhancer(filepath.Join("bin"), cfg.Engine.ModelDir, cfg.Audio.Enhancer)
+	enhancer := denoiser.NewSpeechEnhancer(filepath.Join("bin"), cfg.Engine.ModelDir, cfg.Audio.Enhancer)
 
 	ctx, cancel := context.WithCancel(context.Background())
 

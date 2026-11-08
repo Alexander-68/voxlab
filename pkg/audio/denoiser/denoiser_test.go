@@ -1,4 +1,4 @@
-package audio
+package denoiser
 
 import (
 	"math"
@@ -34,12 +34,12 @@ func TestSpeechEnhancerFactoryAndProcessing(t *testing.T) {
 	cfg := config.EnhancerConfig{
 		Enabled:    true,
 		ModelType:  "gtcrn",
-		ModelPath:  "../../models/gtcrn_simple.onnx",
+		ModelPath:  "../../../models/gtcrn_simple.onnx",
 		NumThreads: 1,
 		Provider:   "cpu",
 	}
 
-	enhancer := NewSpeechEnhancer("../../bin", "../../models", cfg)
+	enhancer := NewSpeechEnhancer("../../../bin", "../../../models", cfg)
 	if enhancer == nil {
 		t.Fatalf("enhancer must not be nil")
 	}
@@ -59,19 +59,22 @@ func TestSpeechEnhancerFactoryAndProcessing(t *testing.T) {
 		}
 
 		out := enhancer.ProcessChunk(chunk)
-		if len(out) != 480 {
-			t.Errorf("expected 480 samples output, got %d", len(out))
+		if len(out) != len(chunk) {
+			t.Fatalf("expected output len %d, got %d", len(chunk), len(out))
 		}
 
-		// Test switching to dpdfnet if available
-		if _, err := os.Stat("../../models/dpdfnet_baseline.onnx"); err == nil {
-			err := enhancer.SwitchModel("dpdfnet")
-			if err != nil {
-				t.Errorf("SwitchModel(dpdfnet) failed: %v", err)
+		// Verify model switching to dpdfnet if present
+		dpdfPath := "../../../models/dpdfnet_baseline.onnx"
+		if _, err := os.Stat(dpdfPath); err == nil {
+			if err := enhancer.SwitchModel("dpdfnet"); err != nil {
+				t.Fatalf("failed switching to dpdfnet: %v", err)
+			}
+			if enhancer.ModelType() != "dpdfnet" {
+				t.Fatalf("expected dpdfnet, got %s", enhancer.ModelType())
 			}
 			out2 := enhancer.ProcessChunk(chunk)
-			if len(out2) != 480 {
-				t.Errorf("expected 480 samples output for dpdfnet, got %d", len(out2))
+			if len(out2) != len(chunk) {
+				t.Fatalf("expected output len %d for dpdfnet, got %d", len(chunk), len(out2))
 			}
 		}
 	}

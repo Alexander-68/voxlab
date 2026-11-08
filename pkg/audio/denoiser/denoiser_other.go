@@ -1,6 +1,6 @@
 //go:build !windows
 
-package audio
+package denoiser
 
 import (
 	"voxlab/pkg/config"

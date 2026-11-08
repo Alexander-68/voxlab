@@ -17,35 +17,6 @@ import (
 	"voxlab/pkg/audio"
 )
 
-// ItemResult contains the evaluation verdict and metrics for one test item.
-type ItemResult struct {
-	ID                string        `json:"id"`
-	Description       string        `json:"description"`
-	Mode              TestCaseMode  `json:"mode"`
-	Voice             string        `json:"voice,omitempty"`
-	SpeakingRate      float64       `json:"speaking_rate,omitempty"`
-	SNR               *float64      `json:"snr_db,omitempty"`
-	NoiseType         string        `json:"noise_type,omitempty"`
-	Accent            string        `json:"accent,omitempty"`
-	WavFile           string        `json:"wav_file,omitempty"`
-	Passed            bool          `json:"passed"`
-	Transcript        string        `json:"transcript"`
-	IntentID          string        `json:"intent_id,omitempty"`
-	Confidence        float64       `json:"confidence,omitempty"`
-	Class             string        `json:"class,omitempty"`    // what the item expects: "ACCEPT", "REJECT", "SILENCE"
-	Decision          string        `json:"decision,omitempty"` // what the pipeline did, same values
-	Reason            string        `json:"reason,omitempty"`
-	WER               float64       `json:"wer"`
-	CER               float64       `json:"cer"`
-	Duration          time.Duration `json:"duration"`
-	TTFT              time.Duration `json:"ttft"`
-	EndpointDelay     time.Duration `json:"endpoint_delay"`
-	SecondPassLatency time.Duration `json:"second_pass_latency"`
-	Error             string        `json:"error,omitempty"`
-	KeyTermHit        bool          `json:"key_term_hit,omitempty"`
-	DroppedChunks     int           `json:"dropped_chunks,omitempty"`
-}
-
 const (
 	sampleRate    = 16000
 	chunkSamples  = 480 // 30 ms

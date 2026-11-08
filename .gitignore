@@ -21,3 +21,4 @@ data/annotation_log.jsonl
 # Graphify cache and machine-local sidecars
 graphify-out/cache/
 graphify-out/.*
+graphify-out/20*/

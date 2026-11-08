@@ -1,4 +1,4 @@
-package evaluation
+﻿package corpus
 
 import (
 	"bytes"
@@ -712,6 +712,8 @@ func BuildTier2MatrixDefinitions() ([]BaseUtterance, map[string][]MatrixVariatio
 }
 
 // scaleToDBFS sets the level of the loudest 30 ms chunk, which is what the noise gate reacts to.
+const chunkSamples = 480
+
 func scaleToDBFS(samples []float32, dbfs float64) {
 	var peak float64
 	for i := 0; i < len(samples); i += chunkSamples {
@@ -912,3 +914,70 @@ func GenerateTier2Corpus(outDir string, runner engine.SpeechEngine) (*EvalManife
 	log.Printf("[Tier2 Generator] Successfully created %d test items in %s", len(manifest.Items), outDir)
 	return manifest, nil
 }
+
+// GenerateTier1Corpus generates the Tier-1 smoke test corpus and manifest.
+func GenerateTier1Corpus(outDir string, runner engine.SpeechEngine) (*EvalManifest, error) {
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		return nil, err
+	}
+	exact := 0.0
+	cases := []EvalItem{
+		{ID: "T1_CMD_SETTINGS", Description: "Command: Open Settings (US Female voice)", Mode: ModeCommand,
+			Text: "open settings", Voice: "af_heart", Expected: "NAV_SETTINGS", WavFile: "t1_cmd_settings.wav"},
+		{ID: "T1_CMD_START_REC", Description: "Command: Start Recording (US Male voice)", Mode: ModeCommand,
+			Text: "start recording", Voice: "am_adam", Expected: "START_RECORDING", WavFile: "t1_cmd_start_recording.wav"},
+		{ID: "T1_CMD_NEGATION", Description: "Command: Negation Rejection (US Female voice)", Mode: ModeCommand,
+			Text: "do not stop recording", Voice: "af_heart", Expected: "REJECT:NEGATION_DETECTED", WavFile: "t1_cmd_negation.wav"},
+		{ID: "T1_DICT_BENCH", Description: "Dictation: Technical phrase (British Female voice)", Mode: ModeDictation,
+			Text: "The voice pipeline test bench is operational and ready.", Voice: "bf_emma", Expected: "pipeline test bench",
+			MaxErrorRate: &exact, WavFile: "t1_dict_bench.wav"},
+	}
+
+	manifest := &EvalManifest{Version: "1.0", Tier: "tier-1-smoke"}
+	for _, c := range cases {
+		samples, err := LoadOrSynthesizeClip(filepath.Join(outDir, c.WavFile), runner, engine.TTSRequest{
+			Text: c.Text, Voice: c.Voice, Speed: 1.0, SampleRate: 24000,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", c.ID, err)
+		}
+		c.DurationSec = float64(len(samples)) / 16000.0
+		manifest.Items = append(manifest.Items, c)
+	}
+
+	// Low-level hiss plus faint periodic clicks, both below the gate.
+	noise := make([]float32, 16000*2)
+	for i := range noise {
+		noise[i] = float32((float64(i%997)/997.0 - 0.5) * 0.006)
+		if i%3200 == 0 {
+			noise[i] += 0.015
+		}
+	}
+	noiseBytes, err := audio.EncodeWAV(noise, 16000)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "t1_noise_below_gate.wav"), noiseBytes, 0644); err != nil {
+		return nil, err
+	}
+	manifest.Items = append(manifest.Items, EvalItem{
+		ID:          "T1_NOISE_GATE",
+		Description: "Acoustic Noise: Low-level typing/room chatter below gate threshold",
+		Mode:        ModeCommand,
+		Voice:       "synthetic",
+		Expected:    "DROPPED_BY_GATE",
+		WavFile:     "t1_noise_below_gate.wav",
+		DurationSec: 2.0,
+	})
+
+	manBytes, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "manifest.json"), manBytes, 0644); err != nil {
+		return nil, err
+	}
+	return manifest, nil
+}
+
+

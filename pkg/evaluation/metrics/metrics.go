@@ -1,11 +1,50 @@
-package evaluation
+package metrics
 
 import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"time"
+	"unicode"
 )
+
+// TestCaseMode specifies whether audio is evaluated as a command or dictation.
+type TestCaseMode string
+
+const (
+	ModeCommand   TestCaseMode = "command"
+	ModeDictation TestCaseMode = "dictation"
+)
+
+// ItemResult contains the evaluation verdict and metrics for one test item.
+type ItemResult struct {
+	ID                string        `json:"id"`
+	Description       string        `json:"description"`
+	Mode              TestCaseMode  `json:"mode"`
+	Voice             string        `json:"voice,omitempty"`
+	SpeakingRate      float64       `json:"speaking_rate,omitempty"`
+	SNR               *float64      `json:"snr_db,omitempty"`
+	NoiseType         string        `json:"noise_type,omitempty"`
+	Accent            string        `json:"accent,omitempty"`
+	WavFile           string        `json:"wav_file,omitempty"`
+	Passed            bool          `json:"passed"`
+	Transcript        string        `json:"transcript"`
+	IntentID          string        `json:"intent_id,omitempty"`
+	Confidence        float64       `json:"confidence,omitempty"`
+	Class             string        `json:"class,omitempty"`    // what the item expects: "ACCEPT", "REJECT", "SILENCE"
+	Decision          string        `json:"decision,omitempty"` // what the pipeline did, same values
+	Reason            string        `json:"reason,omitempty"`
+	WER               float64       `json:"wer"`
+	CER               float64       `json:"cer"`
+	Duration          time.Duration `json:"duration"`
+	TTFT              time.Duration `json:"ttft"`
+	EndpointDelay     time.Duration `json:"endpoint_delay"`
+	SecondPassLatency time.Duration `json:"second_pass_latency"`
+	Error             string        `json:"error,omitempty"`
+	KeyTermHit        bool          `json:"key_term_hit,omitempty"`
+	DroppedChunks     int           `json:"dropped_chunks,omitempty"`
+}
 
 // LatencyPercentiles summarizes response times across percentiles.
 type LatencyPercentiles struct {
@@ -157,7 +196,6 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 		totalDurVals   []float64
 	)
 
-	// Maps for SNR grouping
 	type snrAgg struct {
 		snrVal   *float64
 		count    int
@@ -178,7 +216,6 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 		return fmt.Sprintf("%+.0f dB", *snr)
 	}
 
-	// Maps for breakdown grouping
 	type dimAgg struct {
 		count    int
 		passed   int
@@ -198,7 +235,6 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 		}
 		report.DroppedChunks += res.DroppedChunks
 
-		// Latency collections
 		totalDurVals = append(totalDurVals, float64(res.Duration.Milliseconds()))
 		if res.TTFT > 0 {
 			ttftVals = append(ttftVals, float64(res.TTFT.Milliseconds()))
@@ -210,14 +246,12 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 			secondPassVals = append(secondPassVals, float64(res.SecondPassLatency.Milliseconds()))
 		}
 
-		// WER / CER
 		if res.Class == "ACCEPT" {
 			totalWER += res.WER
 			totalCER += res.CER
 			werCount++
 		}
 
-		// Category counts
 		if res.Mode == ModeCommand && res.Class == "ACCEPT" {
 			validCmdCount++
 			if res.Passed {
@@ -235,7 +269,6 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 			}
 		}
 
-		// SNR curve grouping
 		sKey := snrKey(res.SNR, res.NoiseType)
 		sEntry, ok := snrMap[sKey]
 		if !ok {
@@ -259,7 +292,6 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 		}
 		sEntry.latSum += float64(res.Duration.Milliseconds())
 
-		// Dimension grouping: Voice
 		if res.Voice != "" {
 			vEntry, exists := voiceMap[res.Voice]
 			if !exists {
@@ -277,7 +309,6 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 			}
 		}
 
-		// Dimension grouping: Speaking Rate
 		if res.SpeakingRate > 0 {
 			rKey := fmt.Sprintf("%.1fx", res.SpeakingRate)
 			rEntry, exists := rateMap[rKey]
@@ -296,7 +327,6 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 			}
 		}
 
-		// Dimension grouping: Noise Type
 		nKey := res.NoiseType
 		if nKey == "" {
 			nKey = "clean"
@@ -326,7 +356,6 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 	report.RejectionAccuracy = passRatio(adversarialPassed, adversarialCount)
 	report.GatePrecision = passRatio(gatePassed, gateCount)
 
-	// Latency percentiles
 	report.LatencyStats = LatencyStatistics{
 		TTFT:          ComputePercentiles(ttftVals),
 		EndpointDelay: ComputePercentiles(endpointVals),
@@ -334,7 +363,6 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 		TotalDuration: ComputePercentiles(totalDurVals),
 	}
 
-	// Order SNR points logically: Clean, +20dB, +15dB, +10dB, +5dB, 0dB, -5dB
 	snrOrder := []string{"Clean", "+20 dB", "+15 dB", "+10 dB", "+5 dB", "+0 dB", "-5 dB"}
 	for _, key := range snrOrder {
 		agg, ok := snrMap[key]
@@ -359,7 +387,7 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 		report.SNRCurve = append(report.SNRCurve, pt)
 		delete(snrMap, key)
 	}
-	// Any remaining SNR points
+
 	for key, agg := range snrMap {
 		pt := SNRCurvePoint{
 			SNR:          agg.snrVal,
@@ -376,7 +404,6 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 		report.SNRCurve = append(report.SNRCurve, pt)
 	}
 
-	// Dimension breakdowns
 	for k, agg := range voiceMap {
 		dg := DimensionGroup{
 			Key:      k,
@@ -422,11 +449,118 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 	return report
 }
 
-// passRatio is passed/count, or nil with no data, so an untested KPI cannot read as perfect.
 func passRatio(passed, count int) *float64 {
 	if count == 0 {
 		return nil
 	}
 	r := float64(passed) / float64(count)
 	return &r
+}
+
+// CalculateWER computes Word Error Rate between a reference string and hypothesis string.
+func CalculateWER(reference, hypothesis string) float64 {
+	refWords := normalizeAndSplitWords(reference)
+	hypWords := normalizeAndSplitWords(hypothesis)
+
+	if len(refWords) == 0 {
+		if len(hypWords) == 0 {
+			return 0.0
+		}
+		return 1.0
+	}
+
+	d := make([][]int, len(refWords)+1)
+	for i := range d {
+		d[i] = make([]int, len(hypWords)+1)
+		d[i][0] = i
+	}
+	for j := range d[0] {
+		d[0][j] = j
+	}
+
+	for i := 1; i <= len(refWords); i++ {
+		for j := 1; j <= len(hypWords); j++ {
+			cost := 1
+			if refWords[i-1] == hypWords[j-1] {
+				cost = 0
+			}
+			d[i][j] = min(
+				d[i-1][j]+1,      // deletion
+				d[i][j-1]+1,      // insertion
+				d[i-1][j-1]+cost, // substitution
+			)
+		}
+	}
+
+	return float64(d[len(refWords)][len(hypWords)]) / float64(len(refWords))
+}
+
+// CalculateCER computes Character Error Rate between a reference string and hypothesis string.
+func CalculateCER(reference, hypothesis string) float64 {
+	refRunes := normalizeAndFilterRunes(reference)
+	hypRunes := normalizeAndFilterRunes(hypothesis)
+
+	if len(refRunes) == 0 {
+		if len(hypRunes) == 0 {
+			return 0.0
+		}
+		return 1.0
+	}
+
+	d := make([][]int, len(refRunes)+1)
+	for i := range d {
+		d[i] = make([]int, len(hypRunes)+1)
+		d[i][0] = i
+	}
+	for j := range d[0] {
+		d[0][j] = j
+	}
+
+	for i := 1; i <= len(refRunes); i++ {
+		for j := 1; j <= len(hypRunes); j++ {
+			cost := 1
+			if refRunes[i-1] == hypRunes[j-1] {
+				cost = 0
+			}
+			d[i][j] = min(
+				d[i-1][j]+1,      // deletion
+				d[i][j-1]+1,      // insertion
+				d[i-1][j-1]+cost, // substitution
+			)
+		}
+	}
+
+	return float64(d[len(refRunes)][len(hypRunes)]) / float64(len(refRunes))
+}
+
+// IsCJK returns true if the rune is within Chinese, Japanese, or Korean script blocks.
+func IsCJK(r rune) bool {
+	return unicode.Is(unicode.Han, r) ||
+		unicode.Is(unicode.Hiragana, r) ||
+		unicode.Is(unicode.Katakana, r) ||
+		unicode.Is(unicode.Hangul, r)
+}
+
+func normalizeAndSplitWords(s string) []string {
+	var clean strings.Builder
+	for _, r := range strings.ToLower(s) {
+		if IsCJK(r) {
+			clean.WriteRune(' ')
+			clean.WriteRune(r)
+			clean.WriteRune(' ')
+		} else if unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsSpace(r) {
+			clean.WriteRune(r)
+		}
+	}
+	return strings.Fields(clean.String())
+}
+
+func normalizeAndFilterRunes(s string) []rune {
+	var out []rune
+	for _, r := range strings.ToLower(s) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			out = append(out, r)
+		}
+	}
+	return out
 }
