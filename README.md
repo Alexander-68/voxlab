@@ -209,6 +209,9 @@ VOXLAB_TIER2=1 go test ./pkg/evaluation/ -timeout 40m
 # and exits 1 below the pass bar (Tier 1: 100%, Tier 2: 80%).
 go run ./cmd/eval_bench -tier 2
 
+# PowerShell script to run Tier 2 (supports -ForceRegenerate to re-synthesize audio samples, -Short, -Mode bench):
+pwsh scripts/run_tier2_test.ps1 [-ForceRegenerate] [-Short] [-Mode bench|test]
+
 # Regenerate missing corpus clips (existing WAVs are kept; delete one to resynthesize it)
 go run ./cmd/gen_eval_samples -tier all
 ```
