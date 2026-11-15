@@ -58,3 +58,12 @@ func TestStateMachine(t *testing.T) {
 		t.Errorf("expected state IDLE after cancel, got %s", sm.Current())
 	}
 }
+
+func TestFinishProcessOnlyFromProcess(t *testing.T) {
+	sm := NewStateMachine()
+	sm.StartDictation("t")
+	sm.SpeechEndpointed("note") // ANNOTATION_LISTEN -> REVIEW
+	if sm.FinishProcess() || sm.Current() != StateReview {
+		t.Fatalf("FinishProcess must not leave REVIEW, state=%s", sm.Current())
+	}
+}

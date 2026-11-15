@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"regexp"
 	"runtime"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -50,7 +51,7 @@ func (s *WebSocketSource) PushChunk(samples []float32) {
 		select {
 		case s.outChan <- samples:
 		default:
-			// Buffer full, drop oldest chunk to maintain real-time latency
+			// Buffer full: drop this (newest) chunk to maintain real-time latency
 		}
 	}
 }
@@ -63,12 +64,22 @@ func (s *WebSocketSource) Stop() error {
 	return nil
 }
 
+// chunkInterval is the real-time duration of one chunk, kept at ns precision (ms truncation made
+// e.g. 160 @ 44.1 kHz play ~20% fast) and never <= 0 (time.NewTicker panics).
+func chunkInterval(chunkSamples, sampleRate int) time.Duration {
+	if chunkSamples <= 0 || sampleRate <= 0 {
+		return 20 * time.Millisecond
+	}
+	return time.Duration(chunkSamples) * time.Second / time.Duration(sampleRate)
+}
+
 // WavFileSource streams audio from a WAV file at real-time rate for test bench evaluation.
 type WavFileSource struct {
 	filePath     string
 	sampleRate   int
 	chunkSamples int
 	cancel       context.CancelFunc
+	done         chan struct{} // closed when the streaming goroutine exits
 	running      bool
 	mu           sync.Mutex
 	loop         bool
@@ -109,9 +120,15 @@ func (s *WavFileSource) Start(ctx context.Context, out chan<- []float32) error {
 	if wavRate != s.sampleRate && wavRate > 0 {
 		samples = Resample(samples, wavRate, s.sampleRate)
 	}
+	if len(samples) == 0 {
+		s.mu.Unlock()
+		return errors.New("wav file contains no audio samples")
+	}
 
 	subCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
 	s.cancel = cancel
+	s.done = done
 	s.running = true
 	s.mu.Unlock()
 
@@ -120,9 +137,11 @@ func (s *WavFileSource) Start(ctx context.Context, out chan<- []float32) error {
 			s.mu.Lock()
 			s.running = false
 			s.mu.Unlock()
+			cancel()
+			close(done)
 		}()
 
-		chunkDuration := time.Duration(float64(s.chunkSamples)/float64(s.sampleRate)*1000) * time.Millisecond
+		chunkDuration := chunkInterval(s.chunkSamples, s.sampleRate)
 		ticker := time.NewTicker(chunkDuration)
 		defer ticker.Stop()
 
@@ -146,11 +165,11 @@ func (s *WavFileSource) Start(ctx context.Context, out chan<- []float32) error {
 				chunk := samples[idx:end]
 				idx = end
 
+				// Block (bounded by the ticker cadence) rather than drop: lost chunks corrupt evaluation.
 				select {
 				case out <- chunk:
 				case <-subCtx.Done():
 					return
-				default:
 				}
 			}
 		}
@@ -159,14 +178,19 @@ func (s *WavFileSource) Start(ctx context.Context, out chan<- []float32) error {
 	return nil
 }
 
+// Stop cancels streaming and waits for the goroutine to exit, so a following Start cannot overlap it.
 func (s *WavFileSource) Stop() error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.cancel != nil {
 		s.cancel()
 		s.cancel = nil
 	}
-	s.running = false
+	done := s.done
+	s.done = nil
+	s.mu.Unlock()
+	if done != nil {
+		<-done
+	}
 	return nil
 }
 
@@ -175,10 +199,10 @@ type HostNativeSource struct {
 	sampleRate   int
 	chunkSamples int
 	cancel       context.CancelFunc
+	done         chan struct{} // closed when the capture goroutine exits
 	running      bool
 	mu           sync.Mutex
 	deviceName   string
-	cmd          *exec.Cmd
 }
 
 // NewHostNativeSource creates a new host native audio capture source.
@@ -200,7 +224,9 @@ func (s *HostNativeSource) DeviceName() string {
 
 // detectWindowsDirectShowMic searches for available DirectShow microphones.
 func detectWindowsDirectShowMic() string {
-	cmd := exec.Command("ffmpeg", "-list_devices", "true", "-f", "dshow", "-i", "dummy")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-list_devices", "true", "-f", "dshow", "-i", "dummy")
 	out, _ := cmd.CombinedOutput()
 	outputStr := string(out)
 
@@ -214,6 +240,14 @@ func detectWindowsDirectShowMic() string {
 }
 
 func (s *HostNativeSource) Start(ctx context.Context, out chan<- []float32) error {
+	// Device detection runs ffmpeg; keep it outside s.mu so a slow probe cannot block Stop/DeviceName.
+	mic := ""
+	if runtime.GOOS == "windows" {
+		if _, err := exec.LookPath("ffmpeg"); err == nil {
+			mic = detectWindowsDirectShowMic()
+		}
+	}
+
 	s.mu.Lock()
 	if s.running {
 		s.mu.Unlock()
@@ -221,31 +255,31 @@ func (s *HostNativeSource) Start(ctx context.Context, out chan<- []float32) erro
 	}
 
 	subCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
 	s.cancel = cancel
+	s.done = done
 	s.running = true
+	rate := strconv.Itoa(s.sampleRate)
 
 	// Check if ffmpeg or arecord is available
 	var captureCmd *exec.Cmd
 	devName := "simulated"
 
 	if runtime.GOOS == "windows" {
-		if _, err := exec.LookPath("ffmpeg"); err == nil {
-			mic := detectWindowsDirectShowMic()
-			if mic != "" {
-				devName = mic
-				captureCmd = exec.CommandContext(subCtx, "ffmpeg",
-					"-f", "dshow",
-					"-audio_buffer_size", "20",
-					"-fflags", "nobuffer",
-					"-flags", "low_delay",
-					"-i", "audio="+mic,
-					"-ar", "16000",
-					"-ac", "1",
-					"-f", "s16le",
-					"-flush_packets", "1",
-					"pipe:1",
-				)
-			}
+		if mic != "" {
+			devName = mic
+			captureCmd = exec.CommandContext(subCtx, "ffmpeg",
+				"-f", "dshow",
+				"-audio_buffer_size", "20",
+				"-fflags", "nobuffer",
+				"-flags", "low_delay",
+				"-i", "audio="+mic,
+				"-ar", rate,
+				"-ac", "1",
+				"-f", "s16le",
+				"-flush_packets", "1",
+				"pipe:1",
+			)
 		}
 	} else {
 		// Linux: try arecord or ffmpeg
@@ -253,7 +287,7 @@ func (s *HostNativeSource) Start(ctx context.Context, out chan<- []float32) erro
 			devName = "default"
 			captureCmd = exec.CommandContext(subCtx, "arecord",
 				"-q",
-				"-r", "16000",
+				"-r", rate,
 				"-c", "1",
 				"-f", "S16_LE",
 				"-t", "raw",
@@ -265,7 +299,7 @@ func (s *HostNativeSource) Start(ctx context.Context, out chan<- []float32) erro
 				"-fflags", "nobuffer",
 				"-flags", "low_delay",
 				"-i", "default",
-				"-ar", "16000",
+				"-ar", rate,
 				"-ac", "1",
 				"-f", "s16le",
 				"-flush_packets", "1",
@@ -275,7 +309,6 @@ func (s *HostNativeSource) Start(ctx context.Context, out chan<- []float32) erro
 	}
 
 	s.deviceName = devName
-	s.cmd = captureCmd
 	s.mu.Unlock()
 
 	log.Printf("[Audio] Starting Host Native Mic: %s", devName)
@@ -284,24 +317,25 @@ func (s *HostNativeSource) Start(ctx context.Context, out chan<- []float32) erro
 		stdout, err := captureCmd.StdoutPipe()
 		if err != nil {
 			log.Printf("[Audio] Pipe error: %v, falling back to simulation", err)
-			go s.runSimulatedLoop(subCtx, out)
+			go s.runSimulatedLoop(subCtx, cancel, done, out)
 			return nil
 		}
 
 		if err := captureCmd.Start(); err != nil {
 			log.Printf("[Audio] Host capture process error: %v, falling back to simulation", err)
-			go s.runSimulatedLoop(subCtx, out)
+			go s.runSimulatedLoop(subCtx, cancel, done, out)
 			return nil
 		}
 
 		go func() {
 			defer func() {
-				if captureCmd.Process != nil {
-					_ = captureCmd.Process.Kill()
-				}
+				_ = captureCmd.Process.Kill()
+				_ = captureCmd.Wait() // reap the child and release its pipes
 				s.mu.Lock()
 				s.running = false
 				s.mu.Unlock()
+				cancel()
+				close(done)
 			}()
 
 			bytesPerChunk := s.chunkSamples * 2 // 16-bit = 2 bytes per sample
@@ -329,18 +363,20 @@ func (s *HostNativeSource) Start(ctx context.Context, out chan<- []float32) erro
 	}
 
 	// Fallback to simulated audio if no native capture tool
-	go s.runSimulatedLoop(subCtx, out)
+	go s.runSimulatedLoop(subCtx, cancel, done, out)
 	return nil
 }
 
-func (s *HostNativeSource) runSimulatedLoop(ctx context.Context, out chan<- []float32) {
+func (s *HostNativeSource) runSimulatedLoop(ctx context.Context, cancel context.CancelFunc, done chan struct{}, out chan<- []float32) {
 	defer func() {
 		s.mu.Lock()
 		s.running = false
 		s.mu.Unlock()
+		cancel()
+		close(done)
 	}()
 
-	chunkDuration := time.Duration(float64(s.chunkSamples)/float64(s.sampleRate)*1000) * time.Millisecond
+	chunkDuration := chunkInterval(s.chunkSamples, s.sampleRate)
 	ticker := time.NewTicker(chunkDuration)
 	defer ticker.Stop()
 
@@ -364,17 +400,19 @@ func (s *HostNativeSource) runSimulatedLoop(ctx context.Context, out chan<- []fl
 	}
 }
 
+// Stop cancels capture (CommandContext kills the child) and waits for the goroutine to exit,
+// so a following Start cannot overlap the old run or have its running flag cleared by it.
 func (s *HostNativeSource) Stop() error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.cancel != nil {
 		s.cancel()
 		s.cancel = nil
 	}
-	if s.cmd != nil && s.cmd.Process != nil {
-		_ = s.cmd.Process.Kill()
-		s.cmd = nil
+	done := s.done
+	s.done = nil
+	s.mu.Unlock()
+	if done != nil {
+		<-done
 	}
-	s.running = false
 	return nil
 }

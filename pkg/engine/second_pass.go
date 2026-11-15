@@ -76,19 +76,23 @@ func (w *WarmOffline) Transcribe(samples []float32, sampleRate int) (string, err
 		binary.LittleEndian.PutUint32(buf[8+i*4:], math.Float32bits(v))
 	}
 	const payload = 10240 // same framing as the reference client
+	_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 	for len(buf) > 0 {
 		n := min(payload, len(buf))
 		if err := conn.WriteMessage(websocket.BinaryMessage, buf[:n]); err != nil {
-			return "", err
+			return "", fmt.Errorf("second-pass send failed: %w", err)
 		}
 		buf = buf[n:]
 	}
 
-	_ = conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	// Decode time grows with the utterance: 10s base plus 2x the audio duration.
+	audioDur := time.Duration(float64(len(samples)) / float64(max(sampleRate, 1)) * float64(time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(10*time.Second + 2*audioDur))
 	_, msg, err := conn.ReadMessage()
 	if err != nil {
 		return "", err
 	}
+	_ = conn.SetWriteDeadline(time.Now().Add(time.Second))
 	_ = conn.WriteMessage(websocket.TextMessage, []byte("Done"))
 
 	var res struct {

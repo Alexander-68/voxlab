@@ -1,12 +1,21 @@
 # Binaries
-bin/
+/bin/
 *.exe
 *.dll
 *.so
 *.dylib
 
+# Go build / test artifacts
+/voxlab
+*.test
+*.prof
+coverage.out
+
+# Interrupted eval runs (baseline eval_report_*.json stay tracked; the UI serves them)
+/data/eval_report_*.partial.json
+
 # Models directory archives and downloaded models
-models/
+/models/
 
 
 # OS artifacts

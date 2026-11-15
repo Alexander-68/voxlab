@@ -7,5 +7,5 @@ import (
 )
 
 func newPlatformSpeechEnhancer(dllDir string, modelDir string, cfg config.EnhancerConfig) (SpeechEnhancer, error) {
-	return NewBypassEnhancer(cfg.Enabled), nil
+	return NewBypassEnhancer(false), nil // passthrough: never report denoising as active
 }

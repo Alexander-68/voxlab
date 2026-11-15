@@ -135,7 +135,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const eventLog = document.getElementById('event-log');
   const btnClearLog = document.getElementById('btn-clear-log');
 
-  const ttsModelBadge = document.getElementById('tts-model-badge');
   const ttsModelName = document.getElementById('tts-model-name');
   const ttsPlayerModel = document.getElementById('tts-player-model');
   const chkTtsStreaming = document.getElementById('chk-tts-streaming');
@@ -520,63 +519,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function updateTtsModelDisplay(model, isNeural) {
+  function updateTtsModelDisplay(model) {
     if (!model) return;
     const cleanModel = model.replace(/\s*\[Warm RAM\]/gi, '').trim();
-    if (ttsModelBadge) {
-      ttsModelBadge.textContent = cleanModel.toUpperCase();
-      ttsModelBadge.className = isNeural ? 'badge badge-connected' : 'badge badge-muted';
-      ttsModelBadge.title = `Active TTS Model: ${cleanModel}`;
-    }
     if (ttsModelName) {
       ttsModelName.textContent = cleanModel;
     }
     if (ttsPlayerModel) {
       ttsPlayerModel.textContent = cleanModel;
     }
-    if (ttsModelSelect) {
-      let matched = false;
-      const lowModel = cleanModel.toLowerCase();
-      // 1. Exact match
-      for (const opt of ttsModelSelect.options) {
-        if (opt.value && opt.value.toLowerCase() === lowModel) {
-          ttsModelSelect.value = opt.value;
-          matched = true;
-          break;
-        }
-      }
-      // 2. Specific variant match (FP16 or INT8)
-      if (!matched && lowModel.includes('fp16')) {
-        for (const opt of ttsModelSelect.options) {
-          if (opt.value && opt.value.toLowerCase().includes('fp16')) {
-            ttsModelSelect.value = opt.value;
-            matched = true;
-            break;
-          }
-        }
-      }
-      if (!matched && lowModel.includes('int8')) {
-        for (const opt of ttsModelSelect.options) {
-          if (opt.value && opt.value.toLowerCase().includes('int8')) {
-            ttsModelSelect.value = opt.value;
-            matched = true;
-            break;
-          }
-        }
-      }
-      // 3. Fallback contains match (skipping FP16/INT8 options if active model is standard FP32)
-      if (!matched) {
-        for (const opt of ttsModelSelect.options) {
-          const optLow = (opt.value || '').toLowerCase();
-          const isVariantOpt = optLow.includes('fp16') || optLow.includes('int8');
-          if (opt.value && !isVariantOpt && lowModel.includes(optLow)) {
-            ttsModelSelect.value = opt.value;
-            matched = true;
-            break;
-          }
-        }
-      }
-    }
+    if (ttsModelSelect) selectModelOption(ttsModelSelect, cleanModel);
   }
 
   function updateEnhancerDisplay(enabled, modelType, name) {
@@ -605,7 +557,7 @@ document.addEventListener('DOMContentLoaded', () => {
     voiceState.className = 'badge ' + getStateBadgeClass(state);
 
     if (data.tts_model) {
-      updateTtsModelDisplay(data.tts_model, data.tts_is_neural);
+      updateTtsModelDisplay(data.tts_model);
     }
 
     if (data.enhancer_on !== undefined) {
@@ -724,7 +676,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   client.on('wake_word_detected', (data) => {
     logEvent('wake_word_detected', `Keyword: "${data.phrase}" (Conf: ${data.confidence.toFixed(2)})`);
-    commandTranscriptBox.innerHTML = `<span style="color:#38bdf8;">[Wake word: "${data.phrase}"] Listening...</span>`;
+    commandTranscriptBox.innerHTML = `<span style="color:#38bdf8;">[Wake word: "${escapeHtml(data.phrase)}"] Listening...</span>`;
     asrStatusBadge.textContent = 'Listening';
     asrStatusBadge.className = 'badge badge-listen';
   });
@@ -832,7 +784,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let streamNextStartTime = 0;
   let activeAudioSources = [];
   let isStreamPlaying = false;
-  let streamChunksReceived = 0;
+  let streamGeneration = 0; // bumped on stop so in-flight chunks from a cancelled stream are dropped
   let streamChunksPlayed = 0;
   let streamTotalChunks = 0;
   let streamPlaybackCompleteTimer = null;
@@ -858,7 +810,7 @@ document.addEventListener('DOMContentLoaded', () => {
     activeAudioSources = [];
     isStreamPlaying = false;
     streamNextStartTime = 0;
-    streamChunksReceived = 0;
+    streamGeneration++;
     streamChunksPlayed = 0;
     streamTotalChunks = 0;
     if (streamPlaybackCompleteTimer) {
@@ -896,7 +848,7 @@ document.addEventListener('DOMContentLoaded', () => {
     logEvent('tts.started', `"${data.text}" (${data.voice}${speedTag})${modelTag}${modeTag}`);
 
     if (data.model) {
-      updateTtsModelDisplay(data.model, data.is_neural);
+      updateTtsModelDisplay(data.model);
     }
     btnSynthesize.disabled = true;
     btnSynthesize.textContent = isStreaming ? '⚡ Streaming Output...' : '⏳ Synthesizing Audio...';
@@ -927,16 +879,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  client.on('tts.chunk', async (data) => {
+  // Chunks are decoded/scheduled strictly in arrival order so streamNextStartTime stays monotonic.
+  let streamChunkChain = Promise.resolve();
+  client.on('tts.chunk', (data) => {
     const isStreaming = chkTtsStreaming ? chkTtsStreaming.checked : true;
     if (!isStreaming) return;
+    const gen = streamGeneration;
+    streamChunkChain = streamChunkChain.then(() => handleStreamChunk(data, gen));
+  });
 
+  async function handleStreamChunk(data, gen) {
     try {
       const ctx = getStreamAudioCtx();
       const arrayBuf = base64ToArrayBuffer(data.wav_base64);
       const audioBuf = await ctx.decodeAudioData(arrayBuf);
+      if (gen !== streamGeneration) return; // playback was stopped/restarted while decoding
 
-      streamChunksReceived++;
       if (ttsStreamBanner) {
         ttsStreamBanner.style.display = 'flex';
         ttsStreamStatus.textContent = `Streaming chunk #${data.index + 1} (${data.duration_sec.toFixed(2)}s, TTFA: ${data.latency_ms}ms)...`;
@@ -991,10 +949,13 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {
       console.warn('[TTS] Failed to decode/schedule stream chunk:', e);
     }
-  });
+  }
 
   client.on('tts.error', (data) => {
     logEvent('tts.error', `Speech failed: ${data.message}`);
+    stopStreamingPlayback();
+    btnSynthesize.disabled = false;
+    btnSynthesize.textContent = '🔊 Synthesize & Speak';
     metricTtsLatency.textContent = 'failed';
     metricTtsDur.textContent = '--';
   });
@@ -1056,7 +1017,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   client.on('tts.model_changed', (data) => {
     logEvent('tts.model_changed', `Model changed: ${data.model} (${data.voices ? data.voices.length : 0} voices)`);
-    updateTtsModelDisplay(data.model, data.is_neural);
+    updateTtsModelDisplay(data.model);
     if (data.installed_models) {
       populateModelsDropdown(data.installed_models, data.model);
     }
@@ -1278,8 +1239,14 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   chkWebrtcNs.addEventListener('change', async (e) => {
-    const applied = await capture.setWebRtcNoiseSuppression(e.target.checked);
-    logEvent('dsp.webrtc_ns', `WebRTC Noise Suppression: ${e.target.checked ? 'ENABLED' : 'DISABLED'} (browser reports: ${applied})`);
+    const desired = e.target.checked;
+    try {
+      const applied = await capture.setWebRtcNoiseSuppression(desired);
+      logEvent('dsp.webrtc_ns', `WebRTC Noise Suppression: ${desired ? 'ENABLED' : 'DISABLED'} (browser reports: ${applied})`);
+    } catch (err) {
+      e.target.checked = !desired;
+      logEvent('dsp.webrtc_ns', `WebRTC Noise Suppression toggle failed: ${err.message}`);
+    }
   });
 
   if (chkMonitor) {
@@ -1641,6 +1608,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  let evalProgressHideTimer = null;
   function setEvalRunningUI(running, current = 0, total = 0, caseName = '') {
     if (btnRunTier2) btnRunTier2.disabled = running;
     if (btnRunTier1) btnRunTier1.disabled = running;
@@ -1649,8 +1617,9 @@ document.addEventListener('DOMContentLoaded', () => {
       else btnCancelEval.classList.add('hidden');
     }
     if (evalProgressBox) {
+      clearTimeout(evalProgressHideTimer);
       if (running) evalProgressBox.classList.remove('hidden');
-      else setTimeout(() => evalProgressBox.classList.add('hidden'), 2500);
+      else evalProgressHideTimer = setTimeout(() => evalProgressBox.classList.add('hidden'), 2500);
     }
     if (evalStatusBadge) {
       if (running) {
@@ -1669,14 +1638,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Null-safe metric formatters: a missing metric renders 'n/a' instead of aborting the render.
+  const fixed = (v, d) => (v === null || v === undefined ? 'n/a' : Number(v).toFixed(d));
+  const pct = (v) => (v === null || v === undefined ? 'n/a' : `${(Number(v) * 100).toFixed(1)}%`);
+
   function renderEvalReport(rep) {
     if (!rep) return;
     cachedEvalReport = rep;
 
-    if (evalKpiPassRate) evalKpiPassRate.textContent = `${(rep.pass_rate * 100).toFixed(1)}%`;
-    if (evalKpiWer) evalKpiWer.textContent = rep.avg_wer.toFixed(2);
-    if (evalKpiCer) evalKpiCer.textContent = rep.avg_cer.toFixed(2);
-    if (evalKpiIntentAcc) evalKpiIntentAcc.textContent = rep.intent_accuracy == null ? 'n/a' : `${(rep.intent_accuracy * 100).toFixed(1)}%`;
+    if (evalKpiPassRate) evalKpiPassRate.textContent = pct(rep.pass_rate);
+    if (evalKpiWer) evalKpiWer.textContent = fixed(rep.avg_wer, 2);
+    if (evalKpiCer) evalKpiCer.textContent = fixed(rep.avg_cer, 2);
+    if (evalKpiIntentAcc) evalKpiIntentAcc.textContent = pct(rep.intent_accuracy);
     if (evalKpiTtft) {
       const p95 = rep.latency_stats && rep.latency_stats.ttft ? rep.latency_stats.ttft.p95_ms : 0;
       evalKpiTtft.textContent = `${p95} ms`;
@@ -1692,12 +1665,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         return `<tr>
           <td><span class="snr-badge ${badgeClass}">${escapeHtml(pt.label)}</span></td>
-          <td>${pt.count}</td>
-          <td style="color: ${pt.pass_rate >= 0.8 ? 'var(--success)' : 'var(--danger)'}; font-weight: 600;">${(pt.pass_rate * 100).toFixed(1)}%</td>
-          <td>${pt.avg_wer.toFixed(3)}</td>
-          <td>${pt.avg_cer.toFixed(3)}</td>
-          <td>${(pt.intent_accuracy * 100).toFixed(1)}%</td>
-          <td>${Math.round(pt.avg_latency_ms)} ms</td>
+          <td>${escapeHtml(pt.count)}</td>
+          <td style="color: ${pt.pass_rate >= 0.8 ? 'var(--success)' : 'var(--danger)'}; font-weight: 600;">${pct(pt.pass_rate)}</td>
+          <td>${fixed(pt.avg_wer, 3)}</td>
+          <td>${fixed(pt.avg_cer, 3)}</td>
+          <td>${pct(pt.intent_accuracy)}</td>
+          <td>${fixed(pt.avg_latency_ms, 0)} ms</td>
         </tr>`;
       }).join('');
     }
@@ -1757,7 +1730,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <td>${Math.round(r.duration / 1000000)} ms</td>
         <td>${verdictBadge}</td>
         <td>
-          ${r.wav_file ? `<button class="btn-play-sample" data-src="/data/test_samples/${subDir}/${escapeHtml(r.wav_file)}" onclick="new Audio(this.dataset.src).play()">▶️ Play</button>` : ''}
+          ${r.wav_file ? `<button class="btn-play-sample" data-src="/data/test_samples/${subDir}/${escapeHtml(r.wav_file)}">▶️ Play</button>` : ''}
         </td>
       </tr>`;
     }).join('');
@@ -1765,6 +1738,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (evalFilterVerdict) {
     evalFilterVerdict.addEventListener('change', renderCasesTable);
+  }
+
+  if (evalCasesTbody) {
+    evalCasesTbody.addEventListener('click', (e) => {
+      const btn = e.target.closest('.btn-play-sample');
+      if (!btn) return;
+      new Audio(btn.dataset.src).play().catch((err) => logEvent('eval.play', `Sample playback failed: ${err.message}`));
+    });
   }
 
   // Drops the previous run's results, so nothing on screen can be mistaken for this run's.
@@ -1833,24 +1814,25 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Load initial evaluation report if available on server
-  fetch('/api/eval/report?tier=tier-2-deep-matrix')
-    .then(r => r.ok ? r.json() : null)
-    .then(rep => {
-      if (rep) {
-        renderEvalReport(rep);
-        if (evalStatusBadge) {
-          evalStatusBadge.className = 'badge badge-ready';
-          evalStatusBadge.textContent = 'Report Loaded';
-        }
-      }
-    })
-    .catch(() => {});
-
   // A reload during a run has missed eval.started, so pick the run up from the server.
+  // Status goes first: the last saved report is only shown when no run is in progress.
   fetch('/api/eval/status')
     .then(r => r.ok ? r.json() : null)
+    .catch(() => null)
     .then(st => {
-      if (st && st.running) setEvalRunningUI(true, st.current, st.total, st.tier);
+      if (st && st.running) {
+        setEvalRunningUI(true, st.current, st.total, st.tier);
+        return null;
+      }
+      return fetch('/api/eval/report?tier=tier-2-deep-matrix').then(r => r.ok ? r.json() : null);
+    })
+    .then(rep => {
+      if (!rep) return;
+      renderEvalReport(rep);
+      if (evalStatusBadge) {
+        evalStatusBadge.className = 'badge badge-ready';
+        evalStatusBadge.textContent = 'Report Loaded';
+      }
     })
     .catch(() => {});
 
@@ -1880,8 +1862,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    if (str === undefined || str === null) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
   // Initialize source UI controls
@@ -1926,6 +1908,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Picks the option matching a model name: exact, then FP16/INT8 variant, then a non-variant substring.
+  function selectModelOption(selectEl, model) {
+    const low = model.toLowerCase();
+    const opts = Array.from(selectEl.options).filter((o) => o.value);
+    const has = (o, sub) => o.value.toLowerCase().includes(sub);
+    const hit = opts.find((o) => o.value.toLowerCase() === low)
+      || (low.includes('fp16') && opts.find((o) => has(o, 'fp16')))
+      || (low.includes('int8') && opts.find((o) => has(o, 'int8')))
+      || opts.find((o) => !has(o, 'fp16') && !has(o, 'int8') && low.includes(o.value.toLowerCase()));
+    if (hit) selectEl.value = hit.value;
+  }
+
   function populateModelsDropdown(models, activeModel) {
     if (!ttsModelSelect || !models || !models.length) return;
     const curVal = ttsModelSelect.value;
@@ -1942,47 +1936,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     if (activeModel) {
-      let matched = false;
-      const lowActive = activeModel.toLowerCase();
-      // 1. Exact match
-      for (const opt of ttsModelSelect.options) {
-        if (opt.value && opt.value.toLowerCase() === lowActive) {
-          ttsModelSelect.value = opt.value;
-          matched = true;
-          break;
-        }
-      }
-      // 2. Specific variant match (FP16 or INT8)
-      if (!matched && lowActive.includes('fp16')) {
-        for (const opt of ttsModelSelect.options) {
-          if (opt.value && opt.value.toLowerCase().includes('fp16')) {
-            ttsModelSelect.value = opt.value;
-            matched = true;
-            break;
-          }
-        }
-      }
-      if (!matched && lowActive.includes('int8')) {
-        for (const opt of ttsModelSelect.options) {
-          if (opt.value && opt.value.toLowerCase().includes('int8')) {
-            ttsModelSelect.value = opt.value;
-            matched = true;
-            break;
-          }
-        }
-      }
-      // 3. Fallback contains match (skipping FP16/INT8 options if active model is standard FP32)
-      if (!matched) {
-        for (const opt of ttsModelSelect.options) {
-          const optLow = (opt.value || '').toLowerCase();
-          const isVariantOpt = optLow.includes('fp16') || optLow.includes('int8');
-          if (opt.value && !isVariantOpt && lowActive.includes(optLow)) {
-            ttsModelSelect.value = opt.value;
-            matched = true;
-            break;
-          }
-        }
-      }
+      selectModelOption(ttsModelSelect, activeModel);
     } else if (curVal && Array.from(ttsModelSelect.options).some(o => o.value === curVal)) {
       ttsModelSelect.value = curVal;
     }
@@ -2065,7 +2019,7 @@ document.addEventListener('DOMContentLoaded', () => {
     .then(r => r.json())
     .then(data => {
       if (data && data.model) {
-        updateTtsModelDisplay(data.model, data.is_neural);
+        updateTtsModelDisplay(data.model);
       }
       if (data && data.installed_models) {
         populateModelsDropdown(data.installed_models, data.model);

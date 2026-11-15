@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -100,5 +101,26 @@ func TestComputeSuiteReport(t *testing.T) {
 	}
 	if len(report.SNRCurve) != 1 {
 		t.Errorf("expected 1 SNR point, got %d", len(report.SNRCurve))
+	}
+}
+
+func TestSNRCurveBuckets(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	results := []ItemResult{
+		{NoiseType: "white", SNR: f(25), Mode: ModeCommand, Class: "ACCEPT", Passed: true},
+		{NoiseType: "white", SNR: f(-0.4)},
+		{NoiseType: "white"}, // sub-gate clip: no SNR, not on the curve
+		{NoiseType: "reverb", SNR: f(15)},
+		{NoiseType: "clean"},
+	}
+	var labels []string
+	for _, pt := range ComputeSuiteReport("t", results, 0).SNRCurve {
+		labels = append(labels, pt.Label)
+		if pt.Label == "+25 dB" && pt.IntentAccuracy != 1 {
+			t.Errorf("+25 dB intent accuracy = %v, want 1", pt.IntentAccuracy)
+		}
+	}
+	if got, want := strings.Join(labels, ","), "Clean,+25 dB,+0 dB,Reverb"; got != want {
+		t.Errorf("SNR curve labels = %s, want %s", got, want)
 	}
 }

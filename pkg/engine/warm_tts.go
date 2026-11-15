@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"fmt"
+
 	"voxlab/pkg/audio"
 )
 
@@ -20,6 +22,9 @@ type WarmTTS interface {
 
 // float32SliceToTTSResult converts raw float32 samples into a TTSResult with encoded WAV bytes.
 func float32SliceToTTSResult(samples []float32, sampleRate int, latencyMs int64) (*TTSResult, error) {
+	if sampleRate <= 0 {
+		return nil, fmt.Errorf("invalid sample rate %d for TTS result", sampleRate)
+	}
 	wavBytes, err := audio.EncodeWAV(samples, sampleRate)
 	if err != nil {
 		return nil, err

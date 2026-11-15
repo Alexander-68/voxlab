@@ -1,6 +1,8 @@
 package intent
 
 import (
+	"maps"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -14,15 +16,15 @@ type MatchCandidate struct {
 
 // IntentDecision represents the final evaluation of an utterance.
 type IntentDecision struct {
-	Decision       string            `json:"decision"` // "ACCEPT", "REJECT", "CLARIFY"
-	IntentID       string            `json:"intent_id,omitempty"`
-	Confidence     float64           `json:"confidence"`
-	Margin         float64           `json:"margin"`
-	Reason         string            `json:"reason,omitempty"`
-	RawTranscript  string            `json:"raw_transcript"`
-	Slots          map[string]string `json:"slots,omitempty"`
-	MissingSlots   []string          `json:"missing_slots,omitempty"`
-	TopCandidates  []MatchCandidate  `json:"top_candidates"`
+	Decision      string            `json:"decision"` // "ACCEPT", "REJECT", "CLARIFY"
+	IntentID      string            `json:"intent_id,omitempty"`
+	Confidence    float64           `json:"confidence"`
+	Margin        float64           `json:"margin"`
+	Reason        string            `json:"reason,omitempty"`
+	RawTranscript string            `json:"raw_transcript"`
+	Slots         map[string]string `json:"slots,omitempty"`
+	MissingSlots  []string          `json:"missing_slots,omitempty"`
+	TopCandidates []MatchCandidate  `json:"top_candidates"`
 }
 
 // IntentMatcher performs multi-stage matching against the command catalog.
@@ -58,15 +60,13 @@ var (
 	}
 )
 
-// HasNegation checks if the transcript contains explicit negations.
+// HasNegation reports a negation word followed by anything. It does not check what follows:
+// rejecting "no problem, open settings" is the safe failure, accepting "don't you dare stop" is not.
 func HasNegation(text string) bool {
 	tokens := Tokenize(text)
-	for i, t := range tokens {
+	for _, t := range tokens[:max(len(tokens)-1, 0)] {
 		if negationWords[t] {
-			// Check if followed by an action verb
-			if i+1 < len(tokens) {
-				return true
-			}
+			return true
 		}
 	}
 	return false
@@ -189,8 +189,8 @@ func (m *IntentMatcher) Match(transcript string) IntentDecision {
 		})
 	}
 
-	// Sort candidates by score descending
-	sort.Slice(candidates, func(i, j int) bool {
+	// Sort candidates by score descending; ties keep catalog order.
+	sort.SliceStable(candidates, func(i, j int) bool {
 		return candidates[i].Score > candidates[j].Score
 	})
 
@@ -286,22 +286,20 @@ func (m *IntentMatcher) extractSlots(intentID, text string) (map[string]string, 
 	}
 
 	resolved := make(map[string]string)
-	textLower := strings.ToLower(text)
+	textTokens := Tokenize(text)
 
+	// Aliases match on token boundaries ("scope" is not in "telescope"); the longest alias
+	// wins and IDs are visited in sorted order, so the result is deterministic.
 	for _, slotName := range cmd.RequiredSlots {
-		slotEntities, exists := m.catalog.Entities[slotName]
-		if !exists {
-			continue
-		}
-		for canonicalID, aliases := range slotEntities {
-			for _, alias := range aliases {
-				if strings.Contains(textLower, strings.ToLower(alias)) {
+		slotEntities := m.catalog.Entities[slotName]
+		bestLen := 0
+		for _, canonicalID := range slices.Sorted(maps.Keys(slotEntities)) {
+			for _, alias := range slotEntities[canonicalID] {
+				aliasTokens := Tokenize(alias)
+				if len(aliasTokens) > bestLen && containsTokens(textTokens, aliasTokens) {
 					resolved[slotName] = canonicalID
-					break
+					bestLen = len(aliasTokens)
 				}
-			}
-			if _, found := resolved[slotName]; found {
-				break
 			}
 		}
 	}
@@ -314,4 +312,14 @@ func (m *IntentMatcher) extractSlots(intentID, text string) (map[string]string, 
 	}
 
 	return resolved, missing
+}
+
+// containsTokens reports whether sub occurs as a contiguous run in tokens.
+func containsTokens(tokens, sub []string) bool {
+	for i := 0; i+len(sub) <= len(tokens); i++ {
+		if slices.Equal(tokens[i:i+len(sub)], sub) {
+			return true
+		}
+	}
+	return false
 }

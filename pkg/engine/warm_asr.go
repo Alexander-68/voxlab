@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -85,7 +86,7 @@ func (w *WarmASR) WaitReady() error {
 
 // waitForPort polls until a local server accepts connections (up to 30s for large models to load).
 func waitForPort(port int) bool {
-	for i := 0; i < 300; i++ {
+	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); {
 		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 100*time.Millisecond)
 		if err == nil {
 			conn.Close()
@@ -150,8 +151,9 @@ func (w *WarmASR) Open() (*ASRStream, error) {
 // endpoints segments itself, and pushes hypotheses back; readLoop collects them.
 // Send/Finish must be called from a single goroutine; Close may be called from any.
 type ASRStream struct {
-	conn *websocket.Conn
-	done chan struct{}
+	conn   *websocket.Conn
+	done   chan struct{}
+	closed atomic.Bool // Close was called, so read errors are expected
 
 	mu             sync.Mutex
 	finals         []ASRResult // endpointed segments not yet taken
@@ -163,7 +165,13 @@ func (s *ASRStream) readLoop() {
 	defer close(s.done)
 	for {
 		_, msg, err := s.conn.ReadMessage()
-		if err != nil || string(msg) == "Done!" {
+		if err != nil {
+			if !s.closed.Load() {
+				log.Printf("[SherpaRunner] ASR stream read failed, tail may be lost: %v", err)
+			}
+			return
+		}
+		if string(msg) == "Done!" {
 			return
 		}
 		var res struct {
@@ -172,7 +180,8 @@ func (s *ASRStream) readLoop() {
 			StartTime  float64   `json:"start_time"` // segment start, seconds since stream start
 			Timestamps []float64 `json:"timestamps"` // token times relative to start_time
 		}
-		if json.Unmarshal(msg, &res) != nil {
+		if err := json.Unmarshal(msg, &res); err != nil {
+			log.Printf("[SherpaRunner] Dropping malformed ASR frame %.200q: %v", msg, err)
 			continue
 		}
 		text := normalizeCase(strings.TrimSpace(res.Text))
@@ -200,6 +209,7 @@ func (s *ASRStream) Send(samples []float32) error {
 	for i, v := range samples {
 		binary.LittleEndian.PutUint32(buf[i*4:], math.Float32bits(v))
 	}
+	_ = s.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 	return s.conn.WriteMessage(websocket.BinaryMessage, buf)
 }
 
@@ -223,6 +233,7 @@ func (s *ASRStream) Next() *ASRResult {
 // Finish tells the server no more audio is coming, waits for it to decode the tail,
 // closes the stream and returns all segments not yet taken (including the in-progress one).
 func (s *ASRStream) Finish(timeout time.Duration) []string {
+	_ = s.conn.SetWriteDeadline(time.Now().Add(time.Second))
 	if s.conn.WriteMessage(websocket.TextMessage, []byte("Done")) == nil {
 		select {
 		case <-s.done:
@@ -231,6 +242,7 @@ func (s *ASRStream) Finish(timeout time.Duration) []string {
 		}
 	}
 	s.Close()
+	<-s.done // readLoop exits once the conn is closed; nothing can append after this
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var out []string
@@ -246,5 +258,6 @@ func (s *ASRStream) Finish(timeout time.Duration) []string {
 
 // Close drops the stream without waiting for results.
 func (s *ASRStream) Close() {
+	s.closed.Store(true)
 	_ = s.conn.Close()
 }

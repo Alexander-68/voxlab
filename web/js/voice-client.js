@@ -7,7 +7,6 @@ class VoiceClient {
     this.ws = null;
     this.listeners = new Map();
     this.reconnectTimer = null;
-    this.isConnected = false;
   }
 
   connect() {
@@ -16,27 +15,30 @@ class VoiceClient {
     }
 
     try {
-      this.ws = new WebSocket(this.url);
-      this.ws.binaryType = 'arraybuffer';
+      const socket = new WebSocket(this.url);
+      this.ws = socket;
+      socket.binaryType = 'arraybuffer';
 
-      this.ws.onopen = () => {
-        this.isConnected = true;
+      // Handlers ignore events from a superseded socket.
+      socket.onopen = () => {
+        if (this.ws !== socket) return;
         this.emit('connection', { connected: true });
         console.log('[VoiceClient] Connected to VoxLab host daemon');
       };
 
-      this.ws.onclose = () => {
-        this.isConnected = false;
+      socket.onclose = () => {
+        if (this.ws !== socket) return;
         this.emit('connection', { connected: false });
         console.warn('[VoiceClient] Disconnected. Reconnecting in 2s...');
         this.scheduleReconnect();
       };
 
-      this.ws.onerror = (err) => {
+      socket.onerror = (err) => {
         console.error('[VoiceClient] WebSocket error:', err);
       };
 
-      this.ws.onmessage = (event) => {
+      socket.onmessage = (event) => {
+        if (this.ws !== socket) return;
         if (typeof event.data === 'string') {
           try {
             const msg = JSON.parse(event.data);
@@ -73,9 +75,14 @@ class VoiceClient {
 
   emit(event, data) {
     const list = this.listeners.get(event);
-    if (list) {
-      list.forEach((cb) => cb(data));
-    }
+    if (!list) return;
+    list.forEach((cb) => {
+      try {
+        cb(data);
+      } catch (e) {
+        console.error(`[VoiceClient] Listener for "${event}" threw:`, e);
+      }
+    });
   }
 
   sendAudioChunk(arrayBuffer) {
@@ -85,10 +92,16 @@ class VoiceClient {
   }
 
   sendAction(action, payload = {}) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ action, ...payload }));
-    } else {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       console.warn('[VoiceClient] Cannot send action, WS not open:', action);
+      return false;
+    }
+    try {
+      this.ws.send(JSON.stringify({ ...payload, action }));
+      return true;
+    } catch (e) {
+      console.error('[VoiceClient] Failed to send action:', action, e);
+      return false;
     }
   }
 
@@ -97,7 +110,7 @@ class VoiceClient {
     this.sendAction('activate', { mode: 'command' });
   }
 
-  startDictation(targetId = 'scope_inspection_1') {
+  startDictation(targetId) {
     this.sendAction('activate', { mode: 'dictation', target_id: targetId });
   }
 
@@ -114,7 +127,7 @@ class VoiceClient {
     this.sendAction('confirm', { approved });
   }
 
-  speak(text, voice = 'af_heart', speed = 1.0, streaming = true) {
+  speak(text, voice, speed = 1.0, streaming = true) {
     this.sendAction('speak', { payload: { text, voice, speed, streaming } });
   }
 
@@ -155,11 +168,11 @@ class VoiceClient {
   }
 
   setAgc(enabled) {
-    this.sendAction('set_agc', { enabled: enabled });
+    this.sendAction('set_agc', { enabled: !!enabled });
   }
 
   setHighPass(enabled) {
-    this.sendAction('set_highpass', { enabled: enabled });
+    this.sendAction('set_highpass', { enabled: !!enabled });
   }
 
   setMonitor(enabled) {
@@ -194,7 +207,7 @@ class VoiceClient {
     this.sendAction('set_asr_engine', { engine });
   }
 
-  startEvaluation(tier = 'tier-2-deep-matrix') {
+  startEvaluation(tier) {
     this.sendAction('eval.start', { tier });
   }
 

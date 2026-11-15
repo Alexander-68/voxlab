@@ -1,8 +1,11 @@
 package metrics
 
 import (
+	"cmp"
 	"fmt"
+	"maps"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -168,7 +171,7 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 	report := &SuiteReport{
 		Tier:           tier,
 		TotalCases:     len(results),
-		Results:        results,
+		Results:        slices.Clone(results),
 		Duration:       suiteDuration,
 		VoiceBreakdown: make(map[string]DimensionGroup),
 		RateBreakdown:  make(map[string]DimensionGroup),
@@ -209,11 +212,20 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 	}
 	snrMap := make(map[string]*snrAgg)
 
-	snrKey := func(snr *float64, noiseType string) string {
-		if snr == nil || noiseType == "clean" || noiseType == "" {
-			return "Clean"
+	// snrKey buckets a case on the SNR curve. ok is false for noisy cases without a recorded
+	// SNR (sub-gate clips), which have no place on the curve. Reverb's "SNR" is only a wet-mix
+	// weight, so it gets its own bucket instead of joining the additive-noise levels.
+	snrKey := func(snr *float64, noiseType string) (key string, val *float64, ok bool) {
+		switch {
+		case noiseType == "clean" || noiseType == "":
+			return "Clean", nil, true
+		case noiseType == "reverb":
+			return "Reverb", nil, true
+		case snr == nil:
+			return "", nil, false
 		}
-		return fmt.Sprintf("%+.0f dB", *snr)
+		v := math.Round(*snr) + 0 // + 0 turns -0 into 0, so -0.4 dB is labelled "+0 dB"
+		return fmt.Sprintf("%+.0f dB", v), &v, true
 	}
 
 	type dimAgg struct {
@@ -269,11 +281,13 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 			}
 		}
 
-		sKey := snrKey(res.SNR, res.NoiseType)
+		sKey, sVal, onCurve := snrKey(res.SNR, res.NoiseType)
 		sEntry, ok := snrMap[sKey]
 		if !ok {
-			sEntry = &snrAgg{snrVal: res.SNR}
-			snrMap[sKey] = sEntry
+			sEntry = &snrAgg{snrVal: sVal}
+			if onCurve {
+				snrMap[sKey] = sEntry
+			}
 		}
 		sEntry.count++
 		if res.Passed {
@@ -363,12 +377,23 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 		TotalDuration: ComputePercentiles(totalDurVals),
 	}
 
-	snrOrder := []string{"Clean", "+20 dB", "+15 dB", "+10 dB", "+5 dB", "+0 dB", "-5 dB"}
-	for _, key := range snrOrder {
-		agg, ok := snrMap[key]
-		if !ok {
-			continue
+	// Clean first, then SNR levels from high to low, then buckets without a level (Reverb).
+	rank := func(key string) (int, float64) {
+		switch v := snrMap[key].snrVal; {
+		case key == "Clean":
+			return 0, 0
+		case v != nil:
+			return 1, -*v
 		}
+		return 2, 0
+	}
+	snrKeys := slices.SortedFunc(maps.Keys(snrMap), func(a, b string) int {
+		ra, va := rank(a)
+		rb, vb := rank(b)
+		return cmp.Or(cmp.Compare(ra, rb), cmp.Compare(va, vb), strings.Compare(a, b))
+	})
+	for _, key := range snrKeys {
+		agg := snrMap[key]
 		pt := SNRCurvePoint{
 			SNR:          agg.snrVal,
 			Label:        key,
@@ -383,23 +408,6 @@ func ComputeSuiteReport(tier string, results []ItemResult, suiteDuration time.Du
 		}
 		if agg.cmdCount > 0 {
 			pt.IntentAccuracy = math.Round((float64(agg.cmdPass)/float64(agg.cmdCount))*1000) / 1000
-		}
-		report.SNRCurve = append(report.SNRCurve, pt)
-		delete(snrMap, key)
-	}
-
-	for key, agg := range snrMap {
-		pt := SNRCurvePoint{
-			SNR:          agg.snrVal,
-			Label:        key,
-			Count:        agg.count,
-			Passed:       agg.passed,
-			PassRate:     float64(agg.passed) / float64(agg.count),
-			AvgLatencyMs: math.Round((agg.latSum/float64(agg.count))*10) / 10,
-		}
-		if agg.werCount > 0 {
-			pt.AvgWER = math.Round((agg.werSum/float64(agg.werCount))*1000) / 1000
-			pt.AvgCER = math.Round((agg.cerSum/float64(agg.werCount))*1000) / 1000
 		}
 		report.SNRCurve = append(report.SNRCurve, pt)
 	}

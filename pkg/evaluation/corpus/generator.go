@@ -1,4 +1,4 @@
-﻿package corpus
+package corpus
 
 import (
 	"bytes"
@@ -232,7 +232,7 @@ func DefaultBaseUtterances() []BaseUtterance {
 			Voice:        "ef_dora",
 			Lang:         "en", // English read with a Spanish voice, the point of this item
 			SpeakingRate: 1.0,
-			Accent:       "es",
+			Accent:       "es-ES",
 			Gender:       "female",
 			Category:     "command",
 			Expected:     "NAV_SETTINGS",
@@ -521,6 +521,7 @@ func DefaultBaseUtterances() []BaseUtterance {
 			Description:  "Dictation: Intraoperative Bleeding (Mandarin Male Yunxia)",
 			Mode:         ModeDictation,
 			Text:         "术中出血量约五十毫升，已彻底止血，输液通畅。",
+			AltText:      "术中出血量约50毫升，已彻底止血，输液通畅。",
 			Voice:        "zm_yunxia",
 			SpeakingRate: 1.0,
 			Accent:       "zh-CN",
@@ -593,6 +594,7 @@ func DefaultBaseUtterances() []BaseUtterance {
 			Description:  "Dictation: Oxygen Therapy (Mandarin Female Xiaoxiao)",
 			Mode:         ModeDictation,
 			Text:         "鼻导管吸氧每分钟两升，经皮血氧饱和度百分之九十九。",
+			AltText:      "鼻导管吸氧每分钟2升，经皮血氧饱和度99%。",
 			Voice:        "zf_xiaoxiao",
 			SpeakingRate: 1.0,
 			Accent:       "zh-CN",
@@ -720,6 +722,9 @@ func scaleToDBFS(samples []float32, dbfs float64) {
 		rms, _ := audio.CalculateRMS(samples[i:min(i+chunkSamples, len(samples))])
 		peak = max(peak, rms)
 	}
+	if peak < 1e-7 { // silent clip: no level to scale, and dividing would produce NaN/Inf
+		return
+	}
 	gain := float32(math.Pow(10, dbfs/20) / peak)
 	for i := range samples {
 		samples[i] *= gain
@@ -744,6 +749,9 @@ func LoadOrSynthesizeClip(path string, runner engine.SpeechEngine, req engine.TT
 	res, err := runner.Synthesize(req)
 	if err != nil {
 		return nil, fmt.Errorf("synthesis failed: %w", err)
+	}
+	if len(res.AudioSamples) == 0 {
+		return nil, fmt.Errorf("synthesizing %s: TTS returned no audio", path)
 	}
 	if res.Simulated {
 		return nil, fmt.Errorf("synthesizing %s: Kokoro TTS unavailable, got simulator tones instead of speech", path)
@@ -829,6 +837,9 @@ func GenerateTier2Corpus(outDir string, runner engine.SpeechEngine) (*EvalManife
 
 		for _, v := range vars {
 			seed++
+			if v.SNR == nil {
+				return nil, fmt.Errorf("variation %s_%s has no SNR", b.BaseID, v.Suffix)
+			}
 			perturbedSamples := audio.AddNoiseAtSNR(cleanSamples, v.NoiseType, *v.SNR, 16000, seed)
 			filename := fmt.Sprintf("t2_%s_%s.wav", strings.ToLower(b.BaseID), strings.ToLower(v.Suffix))
 			wavPath := filepath.Join(outDir, filename)
@@ -869,9 +880,13 @@ func GenerateTier2Corpus(outDir string, runner engine.SpeechEngine) (*EvalManife
 	// Sub-gate 1: Ambient room hiss (-48 dBFS)
 	hissSamples := audio.GenerateWhiteNoise(16000*2, 777)
 	scaleToDBFS(hissSamples, -48)
-	hissBytes, _ := audio.EncodeWAV(hissSamples, 16000)
-	hissPath := filepath.Join(outDir, "t2_subgate_hiss.wav")
-	_ = os.WriteFile(hissPath, hissBytes, 0644)
+	hissBytes, err := audio.EncodeWAV(hissSamples, 16000)
+	if err != nil {
+		return nil, fmt.Errorf("failed encoding sub-gate hiss wav: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "t2_subgate_hiss.wav"), hissBytes, 0644); err != nil {
+		return nil, fmt.Errorf("failed saving sub-gate hiss wav: %w", err)
+	}
 	manifest.Items = append(manifest.Items, EvalItem{
 		ID:          "T2_SUBGATE_HISS",
 		Description: "[Sub-Gate] Low-level ambient room hiss (-48 dBFS)",
@@ -888,9 +903,13 @@ func GenerateTier2Corpus(outDir string, runner engine.SpeechEngine) (*EvalManife
 	// Sub-gate 2: Light keyboard clicks, loudest 30 ms at -46 dBFS, below the -42 dBFS gate
 	clicksSamples := audio.GenerateTypingNoise(16000*2, 16000, 888)
 	scaleToDBFS(clicksSamples, -46)
-	clicksBytes, _ := audio.EncodeWAV(clicksSamples, 16000)
-	clicksPath := filepath.Join(outDir, "t2_subgate_clicks.wav")
-	_ = os.WriteFile(clicksPath, clicksBytes, 0644)
+	clicksBytes, err := audio.EncodeWAV(clicksSamples, 16000)
+	if err != nil {
+		return nil, fmt.Errorf("failed encoding sub-gate clicks wav: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "t2_subgate_clicks.wav"), clicksBytes, 0644); err != nil {
+		return nil, fmt.Errorf("failed saving sub-gate clicks wav: %w", err)
+	}
 	manifest.Items = append(manifest.Items, EvalItem{
 		ID:          "T2_SUBGATE_CLICKS",
 		Description: "[Sub-Gate] Distant keyboard typing clicks below gate threshold",
@@ -982,5 +1001,3 @@ func GenerateTier1Corpus(outDir string, runner engine.SpeechEngine) (*EvalManife
 	}
 	return manifest, nil
 }
-
-

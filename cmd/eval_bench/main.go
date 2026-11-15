@@ -30,7 +30,8 @@ func run() int {
 
 	tier := *tierFlag
 	if tier != "1" && tier != "2" {
-		tier = "2"
+		log.Printf("[Error] invalid -tier %q: must be '1' or '2'", tier)
+		return 2
 	}
 
 	manifestPath := *manifestFlag
@@ -46,6 +47,11 @@ func run() int {
 	manifest, err := evaluation.LoadManifest(manifestPath)
 	if err != nil {
 		log.Fatalf("[Error] Failed loading manifest at %s: %v\nRun 'go run ./cmd/gen_eval_samples -tier %s' first to generate corpus.", manifestPath, err, tier)
+	}
+
+	// The manifest decides the report name and pass bar, so -manifest with another tier stays consistent.
+	if manifest.Tier == "" {
+		manifest.Tier = map[string]string{"1": "tier-1-smoke", "2": "tier-2-deep-matrix"}[tier]
 	}
 
 	if *quickFlag && len(manifest.Items) > 12 {
@@ -66,7 +72,13 @@ func run() int {
 		log.Printf("[Fatal] Failed initializing VoxLab server: %v", err)
 		return 1
 	}
-	defer func() { _ = srv.Stop(context.Background()) }()
+	defer func() {
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer stopCancel()
+		if err := srv.Stop(stopCtx); err != nil {
+			log.Printf("[Warn] Server shutdown reported an error: %v", err)
+		}
+	}()
 
 	runner, ok := srv.SherpaEngine().(*engine.SherpaRunner)
 	isSherpa := ok && runner.Name() == "sherpa_onnx_native"
@@ -79,13 +91,19 @@ func run() int {
 			log.Print("Sherpa warm ASR not ready within timeout")
 			return 1
 		}
+		if info := runner.ASRModelInfo(); info["second_pass"] == true && info["second_pass_loaded"] != true {
+			log.Print("Second-pass ASR is enabled but did not load within timeout; the benchmark would measure a degraded pipeline")
+			return 1
+		}
 		if err := srv.SetASREngineMode("sherpa"); err != nil {
 			log.Printf("failed setting ASR engine mode to sherpa: %v", err)
 			return 1
 		}
 		fmt.Println(" [READY]")
 	} else {
-		fmt.Println(">> Notice: Native Sherpa models not detected; using simulator ASR engine.")
+		// The simulator cannot transcribe real audio; its numbers would overwrite the report.
+		log.Print("[Error] Native Sherpa models not detected; the benchmark needs real ASR (run scripts/download_models.ps1)")
+		return 1
 	}
 
 	srv.StartBackgroundLoops()
@@ -136,7 +154,11 @@ func run() int {
 	// 3. Save report JSON
 	outPath := *outFlag
 	if outPath == "" {
-		outPath = filepath.Join("data", fmt.Sprintf("eval_report_%s.json", manifest.Tier)) // the name the server reads
+		name := "eval_report_" + manifest.Tier // the name the server reads
+		if err != nil {
+			name += ".partial" // an unfinished run must not replace the last complete report
+		}
+		outPath = filepath.Join("data", name+".json")
 	}
 	reportJSON, saveErr := json.MarshalIndent(report, "", "  ")
 	if saveErr == nil {
@@ -149,7 +171,7 @@ func run() int {
 	fmt.Printf("\nFull JSON evaluation report saved to: %s\n\n", outPath)
 
 	minPass := 0.80 // same bar as the Tier 2 test
-	if tier == "1" {
+	if manifest.Tier == "tier-1-smoke" {
 		minPass = 1.0
 	}
 	if err != nil || report.PassRate < minPass {
@@ -221,11 +243,13 @@ func printLatencyLine(label string, p evaluation.LatencyPercentiles) {
 		label, p.AvgMs, p.P50Ms, p.P90Ms, p.P95Ms, p.P99Ms, p.MaxMs)
 }
 
+// truncateString shortens s to maxLen runes (maxLen >= 4), so CJK text is never split mid-rune.
 func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	r := []rune(s)
+	if len(r) <= maxLen {
 		return s
 	}
-	return s[:maxLen-3] + "..."
+	return string(r[:maxLen-3]) + "..."
 }
 
 func pct(v *float64) string {

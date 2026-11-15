@@ -1,12 +1,15 @@
 package engine
 
 import (
+	"errors"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 const daemonTailBytes = 2048
@@ -38,6 +41,7 @@ func (t *tailWriter) String() string {
 type daemon struct {
 	cmd     *exec.Cmd
 	closing atomic.Bool
+	done    chan struct{} // closed once the process is reaped
 }
 
 func startDaemon(name string, cmd *exec.Cmd) (*daemon, error) {
@@ -49,8 +53,9 @@ func startDaemon(name string, cmd *exec.Cmd) (*daemon, error) {
 	if err := killWithParent(cmd); err != nil {
 		log.Printf("[SherpaRunner] %s may outlive a crash of this process: %v", name, err)
 	}
-	d := &daemon{cmd: cmd}
+	d := &daemon{cmd: cmd, done: make(chan struct{})}
 	go func() {
+		defer close(d.done)
 		err := cmd.Wait()
 		if !d.closing.Load() {
 			log.Printf("[SherpaRunner] %s exited unexpectedly (%v): %s", name, err, stderr.String())
@@ -59,8 +64,16 @@ func startDaemon(name string, cmd *exec.Cmd) (*daemon, error) {
 	return d, nil
 }
 
-// Close kills the process.
+// Close kills the process and waits (bounded) until it is reaped.
 func (d *daemon) Close() error {
 	d.closing.Store(true)
-	return d.cmd.Process.Kill()
+	err := d.cmd.Process.Kill()
+	if errors.Is(err, os.ErrProcessDone) {
+		err = nil
+	}
+	select {
+	case <-d.done:
+	case <-time.After(5 * time.Second):
+	}
+	return err
 }

@@ -2,6 +2,10 @@
 set -e
 
 KOKORO_VER="${1:-v1_1}"
+case "$KOKORO_VER" in
+    v1_1|int8|v1_0|v0_19) ;;
+    *) echo "Unknown Kokoro version '$KOKORO_VER' (expected v1_1|int8|v1_0|v0_19)" >&2; exit 2 ;;
+esac
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$SCRIPT_DIR/.."
 MODELS_DIR="$ROOT_DIR/models"
@@ -10,18 +14,26 @@ BIN_DIR="$ROOT_DIR/bin"
 mkdir -p "$MODELS_DIR"
 mkdir -p "$BIN_DIR"
 
+# A directory alone may be a leftover of an interrupted extraction; require real model files.
+model_dir_ok() {
+    [ -f "$1/tokens.txt" ] && compgen -G "$1/*.onnx" > /dev/null
+}
+
 echo "=================================================="
 echo " VoxLab Neural Model & Engine Downloader (Linux)"
 echo " Target directory: $MODELS_DIR"
 echo "=================================================="
 
 # 1. Precompiled Sherpa-ONNX Executable Tools (Linux x64)
-SHERPA_TTS_BIN="$BIN_DIR/sherpa-onnx-offline-tts"
-if [ ! -f "$SHERPA_TTS_BIN" ]; then
+MISSING_BIN=false
+for b in sherpa-onnx-offline-tts sherpa-onnx-online-websocket-server sherpa-onnx-offline-websocket-server sherpa-onnx-keyword-spotter; do
+    [ -x "$BIN_DIR/$b" ] || MISSING_BIN=true
+done
+if [ "$MISSING_BIN" = true ]; then
     echo "[1/3] Downloading Sherpa-ONNX pre-compiled binaries (v1.13.8 Linux x64)..."
     SHERPA_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-linux-x64-static.tar.bz2"
     wget -c "$SHERPA_URL" -O "$MODELS_DIR/sherpa-bin.tar.bz2"
-    tar -xjf "$MODELS_DIR/sherpa-bin.tar.bz2" -C "$BIN_DIR" --strip-components=2 "*/bin/*" || true
+    tar -xjf "$MODELS_DIR/sherpa-bin.tar.bz2" -C "$BIN_DIR" --strip-components=2 --wildcards "*/bin/*"
     rm -f "$MODELS_DIR/sherpa-bin.tar.bz2"
     echo "Sherpa-ONNX binaries installed into $BIN_DIR!"
 else
@@ -40,7 +52,7 @@ fi
 
 KOKORO_FOLDER="$MODELS_DIR/$KOKORO_NAME"
 ALREADY_INSTALLED=false
-if [ -d "$KOKORO_FOLDER" ]; then
+if model_dir_ok "$KOKORO_FOLDER"; then
     ALREADY_INSTALLED=true
 elif [ "$KOKORO_VER" == "int8" ] && [ -f "$MODELS_DIR/kokoro-multi-lang-v1_1/model.int8.onnx" ]; then
     ALREADY_INSTALLED=true
@@ -53,8 +65,12 @@ if [ "$ALREADY_INSTALLED" = false ]; then
     tar -xjf "$MODELS_DIR/$KOKORO_NAME.tar.bz2" -C "$MODELS_DIR"
     rm -f "$MODELS_DIR/$KOKORO_NAME.tar.bz2"
     if [ "$KOKORO_VER" == "int8" ] && [ -d "$MODELS_DIR/kokoro-multi-lang-v1_1" ]; then
-        cp "$KOKORO_FOLDER/model.int8.onnx" "$MODELS_DIR/kokoro-multi-lang-v1_1/model.int8.onnx"
-        rm -rf "$KOKORO_FOLDER"
+        if [ -f "$KOKORO_FOLDER/model.int8.onnx" ]; then
+            cp "$KOKORO_FOLDER/model.int8.onnx" "$MODELS_DIR/kokoro-multi-lang-v1_1/model.int8.onnx"
+            rm -rf "$KOKORO_FOLDER"
+        else
+            echo "WARN: model.int8.onnx not found in $KOKORO_FOLDER; keeping it in place." >&2
+        fi
     fi
     echo "Kokoro TTS ($KOKORO_NAME) installed!"
 else
@@ -63,7 +79,7 @@ fi
 
 # 3. ASR Models: Nemotron 3.5 & Kroko streaming (first pass), Parakeet Ultra (second pass).
 for ASR_NAME in sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11 sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06 sherpa-onnx-nemo-parakeet-tdt-0.6b-ultra-int8; do
-    if [ ! -d "$MODELS_DIR/$ASR_NAME" ]; then
+    if ! model_dir_ok "$MODELS_DIR/$ASR_NAME"; then
         echo "[3/3] Downloading ASR model $ASR_NAME..."
         wget -c "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/$ASR_NAME.tar.bz2" -O "$MODELS_DIR/$ASR_NAME.tar.bz2"
         tar -xjf "$MODELS_DIR/$ASR_NAME.tar.bz2" -C "$MODELS_DIR"

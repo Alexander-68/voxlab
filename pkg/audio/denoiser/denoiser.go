@@ -1,6 +1,7 @@
 package denoiser
 
 import (
+	"fmt"
 	"log"
 	"sync"
 
@@ -72,6 +73,11 @@ func (b *BypassEnhancer) SetEnabled(enabled bool) {
 }
 
 func (b *BypassEnhancer) SwitchModel(modelType string) error {
+	switch modelType {
+	case "gtcrn", "dpdfnet", "bypass":
+	default:
+		return fmt.Errorf("unsupported enhancer model type %q", modelType)
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.modelType = modelType
@@ -94,7 +100,7 @@ func NewSpeechEnhancer(dllDir string, modelDir string, cfg config.EnhancerConfig
 	enhancer, err := newPlatformSpeechEnhancer(dllDir, modelDir, cfg)
 	if err != nil {
 		log.Printf("[SpeechEnhancer] Native denoiser initialization skipped (%v); using bypass enhancer", err)
-		return NewBypassEnhancer(cfg.Enabled)
+		return NewBypassEnhancer(false) // passthrough: never report denoising as active
 	}
 	return enhancer
 }

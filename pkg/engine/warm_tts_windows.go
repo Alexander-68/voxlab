@@ -144,12 +144,16 @@ type windowsWarmTTS struct {
 	destroyAudioFn *syscall.LazyProc
 	handle         uintptr
 	modelKey       string
-	mu             sync.Mutex
+	sampleRate     int        // native output rate, used for streamed chunk headers
+	mu             sync.Mutex // held across native calls so Close cannot destroy the handle mid-generation
 }
 
 var (
 	warmTtsCbMu sync.Mutex
 	warmTtsCbFn func(samples []float32, progress float32) error
+	// warmTtsGenMu serializes callback generations across instances: the native
+	// callback pointer and warmTtsCbFn are process-global.
+	warmTtsGenMu sync.Mutex
 )
 
 func warmTtsProgressCallback(samplesPtr uintptr, numSamples int32, progressBits uintptr, arg uintptr) uintptr {
@@ -201,7 +205,8 @@ func (w *windowsWarmTTS) SynthesizeStream(text string, sid int, speed float64, o
 
 	startTime := time.Now()
 	var keep [][]byte
-	defer runtime.KeepAlive(keep) // native calls only receive uintptrs, which do not retain the bytes
+	// Closure, so KeepAlive sees the final slice (defer args are evaluated immediately).
+	defer func() { runtime.KeepAlive(keep) }() // native calls only receive uintptrs
 	textPtr := toCString(text, &keep)
 	speedBits := math.Float32bits(float32(speed))
 
@@ -209,10 +214,12 @@ func (w *windowsWarmTTS) SynthesizeStream(text string, sid int, speed float64, o
 	if onChunk != nil && w.genWithCbFn != nil && w.genWithCbFn.Find() == nil {
 		var (
 			chunkIdx   int
-			sampleRate = 24000
+			sampleRate = w.sampleRate
 			cbErr      error
 		)
 
+		warmTtsGenMu.Lock()
+		defer warmTtsGenMu.Unlock()
 		warmTtsCbMu.Lock()
 		warmTtsCbFn = func(samples []float32, progress float32) error {
 			chunkIdx++
@@ -220,6 +227,7 @@ func (w *windowsWarmTTS) SynthesizeStream(text string, sid int, speed float64, o
 			lat := time.Since(startTime).Milliseconds()
 			wav, err := audio.EncodeWAV(samples, sampleRate)
 			if err != nil {
+				cbErr = err
 				return err
 			}
 			c := TTSChunk{
@@ -277,21 +285,26 @@ func (w *windowsWarmTTS) SynthesizeStream(text string, sid int, speed float64, o
 		w.destroyAudioFn.Call(audioPtr)
 
 		latency := time.Since(startTime).Milliseconds()
+		res, err := float32SliceToTTSResult(samples, sampleRate, latency)
+		if err != nil {
+			return nil, err
+		}
+		w.sampleRate = sampleRate
 		// If native engine did not fire callbacks (single sentence), dispatch as chunk 0
 		if chunkIdx == 0 {
-			wav, _ := audio.EncodeWAV(samples, sampleRate)
-			_ = onChunk(TTSChunk{
+			if err := onChunk(TTSChunk{
 				Index:        0,
 				IsLast:       true,
 				AudioSamples: samples,
-				WAVBytes:     wav,
+				WAVBytes:     res.WAVBytes,
 				SampleRate:   sampleRate,
-				DurationSec:  float64(len(samples)) / float64(sampleRate),
+				DurationSec:  res.DurationSec,
 				LatencyMs:    latency,
-			})
+			}); err != nil {
+				return nil, fmt.Errorf("streaming synthesis aborted: %w", err)
+			}
 		}
-
-		return float32SliceToTTSResult(samples, sampleRate, latency)
+		return res, nil
 	}
 
 	// Standard non-streaming path
@@ -321,8 +334,12 @@ func (w *windowsWarmTTS) SynthesizeStream(text string, sid int, speed float64, o
 	w.destroyAudioFn.Call(audioPtr)
 
 	res, err := float32SliceToTTSResult(samples, sampleRate, latency)
-	if err == nil && onChunk != nil {
-		_ = onChunk(TTSChunk{
+	if err != nil {
+		return nil, err
+	}
+	w.sampleRate = sampleRate
+	if onChunk != nil {
+		if err := onChunk(TTSChunk{
 			Index:        0,
 			IsLast:       true,
 			AudioSamples: samples,
@@ -330,9 +347,11 @@ func (w *windowsWarmTTS) SynthesizeStream(text string, sid int, speed float64, o
 			SampleRate:   sampleRate,
 			DurationSec:  res.DurationSec,
 			LatencyMs:    latency,
-		})
+		}); err != nil {
+			return nil, fmt.Errorf("synthesis aborted by consumer: %w", err)
+		}
 	}
-	return res, err
+	return res, nil
 }
 
 func (w *windowsWarmTTS) Close() error {
@@ -373,7 +392,11 @@ func newPlatformWarmTTS(
 	// is loaded rather than any incompatible system-installed onnxruntime.dll
 	kernel32 := syscall.NewLazyDLL("kernel32.dll")
 	setDllDir := kernel32.NewProc("SetDllDirectoryW")
-	setDllDir.Call(uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(absDllDir))))
+	if r, _, err := setDllDir.Call(uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(absDllDir)))); r == 0 {
+		return nil, fmt.Errorf("SetDllDirectoryW(%s) failed: %w", absDllDir, err)
+	}
+	// Restore the default process-wide search path once the DLL and its model are loaded.
+	defer setDllDir.Call(0)
 
 	dll := syscall.NewLazyDLL(absDllPath)
 	if err := dll.Load(); err != nil {
@@ -388,6 +411,7 @@ func newPlatformWarmTTS(
 	genFn := dll.NewProc("SherpaOnnxOfflineTtsGenerate")
 	genWithCbFn := dll.NewProc("SherpaOnnxOfflineTtsGenerateWithCallback")
 	destroyAudioFn := dll.NewProc("SherpaOnnxDestroyOfflineTtsGeneratedAudio")
+	sampleRateFn := dll.NewProc("SherpaOnnxOfflineTtsSampleRate")
 
 	if numThreads <= 0 {
 		numThreads = 4
@@ -412,7 +436,8 @@ func newPlatformWarmTTS(
 	}
 
 	var keep [][]byte
-	defer runtime.KeepAlive(keep) // native calls only receive uintptrs, which do not retain the bytes
+	// Closure, so KeepAlive sees the final slice (defer args are evaluated immediately).
+	defer func() { runtime.KeepAlive(keep) }() // native calls only receive uintptrs
 	var cfg cOfflineTtsConfig
 	cfg.Model.NumThreads = int32(numThreads)
 	cfg.Model.Provider = toCString(provider, &keep)
@@ -434,6 +459,8 @@ func newPlatformWarmTTS(
 		}
 		cfg.RuleFsts = toCString(strings.Join(parts, ","), &keep)
 	}
+	// Batch size, not a cap: all sentences are synthesized, one per batch, and the
+	// streaming callback fires after each batch, i.e. once per sentence.
 	cfg.MaxNumSentences = 1
 	cfg.SilenceScale = 0.5
 
@@ -441,6 +468,13 @@ func newPlatformWarmTTS(
 	ttsPtr, _, callErr := createFn.Call(uintptr(unsafe.Pointer(&cfg)))
 	if ttsPtr == 0 {
 		return nil, fmt.Errorf("SherpaOnnxCreateOfflineTts returned NULL: %v", callErr)
+	}
+
+	sampleRate := 24000 // Kokoro's rate; used until the DLL reports otherwise
+	if sampleRateFn.Find() == nil {
+		if sr, _, _ := sampleRateFn.Call(ttsPtr); int32(sr) > 0 {
+			sampleRate = int(int32(sr))
+		}
 	}
 
 	key := warmTTSKey(modelFile, lang, numThreads, provider)
@@ -456,6 +490,7 @@ func newPlatformWarmTTS(
 		destroyAudioFn: destroyAudioFn,
 		handle:         ttsPtr,
 		modelKey:       key,
+		sampleRate:     sampleRate,
 	}, nil
 }
 

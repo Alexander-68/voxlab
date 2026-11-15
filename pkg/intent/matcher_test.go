@@ -136,3 +136,15 @@ func TestTokenizeNonASCII(t *testing.T) {
 		t.Errorf("Tokenize = %q", got)
 	}
 }
+
+func TestSlotAliasesMatchWholeTokens(t *testing.T) {
+	m := NewIntentMatcher(DefaultCatalog(), 0.75, 0.10)
+	slots, _ := m.extractSlots("ROUTE_VIDEO", "send camera 12 to the main monitor")
+	if _, ok := slots["source"]; ok {
+		t.Errorf("camera 12 must not fill source, got %q", slots["source"])
+	}
+	slots, _ = m.extractSlots("ROUTE_VIDEO", "route the telescope to monitor two")
+	if _, ok := slots["source"]; ok {
+		t.Errorf("telescope must not match alias scope, got %q", slots["source"])
+	}
+}

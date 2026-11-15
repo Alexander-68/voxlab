@@ -28,6 +28,9 @@ func TestBypassEnhancer(t *testing.T) {
 	if b.ModelType() != "gtcrn" {
 		t.Errorf("expected modelType gtcrn, got %s", b.ModelType())
 	}
+	if err := b.SwitchModel("<script>"); err == nil || b.ModelType() != "gtcrn" {
+		t.Errorf("expected unknown model rejected and type unchanged, got err=%v type=%s", err, b.ModelType())
+	}
 }
 
 func TestSpeechEnhancerFactoryAndProcessing(t *testing.T) {

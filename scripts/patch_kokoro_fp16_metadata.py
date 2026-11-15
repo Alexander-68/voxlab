@@ -33,6 +33,15 @@ except ImportError:
     sys.exit(1)
 
 
+# Keys sherpa-onnx needs to load a Kokoro model (present in every official release).
+REQUIRED_KEYS = ("sample_rate", "model_type", "version", "has_espeak", "style_dim", "n_speakers")
+
+
+def missing_keys(model) -> list:
+    present = {p.key for p in model.metadata_props}
+    return [k for k in REQUIRED_KEYS if k not in present]
+
+
 def inspect_metadata(model_path: str):
     if not os.path.exists(model_path):
         print(f"[Error] File not found: {model_path}")
@@ -42,11 +51,15 @@ def inspect_metadata(model_path: str):
     m = onnx.load(model_path, load_external_data=False)
     if not m.metadata_props:
         print("  (No metadata properties found)")
-        return True
 
     for p in m.metadata_props:
         val_preview = p.value if len(p.value) <= 80 else p.value[:77] + "..."
         print(f"  {p.key} = {val_preview}")
+
+    missing = missing_keys(m)
+    if missing:
+        print(f"[Error] Missing required metadata keys: {', '.join(missing)}")
+        return False
     return True
 
 
@@ -59,7 +72,8 @@ def patch_metadata(target_path: str, reference_path: str) -> bool:
         return False
 
     print(f"[1/3] Loading target model: {target_path}")
-    m_target = onnx.load(target_path)
+    # Keep external weights (if any) as references instead of inlining them on save.
+    m_target = onnx.load(target_path, load_external_data=False)
 
     print(f"[2/3] Loading reference model metadata: {reference_path}")
     m_ref = onnx.load(reference_path, load_external_data=False)
@@ -71,9 +85,22 @@ def patch_metadata(target_path: str, reference_path: str) -> bool:
             m_target.metadata_props.append(p)
             added_keys.append(p.key)
 
+    missing = missing_keys(m_target)
+    if missing:
+        print(f"[Error] Required metadata keys absent from target and reference: {', '.join(missing)}")
+        return False
+
     if added_keys:
         print(f"[3/3] Injected missing metadata keys ({len(added_keys)}): {', '.join(added_keys)}")
-        onnx.save(m_target, target_path)
+        # Atomic write: a failed save must not truncate a previously valid model.
+        # Same directory so relative external-data paths stay valid.
+        tmp_path = target_path + ".tmp"
+        try:
+            onnx.save(m_target, tmp_path)
+            os.replace(tmp_path, target_path)
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
         print(f"[OK] Successfully patched and saved: {target_path}")
     else:
         print("[OK] Target model already contains all required Sherpa-ONNX metadata properties.")

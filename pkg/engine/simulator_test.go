@@ -42,3 +42,32 @@ func TestSimulatorEngine(t *testing.T) {
 		t.Errorf("expected positive duration, got %f", res.DurationSec)
 	}
 }
+
+func TestSimulatorFlushReturnsPendingAndWakeIsIndependent(t *testing.T) {
+	sim := NewSimulatorEngine()
+	loud := make([]float32, 480)
+	for i := range loud {
+		loud[i] = 0.2
+	}
+	for range 14 {
+		if _, err := sim.ProcessASRChunk(loud, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// 14 ASR speech chunks must not prime the wake-word streak.
+	if hit, _, _ := sim.DetectWakeWord(loud); hit {
+		t.Fatal("ASR speech leaked into the wake-word counter")
+	}
+	if got := sim.FlushASR(); got != "open settings" {
+		t.Fatalf("FlushASR = %q, want pending partial", got)
+	}
+	if got := sim.FlushASR(); got != "" {
+		t.Fatalf("second FlushASR = %q, want empty (consumed)", got)
+	}
+	if s := clampSpeed(1e-300); s != 0.5 {
+		t.Fatalf("clampSpeed(tiny) = %v", s)
+	}
+	if s := clampSpeed(math.NaN()); s != 1.0 {
+		t.Fatalf("clampSpeed(NaN) = %v", s)
+	}
+}

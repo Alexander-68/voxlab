@@ -10,6 +10,7 @@ class AudioCapture {
     this.sourceNode = null;
     this.processorNode = null;
     this.isRecording = false;
+    this.isStarting = false;
 
     this.sampleRate = 16000;
     this.chunkSize = 480; // 30ms at 16kHz
@@ -26,6 +27,7 @@ class AudioCapture {
     this.isMonitoring = false;
     this.monitorCtx = null;
     this.nextScheduleTime = 0;
+    this.activeSources = new Set();
   }
 
   setScopeEnabled(enabled) {
@@ -77,13 +79,14 @@ class AudioCapture {
   }
 
   async start(options = {}) {
-    if (this.isRecording) return;
+    if (this.isRecording || this.isStarting) return false;
+    this.isStarting = true;
     this.setRemoteMode(false);
 
     const constraints = {
       audio: {
         channelCount: 1,
-        sampleRate: 16000,
+        sampleRate: this.sampleRate,
         echoCancellation: options.echoCancellation !== false,
         noiseSuppression: options.noiseSuppression !== false,
         autoGainControl: options.autoGainControl !== false,
@@ -93,8 +96,16 @@ class AudioCapture {
     try {
       this.mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
       this.audioCtx = new (window.AudioContext || window.webkitAudioContext)({
-        sampleRate: 16000
+        sampleRate: this.sampleRate
       });
+      // chunkSize and the server assume 16 kHz PCM. Safari ignores the sampleRate hint and runs at
+      // the hardware rate, so downsample below instead of sending mislabelled audio.
+      const ratio = this.audioCtx.sampleRate / this.sampleRate;
+      if (ratio < 1) {
+        throw new Error(`AudioContext runs at ${this.audioCtx.sampleRate} Hz, below ${this.sampleRate} Hz`);
+      }
+      // ponytail: box-filter decimation (average per output sample); use a proper low-pass if aliasing shows up in ASR.
+      let acc = 0, accN = 0, phase = 0;
 
       this.sourceNode = this.audioCtx.createMediaStreamSource(this.mediaStream);
 
@@ -112,7 +123,14 @@ class AudioCapture {
         e.outputBuffer.getChannelData(0).fill(0);
 
         for (let i = 0; i < inputData.length; i++) {
-          bufferAccumulator.push(inputData[i]);
+          acc += inputData[i];
+          accN++;
+          phase += 1;
+          if (phase < ratio) continue;
+          phase -= ratio;
+          bufferAccumulator.push(acc / accN);
+          acc = 0;
+          accN = 0;
           if (bufferAccumulator.length >= this.chunkSize) {
             const chunk = bufferAccumulator.slice(0, this.chunkSize);
             bufferAccumulator = bufferAccumulator.slice(this.chunkSize);
@@ -137,7 +155,10 @@ class AudioCapture {
       return true;
     } catch (err) {
       console.error('[AudioCapture] Mic access error:', err);
+      this.stop(); // release partially acquired stream / audio context
       throw err;
+    } finally {
+      this.isStarting = false;
     }
   }
 
@@ -160,8 +181,9 @@ class AudioCapture {
       this.mediaStream = null;
     }
     if (this.audioCtx) {
-      this.audioCtx.close();
+      const ctx = this.audioCtx;
       this.audioCtx = null;
+      ctx.close().catch(() => {});
     }
     if (!this.isRemote) {
       this.clearVisualizer();
@@ -175,7 +197,7 @@ class AudioCapture {
     const options = { ...this.options, noiseSuppression: enabled };
     this.stop();
     await this.start(options);
-    const track = this.mediaStream.getAudioTracks()[0];
+    const track = this.mediaStream ? this.mediaStream.getAudioTracks()[0] : null;
     return track ? track.getSettings().noiseSuppression : undefined;
   }
 
@@ -194,11 +216,20 @@ class AudioCapture {
       }
       this.nextScheduleTime = 0;
     } else {
-      this.nextScheduleTime = 0;
+      this.stopScheduledSources();
       if (this.monitorCtx && this.monitorCtx.state === 'running') {
         this.monitorCtx.suspend().catch(() => {});
       }
     }
+  }
+
+  // Drop already-queued monitor chunks so a clock reset or resume does not overlap/burst them.
+  stopScheduledSources() {
+    for (const src of this.activeSources) {
+      try { src.stop(); } catch (e) { /* not started / already stopped */ }
+    }
+    this.activeSources.clear();
+    this.nextScheduleTime = 0;
   }
 
   setRemoteMode(enabled) {
@@ -235,7 +266,7 @@ class AudioCapture {
       cancelAnimationFrame(this.remoteAnimId);
       this.remoteAnimId = null;
     }
-    if (!this.canvas) return;
+    if (!this.canvas || !this.canvasCtx) return;
     if (!this.scopeEnabled) {
       this.drawDisabledVisualizer();
       return;
@@ -322,20 +353,25 @@ class AudioCapture {
       const numSamples = int16View.length;
       if (numSamples === 0) return;
 
-      const audioBuf = this.monitorCtx.createBuffer(1, numSamples, 16000);
+      const audioBuf = this.monitorCtx.createBuffer(1, numSamples, this.sampleRate);
       const channelData = audioBuf.getChannelData(0);
       for (let i = 0; i < numSamples; i++) {
         channelData[i] = int16View[i] / 32768.0;
       }
 
       const now = this.monitorCtx.currentTime;
-      if (this.nextScheduleTime < now || this.nextScheduleTime > now + 0.200) {
+      if (this.nextScheduleTime > now + 0.200) {
+        this.stopScheduledSources();
+      }
+      if (this.nextScheduleTime < now) {
         this.nextScheduleTime = now + 0.025;
       }
 
       const source = this.monitorCtx.createBufferSource();
       source.buffer = audioBuf;
       source.connect(this.monitorCtx.destination);
+      source.onended = () => this.activeSources.delete(source);
+      this.activeSources.add(source);
       source.start(this.nextScheduleTime);
       this.nextScheduleTime += audioBuf.duration;
     } catch (e) {

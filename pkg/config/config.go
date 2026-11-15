@@ -1,7 +1,9 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 )
 
@@ -162,11 +164,44 @@ func LoadConfig(path string) (*AppConfig, error) {
 		}
 		return nil, err
 	}
-	if err := json.Unmarshal(data, cfg); err != nil {
-		return nil, err
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields() // a misspelled key must not silently fall back to its default
+	if err := dec.Decode(cfg); err != nil {
+		return nil, fmt.Errorf("parse config %s: %w", path, err)
 	}
 	if cfg.Version == "" {
 		cfg.Version = Version
 	}
+	if err := cfg.validate(); err != nil {
+		return nil, fmt.Errorf("config %s: %w", path, err)
+	}
 	return cfg, nil
+}
+
+// validate rejects values that downstream audio code cannot run with (zero ticker intervals,
+// NaN filter coefficients, out-of-range ports). Port 0 means "use the -port flag".
+func (c *AppConfig) validate() error {
+	a := c.Audio
+	if a.SampleRate <= 0 || a.ChunkSamples <= 0 {
+		return fmt.Errorf("audio.sample_rate (%d) and audio.chunk_samples (%d) must be > 0", a.SampleRate, a.ChunkSamples)
+	}
+	if !(a.HighPassCutoffHz > 0) || a.HighPassCutoffHz >= float64(a.SampleRate)/2 {
+		return fmt.Errorf("audio.high_pass_cutoff_hz (%g) must be in (0, sample_rate/2)", a.HighPassCutoffHz)
+	}
+	if !(c.KWS.PreRollDurationSec > 0) {
+		return fmt.Errorf("kws.pre_roll_duration_sec (%g) must be > 0", c.KWS.PreRollDurationSec)
+	}
+	if !(c.Intent.ConfidenceThreshold >= 0 && c.Intent.ConfidenceThreshold <= 1) {
+		return fmt.Errorf("intent.confidence_threshold (%g) must be in 0..1", c.Intent.ConfidenceThreshold)
+	}
+	if !(c.Intent.MarginThreshold >= 0 && c.Intent.MarginThreshold <= 1) {
+		return fmt.Errorf("intent.margin_threshold (%g) must be in 0..1", c.Intent.MarginThreshold)
+	}
+	if c.TTS.SampleRate <= 0 {
+		return fmt.Errorf("tts.sample_rate (%d) must be > 0", c.TTS.SampleRate)
+	}
+	if c.Port < 0 || c.Port > 65535 {
+		return fmt.Errorf("port (%d) must be in 0..65535", c.Port)
+	}
+	return nil
 }

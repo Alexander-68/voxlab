@@ -113,7 +113,7 @@ func TestFormatDictationPhrase(t *testing.T) {
 		{
 			name:     "Abbreviation is not split",
 			input:    "Use a mild analgesic, e.g. paracetamol.",
-			expected: "Use a mild analgesic, e.g. Paracetamol.",
+			expected: "Use a mild analgesic, e.g. paracetamol.",
 		},
 		{
 			name:     "Spoken period after a decimal still converts",
@@ -226,5 +226,23 @@ func TestAppendDictationPhrase(t *testing.T) {
 	expected4 := "Patient presented with mild fever. Temperature 38 degrees, pulse 85.\nLungs are clear. Any known drug allergies?"
 	if draft != expected4 {
 		t.Fatalf("Turn 4 failed: got %q, expected %q", draft, expected4)
+	}
+}
+
+func TestDictationAbbreviationsAndLoneMarks(t *testing.T) {
+	for in, want := range map[string]string{
+		"culture positive for C. difficile": "Culture positive for C. difficile.",
+		"take 1 tab p.o. b.i.d.":            "Take 1 tab p.o. b.i.d.",
+		"stable. the wound is clean":        "Stable. The wound is clean.",
+	} {
+		if got := FormatDictationPhrase(in); got != want {
+			t.Errorf("FormatDictationPhrase(%q) = %q, want %q", in, got, want)
+		}
+	}
+	if got := AppendDictationPhrase("Patient is stable.", "period"); got != "Patient is stable." {
+		t.Errorf("lone period after sentence: got %q", got)
+	}
+	if got := AppendDictationPhrase("Patient is stable", "comma"); got != "Patient is stable," {
+		t.Errorf("lone comma: got %q", got)
 	}
 }

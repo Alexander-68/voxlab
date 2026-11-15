@@ -35,6 +35,7 @@ var upgrader = websocket.Upgrader{}
 // Server is the main VoxLab web and voice API server.
 type Server struct {
 	cfg           *config.AppConfig
+	cfgMu         sync.RWMutex // guards the cfg fields WS handlers change at runtime (KWS, Audio.Enhancer)
 	httpServer    *http.Server
 	dsp           *audio.DSPProcessor
 	enhancer      denoiser.SpeechEnhancer
@@ -88,6 +89,7 @@ type Server struct {
 	evalRunner   *evaluation.EvalRunner
 
 	speakSlots chan struct{} // bounds concurrent speak requests
+	ttsGen     atomic.Uint64 // bumped per finished utterance; only the latest one's failsafe may unmute
 }
 
 const (
@@ -287,8 +289,9 @@ func (s *Server) Serve(ln net.Listener) error {
 func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
 
-	// Static Web UI & Evaluation Assets
-	mux.Handle("/data/", http.StripPrefix("/data/", http.FileServer(http.Dir("data"))))
+	// Static Web UI & Evaluation Assets. Only the test samples are served: data/ also
+	// holds the annotation log (recorded user speech), which must not be downloadable.
+	mux.Handle("/data/test_samples/", http.StripPrefix("/data/test_samples/", http.FileServer(http.Dir(filepath.Join("data", "test_samples")))))
 	mux.Handle("/", http.FileServer(http.Dir(s.cfg.StaticDir)))
 
 	// WebSocket IPC
@@ -403,7 +406,12 @@ func (s *Server) SetASREngineMode(mode string) error {
 	}
 	s.asrEngineMode = mode
 	s.engineMu.Unlock()
+	// Like newTurn: invalidate queued chunks, then reset the abandoned engine while no
+	// recognizer call can be running on it.
+	s.turn.Add(1)
+	s.asrTurnMu.Lock()
 	old.ResetASR()
+	s.asrTurnMu.Unlock()
 
 	name := s.engineDisplayName()
 	log.Printf("[VoxLab] Active ASR engine switched to: %s (%s)", mode, name)
@@ -575,9 +583,12 @@ func (s *Server) processIncomingAudio(rawChunk []float32) {
 	}
 
 	// Step 2: Wake Word Detection when in IDLE
-	if (state == statemachine.StateIdle) && s.cfg.KWS.Enabled && passedGate {
+	s.cfgMu.RLock()
+	kwsEnabled, kwsThreshold := s.cfg.KWS.Enabled, s.cfg.KWS.Threshold
+	s.cfgMu.RUnlock()
+	if (state == statemachine.StateIdle) && kwsEnabled && passedGate {
 		detected, kw, conf := s.currentEngine().DetectWakeWord(cleanChunk)
-		if detected && conf >= s.cfg.KWS.Threshold {
+		if detected && conf >= kwsThreshold {
 			log.Printf("[VoxLab] Wake-word '%s' detected (confidence: %.2f)", kw, conf)
 			s.stateMachine.WakeWordTriggered(kw, conf)
 			s.BroadcastJSON(map[string]interface{}{
@@ -732,7 +743,7 @@ func (s *Server) appendDictation(text string) {
 // saveDraft appends an approved draft to the annotation log and clears the working draft.
 func (s *Server) saveDraft(text string) {
 	s.dictMu.Lock()
-	target := s.dictationTarget
+	target, before := s.dictationTarget, s.dictationDraft
 	s.dictMu.Unlock()
 
 	err := appendJSONLine(annotationLogPath, map[string]interface{}{
@@ -750,7 +761,9 @@ func (s *Server) saveDraft(text string) {
 	}
 
 	s.dictMu.Lock()
-	s.dictationDraft = ""
+	if s.dictationDraft == before { // a phrase appended during the write must survive
+		s.dictationDraft = ""
+	}
 	s.dictMu.Unlock()
 	s.BroadcastJSON(map[string]interface{}{
 		"event": "annotation.saved",
@@ -944,7 +957,10 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				// audio so the recognizer sees every chunk before finalizing, which is
 				// why this keeps the turn rather than starting a new one.
 				if st := s.stateMachine.Current(); st == statemachine.StateAnnotationListen {
-					s.asrChan <- asrWorkItem{turn: s.turn.Load(), state: st, isDictation: true, flush: true}
+					select {
+					case s.asrChan <- asrWorkItem{turn: s.turn.Load(), state: st, isDictation: true, flush: true}:
+					case <-s.ctx.Done():
+					}
 				} else {
 					s.stateMachine.Cancel()
 					s.newTurn()
@@ -1055,7 +1071,9 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 			case "set_kws_threshold":
 				if th, ok := req["threshold"].(float64); ok {
+					s.cfgMu.Lock()
 					s.cfg.KWS.Threshold = th
+					s.cfgMu.Unlock()
 					log.Printf("[KWS] Wake-word threshold set to %.2f", th)
 				}
 
@@ -1079,13 +1097,17 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 			case "set_kws_enable":
 				if en, ok := req["enabled"].(bool); ok {
+					s.cfgMu.Lock()
 					s.cfg.KWS.Enabled = en
+					s.cfgMu.Unlock()
 					log.Printf("[KWS] Continuous wake-word enabled: %v", en)
 				}
 
 			case "set_kws_keyword":
 				if kw, ok := req["keyword"].(string); ok {
+					s.cfgMu.Lock()
 					s.cfg.KWS.Keyword = kw
+					s.cfgMu.Unlock()
 					log.Printf("[KWS] Wake-word phrase set to: %q", kw)
 				}
 
@@ -1179,10 +1201,12 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				if s.enhancer != nil {
 					if modelType != "" {
 						_ = s.enhancer.SwitchModel(modelType)
-						s.cfg.Audio.Enhancer.ModelType = s.enhancer.ModelType()
 					}
 					s.enhancer.SetEnabled(enabled)
+					s.cfgMu.Lock()
+					s.cfg.Audio.Enhancer.ModelType = s.enhancer.ModelType()
 					s.cfg.Audio.Enhancer.Enabled = s.enhancer.IsEnabled()
+					s.cfgMu.Unlock()
 					log.Printf("[SpeechEnhancer] Setting updated: enabled=%v, model=%s (%s)",
 						s.enhancer.IsEnabled(), s.enhancer.ModelType(), s.enhancer.Name())
 					s.BroadcastJSON(map[string]interface{}{
@@ -1310,9 +1334,12 @@ func (s *Server) executeTTS(text, voice string, speed float64, streaming bool) {
 
 	// Failsafe timer: if client starts playback but drops connection or fails to report ended,
 	// ensure echo suppression is automatically cleared after audio duration + margin.
+	// Only the most recent utterance's timer acts, so a shorter earlier one cannot unmute
+	// the mic while a later one is still playing.
+	gen := s.ttsGen.Add(1)
 	go func(durSec float64) {
 		time.Sleep(time.Duration((durSec+4.0)*1000) * time.Millisecond)
-		if s.ttsMgr.IsSpeaking() {
+		if s.ttsGen.Load() == gen && s.ttsMgr.IsSpeaking() {
 			log.Printf("[TTS] Failsafe timer: automatically clearing echo suppression after %.1fs", durSec)
 			s.SetPlaybackActive(false)
 		}
@@ -1430,12 +1457,18 @@ func (s *Server) BroadcastBinary(data []byte) {
 // REST Handlers
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	s.cfgMu.RLock()
+	defer s.cfgMu.RUnlock()
 	_ = json.NewEncoder(w).Encode(s.cfg)
 }
 
 func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	cat, _ := intent.LoadCatalog(s.cfg.Intent.CatalogPath)
+	cat, err := intent.LoadCatalog(s.cfg.Intent.CatalogPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	_ = json.NewEncoder(w).Encode(cat)
 }
 

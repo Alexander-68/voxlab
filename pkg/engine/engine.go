@@ -41,14 +41,21 @@ type TTSChunk struct {
 }
 
 // SpeechEngine defines the interface for VAD, KWS, ASR, and TTS.
+// The ASR methods share streaming state; callers must serialize
+// ProcessASRChunk/FlushASR/ResetASR. Implementations that own subprocesses or
+// native handles should also implement io.Closer (Server.Stop closes them).
 type SpeechEngine interface {
 	Name() string
 	DetectVAD(chunk []float32) (isVoice bool, prob float32)
 	DetectWakeWord(chunk []float32) (detected bool, keyword string, confidence float64)
 	ProcessASRChunk(chunk []float32, isDictation bool) (*ASRResult, error)
-	FlushASR() string // finalize the in-progress utterance and return its text
+	// FlushASR finalizes and consumes the in-progress utterance and returns its text
+	// ("" when nothing was pending). It may block while the engine drains pending audio.
+	FlushASR() string
 	ResetASR()
 	Synthesize(req TTSRequest) (*TTSResult, error)
+	// SynthesizeStream emits audio through onChunk; a non-nil onChunk error aborts
+	// synthesis and is returned (wrapped) to the caller.
 	SynthesizeStream(req TTSRequest, onChunk func(chunk TTSChunk) error) (*TTSResult, error)
 	TTSModelInfo() (modelName string, isNeural bool)
 	SetTTSModel(modelName string) error

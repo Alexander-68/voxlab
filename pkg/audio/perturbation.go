@@ -167,7 +167,7 @@ func GenerateTypingNoise(length int, sampleRate int, seed int64) []float32 {
 
 		// Interval to next keystroke (120ms to 280ms)
 		interval := int(float64(sampleRate) * (0.12 + rng.Float64()*0.16))
-		pos += interval
+		pos += max(interval, 1) // sampleRate <= 0 must not hang the loop
 	}
 
 	return out

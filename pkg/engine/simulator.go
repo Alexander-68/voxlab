@@ -13,6 +13,7 @@ import (
 // SimulatorEngine simulates ASR, VAD, KWS, and TTS for instant test bench operation.
 type SimulatorEngine struct {
 	mu               sync.Mutex
+	wakeStreak       int // KWS loud-chunk streak, independent of the ASR counters
 	speechChunks     int
 	silenceChunks    int
 	lastChunkTime    time.Time
@@ -65,16 +66,14 @@ func (s *SimulatorEngine) DetectWakeWord(chunk []float32) (bool, string, float64
 
 	_, dbfs := audio.CalculateRMS(chunk)
 	if dbfs > -32.0 {
-		s.speechChunks++
+		s.wakeStreak++
 		// If continuous speech sustained for ~15 chunks (~450ms, length of "hey voxlab")
-		if s.speechChunks >= 15 {
-			s.speechChunks = 0
+		if s.wakeStreak >= 15 {
+			s.wakeStreak = 0
 			return true, "hey voxlab", 0.94
 		}
-	} else {
-		if s.speechChunks > 0 {
-			s.speechChunks--
-		}
+	} else if s.wakeStreak > 0 {
+		s.wakeStreak--
 	}
 	return false, "", 0.0
 }
@@ -103,6 +102,7 @@ func (s *SimulatorEngine) ProcessASRChunk(chunk []float32, isDictation bool) (*A
 			wordsToReveal = len(words)
 		}
 		currentPartial := strings.Join(words[:wordsToReveal], " ")
+		s.activeTranscript = currentPartial
 
 		return &ASRResult{
 			IsFinal:    false,
@@ -115,7 +115,7 @@ func (s *SimulatorEngine) ProcessASRChunk(chunk []float32, isDictation bool) (*A
 	// Silence chunk
 	if s.speechChunks > 0 {
 		s.silenceChunks++
-		// 800ms trailing silence = ~26 chunks of 30ms
+		// 600ms trailing silence = 20 chunks of 30ms
 		if s.silenceChunks >= 20 {
 			targetPhrase := s.samplePhrases[s.phraseIdx%len(s.samplePhrases)]
 			if isDictation {
@@ -124,6 +124,7 @@ func (s *SimulatorEngine) ProcessASRChunk(chunk []float32, isDictation bool) (*A
 			s.phraseIdx++
 			s.speechChunks = 0
 			s.silenceChunks = 0
+			s.activeTranscript = ""
 
 			return &ASRResult{
 				IsFinal:    true,
@@ -137,10 +138,16 @@ func (s *SimulatorEngine) ProcessASRChunk(chunk []float32, isDictation bool) (*A
 	return nil, nil
 }
 
-// FlushASR drops the in-progress simulated utterance.
+// FlushASR finalizes the in-progress simulated utterance and returns its partial text.
 func (s *SimulatorEngine) FlushASR() string {
+	s.mu.Lock()
+	pending := s.activeTranscript
+	if pending != "" {
+		s.phraseIdx++ // the flushed phrase counts as spoken, like an endpointed final
+	}
+	s.mu.Unlock()
 	s.ResetASR()
-	return ""
+	return pending
 }
 
 // ResetASR clears accumulated streaming state.
@@ -149,6 +156,7 @@ func (s *SimulatorEngine) ResetASR() {
 	defer s.mu.Unlock()
 	s.speechChunks = 0
 	s.silenceChunks = 0
+	s.activeTranscript = ""
 }
 
 // Synthesize simulates Kokoro TTS by generating rich harmonic vocalic waveforms.
@@ -165,10 +173,7 @@ func (s *SimulatorEngine) SynthesizeStream(req TTSRequest, onChunk func(chunk TT
 		sampleRate = 24000
 	}
 
-	speed := req.Speed
-	if speed <= 0 {
-		speed = 1.0
-	}
+	speed := clampSpeed(req.Speed)
 
 	cleanText := strings.TrimSpace(req.Text)
 	if cleanText == "" {
@@ -272,6 +277,14 @@ func (s *SimulatorEngine) SynthesizeStream(req TTSRequest, onChunk func(chunk TT
 		LatencyMs:    latency,
 		Simulated:    true,
 	}, nil
+}
+
+// clampSpeed defaults unset/NaN/negative speeds to 1.0 and clamps to 0.5-2.0.
+func clampSpeed(speed float64) float64 {
+	if !(speed > 0) { // also catches NaN
+		return 1.0
+	}
+	return min(max(speed, 0.5), 2.0)
 }
 
 // TTSModelInfo returns simulator model information.

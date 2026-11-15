@@ -62,6 +62,7 @@ param(
     [switch]$Short,
 
     [Parameter(HelpMessage = "Maximum test timeout in minutes (default: 40)")]
+    [ValidateRange(1, 600)]
     [int]$TimeoutMinutes = 40,
 
     [Parameter(HelpMessage = "Include dedicated multilingual dictation suite in go test")]
@@ -74,109 +75,116 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
-# Resolve repository root
+# Resolve repository root; restore caller's location and env on exit.
 $RootDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-Set-Location -Path $RootDir
+$PrevTier2 = $env:VOXLAB_TIER2
+Push-Location -Path $RootDir
+try {
+    # Verify Go toolchain
+    if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
+        Write-Host "Go executable ('go') not found in PATH. Please install Go v1.24+." -ForegroundColor Red
+        exit 1
+    }
 
-# Verify Go toolchain
-if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
-    Write-Error "Go executable ('go') not found in PATH. Please install Go v1.24+."
-    exit 1
-}
+    # Verify required model assets up front: generation needs Kokoro, and the Go tests
+    # t.Skip (exit 0, false PASS) when models are missing.
+    $SherpaModelDir = Join-Path $RootDir "models\sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11"
+    $KokoroDir = Join-Path $RootDir "models\kokoro-multi-lang-v1_0"
+    if ((-not (Test-Path $SherpaModelDir)) -or (-not (Test-Path $KokoroDir))) {
+        Write-Host "Required neural models were not found in 'models/'." -ForegroundColor Red
+        Write-Host "Run 'pwsh scripts/download_models.ps1' to fetch model assets." -ForegroundColor Red
+        exit 1
+    }
 
-$Tier2Dir = Join-Path $RootDir "data\test_samples\eval_tier2"
-$ManifestPath = Join-Path $Tier2Dir "manifest.json"
+    $Tier2Dir = Join-Path $RootDir "data\test_samples\eval_tier2"
+    $ManifestPath = Join-Path $Tier2Dir "manifest.json"
 
-# Check if regeneration is needed or requested
-$NeedsGeneration = $ForceRegenerate -or (-not (Test-Path $ManifestPath))
+    # Check if regeneration is needed or requested
+    $NeedsGeneration = $ForceRegenerate -or (-not (Test-Path $ManifestPath))
 
-if ($ForceRegenerate) {
-    Write-Host "==================================================" -ForegroundColor Cyan
-    Write-Host " [VoxLab] Purging Tier-2 Audio Samples for Clean Regen" -ForegroundColor Cyan
-    Write-Host " Target directory: $Tier2Dir" -ForegroundColor Gray
-    Write-Host "==================================================" -ForegroundColor Cyan
+    if ($ForceRegenerate) {
+        Write-Host "==================================================" -ForegroundColor Cyan
+        Write-Host " [VoxLab] Purging Tier-2 Audio Samples for Clean Regen" -ForegroundColor Cyan
+        Write-Host " Target directory: $Tier2Dir" -ForegroundColor Gray
+        Write-Host "==================================================" -ForegroundColor Cyan
 
-    if (Test-Path $Tier2Dir) {
-        $wavFiles = Get-ChildItem -Path $Tier2Dir -Filter "*.wav" -File
-        if ($wavFiles) {
-            Write-Host "Removing $($wavFiles.Count) existing WAV files..." -ForegroundColor Yellow
-            $wavFiles | Remove-Item -Force
+        if (Test-Path $Tier2Dir) {
+            $wavFiles = Get-ChildItem -Path $Tier2Dir -Filter "*.wav" -File
+            if ($wavFiles) {
+                Write-Host "Removing $($wavFiles.Count) existing WAV files..." -ForegroundColor Yellow
+                $wavFiles | Remove-Item -Force
+            }
+            if (Test-Path $ManifestPath) {
+                Remove-Item -Path $ManifestPath -Force
+            }
+        } else {
+            New-Item -ItemType Directory -Path $Tier2Dir -Force | Out-Null
         }
-        if (Test-Path $ManifestPath) {
-            Remove-Item -Path $ManifestPath -Force
+    } elseif (-not (Test-Path $ManifestPath)) {
+        Write-Host "Notice: Tier-2 manifest missing at $ManifestPath. Generating audio samples..." -ForegroundColor Yellow
+    }
+
+    if ($NeedsGeneration) {
+        Write-Host "`n>> Generating Tier-2 acoustic evaluation samples..." -ForegroundColor Green
+        Write-Host "   Command: go run ./cmd/gen_eval_samples -tier 2" -ForegroundColor Gray
+    
+        & go run ./cmd/gen_eval_samples -tier 2
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Failed generating Tier-2 audio samples (exit code $LASTEXITCODE)." -ForegroundColor Red
+            exit $LASTEXITCODE
         }
+        Write-Host ">> Tier-2 audio samples successfully generated.`n" -ForegroundColor Green
+    }
+
+    if ($RegenerateOnly) {
+        Write-Host "[Done] RegenerateOnly requested. Exiting without running tests." -ForegroundColor Green
+        exit 0
+    }
+
+    # Execute Tier-2 Test / Bench
+    Write-Host "==================================================" -ForegroundColor Cyan
+    Write-Host " Executing VoxLab Tier-2 Deep Acoustic Matrix" -ForegroundColor Cyan
+    Write-Host " Mode:    $Mode" -ForegroundColor White
+    Write-Host " Short:   $($Short.IsPresent)" -ForegroundColor White
+    Write-Host " Timeout: ${TimeoutMinutes}m" -ForegroundColor White
+    Write-Host "==================================================" -ForegroundColor Cyan
+
+    $exitCode = 0
+
+    if ($Mode -eq "bench") {
+        $benchArgs = @("run", "./cmd/eval_bench", "-tier", "2")
+        if ($Short) {
+            $benchArgs += "-quick"
+        }
+        Write-Host "Running: go $($benchArgs -join ' ')`n" -ForegroundColor Gray
+        & go @benchArgs
+        $exitCode = $LASTEXITCODE
     } else {
-        New-Item -ItemType Directory -Path $Tier2Dir -Force | Out-Null
-    }
-} elseif (-not (Test-Path $ManifestPath)) {
-    Write-Host "Notice: Tier-2 manifest missing at $ManifestPath. Generating audio samples..." -ForegroundColor Yellow
-}
-
-if ($NeedsGeneration) {
-    Write-Host "`n>> Generating Tier-2 acoustic evaluation samples..." -ForegroundColor Green
-    Write-Host "   Command: go run ./cmd/gen_eval_samples -tier 2" -ForegroundColor Gray
+        $env:VOXLAB_TIER2 = "1"
     
-    & go run ./cmd/gen_eval_samples -tier 2
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "Failed generating Tier-2 audio samples (exit code $LASTEXITCODE)."
-        exit $LASTEXITCODE
-    }
-    Write-Host ">> Tier-2 audio samples successfully generated.`n" -ForegroundColor Green
-}
+        $runPattern = "TestTier2DeepAcousticMatrix"
+        if ($IncludeMultilingual) {
+            $runPattern = "TestTier2DeepAcousticMatrix|TestMultilingualDictations"
+        }
 
-if ($RegenerateOnly) {
-    Write-Host "[Done] RegenerateOnly requested. Exiting without running tests." -ForegroundColor Green
-    exit 0
-}
-
-# Verify required model assets
-$SherpaModelDir = Join-Path $RootDir "models\sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11"
-$KokoroDir = Join-Path $RootDir "models\kokoro-multi-lang-v1_0"
-if ((-not (Test-Path $SherpaModelDir)) -or (-not (Test-Path $KokoroDir))) {
-    Write-Warning "Required neural models were not found in 'models/'."
-    Write-Warning "Run 'pwsh scripts/download_models.ps1' to fetch model assets."
-}
-
-# Execute Tier-2 Test / Bench
-Write-Host "==================================================" -ForegroundColor Cyan
-Write-Host " Executing VoxLab Tier-2 Deep Acoustic Matrix" -ForegroundColor Cyan
-Write-Host " Mode:    $Mode" -ForegroundColor White
-Write-Host " Short:   $($Short.IsPresent)" -ForegroundColor White
-Write-Host " Timeout: ${TimeoutMinutes}m" -ForegroundColor White
-Write-Host "==================================================" -ForegroundColor Cyan
-
-$exitCode = 0
-
-if ($Mode -eq "bench") {
-    $benchArgs = @("run", "./cmd/eval_bench", "-tier", "2")
-    if ($Short) {
-        $benchArgs += "-quick"
-    }
-    Write-Host "Running: go $($benchArgs -join ' ')`n" -ForegroundColor Gray
-    & go @benchArgs
-    $exitCode = $LASTEXITCODE
-} else {
-    $env:VOXLAB_TIER2 = "1"
+        $testArgs = @("test", "-v", "-timeout", "${TimeoutMinutes}m", "./pkg/evaluation/", "-run", $runPattern)
+        if ($Short) {
+            $testArgs += "-short"
+        }
     
-    $runPattern = "TestTier2DeepAcousticMatrix"
-    if ($IncludeMultilingual) {
-        $runPattern = "TestTier2DeepAcousticMatrix|TestMultilingualDictations"
+        Write-Host "Running: go $($testArgs -join ' ')`n" -ForegroundColor Gray
+        & go @testArgs
+        $exitCode = $LASTEXITCODE
     }
 
-    $testArgs = @("test", "-v", "-timeout", "${TimeoutMinutes}m", "./pkg/evaluation/", "-run", $runPattern)
-    if ($Short) {
-        $testArgs += "-short"
+    if ($exitCode -eq 0) {
+        Write-Host "`n[PASS] Tier-2 evaluation suite passed successfully!" -ForegroundColor Green
+    } else {
+        Write-Host "`n[FAIL] Tier-2 evaluation suite failed with exit code $exitCode." -ForegroundColor Red
     }
-    
-    Write-Host "Running: go $($testArgs -join ' ')`n" -ForegroundColor Gray
-    & go @testArgs
-    $exitCode = $LASTEXITCODE
-}
 
-if ($exitCode -eq 0) {
-    Write-Host "`n[PASS] Tier-2 evaluation suite passed successfully!" -ForegroundColor Green
-} else {
-    Write-Host "`n[FAIL] Tier-2 evaluation suite failed with exit code $exitCode." -ForegroundColor Red
+    exit $exitCode
+} finally {
+    Pop-Location
+    $env:VOXLAB_TIER2 = $PrevTier2
 }
-
-exit $exitCode

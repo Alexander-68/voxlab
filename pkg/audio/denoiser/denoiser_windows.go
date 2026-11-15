@@ -60,7 +60,6 @@ type windowsSpeechEnhancer struct {
 	getSampleRate  *syscall.LazyProc
 	getFrameShift  *syscall.LazyProc
 	runFn          *syscall.LazyProc
-	flushFn        *syscall.LazyProc
 	resetFn        *syscall.LazyProc
 	destroyAudioFn *syscall.LazyProc
 
@@ -91,7 +90,9 @@ func newPlatformSpeechEnhancer(dllDir string, modelDir string, cfg config.Enhanc
 
 	kernel32 := syscall.NewLazyDLL("kernel32.dll")
 	setDllDir := kernel32.NewProc("SetDllDirectoryW")
-	setDllDir.Call(uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(absDllDir))))
+	if r, _, err := setDllDir.Call(uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(absDllDir)))); r == 0 {
+		return nil, fmt.Errorf("SetDllDirectoryW(%s) failed: %w", absDllDir, err)
+	}
 
 	dll := syscall.NewLazyDLL(absDllPath)
 	if err := dll.Load(); err != nil {
@@ -99,16 +100,19 @@ func newPlatformSpeechEnhancer(dllDir string, modelDir string, cfg config.Enhanc
 	}
 
 	createFn := dll.NewProc("SherpaOnnxCreateOnlineSpeechDenoiser")
-	if err := createFn.Find(); err != nil {
-		return nil, fmt.Errorf("symbol SherpaOnnxCreateOnlineSpeechDenoiser not found: %w", err)
-	}
 	destroyFn := dll.NewProc("SherpaOnnxDestroyOnlineSpeechDenoiser")
 	getSampleRate := dll.NewProc("SherpaOnnxOnlineSpeechDenoiserGetSampleRate")
 	getFrameShift := dll.NewProc("SherpaOnnxOnlineSpeechDenoiserGetFrameShiftInSamples")
 	runFn := dll.NewProc("SherpaOnnxOnlineSpeechDenoiserRun")
-	flushFn := dll.NewProc("SherpaOnnxOnlineSpeechDenoiserFlush")
 	resetFn := dll.NewProc("SherpaOnnxOnlineSpeechDenoiserReset")
 	destroyAudioFn := dll.NewProc("SherpaOnnxDestroyDenoisedAudio")
+	// LazyProc.Call panics on a missing export; resolve all of them up front so a mismatched DLL
+	// fails construction (and falls back to bypass) instead of crashing on first use.
+	for _, p := range []*syscall.LazyProc{createFn, destroyFn, getSampleRate, getFrameShift, runFn, resetFn, destroyAudioFn} {
+		if err := p.Find(); err != nil {
+			return nil, fmt.Errorf("symbol %s not found: %w", p.Name, err)
+		}
+	}
 
 	modelType := cfg.ModelType
 	if modelType == "" {
@@ -130,7 +134,6 @@ func newPlatformSpeechEnhancer(dllDir string, modelDir string, cfg config.Enhanc
 		getSampleRate:  getSampleRate,
 		getFrameShift:  getFrameShift,
 		runFn:          runFn,
-		flushFn:        flushFn,
 		resetFn:        resetFn,
 		destroyAudioFn: destroyAudioFn,
 		dllDir:         absDllDir,
@@ -190,7 +193,6 @@ func (w *windowsSpeechEnhancer) initModel(modelType string, preferredPath string
 	}
 
 	var keep [][]byte
-	defer runtime.KeepAlive(keep)
 	var cfg cOnlineSpeechDenoiserConfig
 	cfg.Model.NumThreads = int32(w.numThreads)
 	cfg.Model.Provider = toCStringEnhancer(w.provider, &keep)
@@ -206,6 +208,8 @@ func (w *windowsSpeechEnhancer) initModel(modelType string, preferredPath string
 	}
 
 	handle, _, callErr := w.createFn.Call(uintptr(unsafe.Pointer(&cfg)))
+	// cfg holds the C strings only as uintptrs, so keep their backing arrays alive past the call.
+	runtime.KeepAlive(keep)
 	if handle == 0 {
 		return fmt.Errorf("failed to create denoiser for %s: %v", mPath, callErr)
 	}
@@ -300,7 +304,10 @@ func (w *windowsSpeechEnhancer) SetEnabled(enabled bool) {
 	w.enabled = enabled
 	if enabled {
 		if w.handle == 0 {
-			_ = w.initModel(w.modelType, "")
+			if err := w.initModel(w.modelType, ""); err != nil {
+				log.Printf("[SpeechEnhancer] failed to load model while enabling: %v", err)
+				w.enabled = false
+			}
 		} else {
 			w.resetFn.Call(w.handle)
 			w.primeWithSilence()

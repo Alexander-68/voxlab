@@ -61,11 +61,17 @@ const GateOffDBFS = -80.0
 func (p *DSPProcessor) SetGateHold(ms float64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.gateHoldSec = math.Max(0, ms) / 1000.0
+	if !(ms > 0) { // also rejects NaN; values come from WS clients
+		ms = 0
+	}
+	p.gateHoldSec = math.Min(ms, 5000) / 1000.0
 }
 
 // SetGateFloor sets the attenuation applied while the gate is closed, in dB (<= 0; -60 or lower mutes fully).
 func (p *DSPProcessor) SetGateFloor(db float64) {
+	if math.IsNaN(db) {
+		return
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if db <= -60 {
@@ -111,10 +117,14 @@ func (p *DSPProcessor) SetEchoMuted(muted bool) {
 }
 
 // SetGateThreshold updates the noise floor gate cutoff level in dBFS.
+// Values above 0 dBFS would gate every chunk, so they are clamped to 0; NaN is ignored.
 func (p *DSPProcessor) SetGateThreshold(dbfs float64) {
+	if math.IsNaN(dbfs) {
+		return
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.gateDBFS = dbfs
+	p.gateDBFS = math.Min(dbfs, 0)
 }
 
 // GateThreshold returns the active noise gate threshold in dBFS.

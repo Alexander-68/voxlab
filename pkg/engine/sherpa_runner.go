@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -24,17 +25,18 @@ import (
 
 // SherpaRunner executes official Sherpa-ONNX binaries or falls back to simulation.
 type SherpaRunner struct {
-	cfg       *config.AppConfig
-	simulator *SimulatorEngine
-	warmTTS   WarmTTS
-	mu        sync.Mutex
-	asrMu     sync.Mutex // guards the ASR fields below; separate from mu so TTS never blocks ASR
-	warmASR   *WarmASR   // resident ASR server, set as soon as its process is spawned
-	asrReady  bool       // warmASR finished loading models
-	asrModels bool       // streaming models + server binary are installed
-	asrClosed bool       // Close was called; late-starting servers must be killed
-	stream    *ASRStream
-	streamDir string // active first-pass (streaming) model directory
+	cfg             *config.AppConfig
+	simulator       *SimulatorEngine
+	warmTTS         WarmTTS
+	mu              sync.Mutex
+	asrMu           sync.Mutex  // guards the ASR fields below; separate from mu so TTS never blocks ASR
+	warmASR         *WarmASR    // resident ASR server, set as soon as its process is spawned
+	asrReady        bool        // warmASR finished loading models
+	asrModels       atomic.Bool // streaming models + server binary are installed (read lock-free by Name)
+	asrClosed       bool        // Close was called; late-starting servers must be killed
+	stream          *ASRStream
+	streamDictation bool   // mode of the last ProcessASRChunk, so FlushASR refines with the right mode
+	streamDir       string // active first-pass (streaming) model directory
 
 	offline             *WarmOffline // resident second-pass (Parakeet) server
 	offlineReady        bool
@@ -42,7 +44,7 @@ type SherpaRunner struct {
 	secondPassCommand   bool
 	secondPassDictation bool
 	segAudio            []float32 // audio sent to the current stream not yet assigned to a segment
-	segBase      int       // stream sample index of segAudio[0]
+	segBase             int       // stream sample index of segAudio[0]
 
 	// OnRefine reports each second-pass correction (set by the server before audio flows).
 	OnRefine func(isDictation bool, firstPass, refined string, latencyMs int64)
@@ -67,7 +69,7 @@ func NewSherpaRunner(cfg *config.AppConfig) *SherpaRunner {
 	fallbacks = append(fallbacks, InstalledStreamingModels(cfg.Engine.ModelDir)...)
 	runner.streamDir = resolveModelDir(fallbacks...)
 	_, binExists := findSherpaBin("sherpa-onnx-online-websocket-server")
-	runner.asrModels = runner.streamDir != "" && binExists
+	runner.asrModels.Store(runner.streamDir != "" && binExists)
 	runner.secondPassCommand = cfg.Engine.SecondPassCommand
 	runner.secondPassDictation = cfg.Engine.SecondPassDictation
 	runner.secondPass = runner.secondPassCommand || runner.secondPassDictation || cfg.Engine.SecondPass
@@ -82,7 +84,7 @@ func NewSherpaRunner(cfg *config.AppConfig) *SherpaRunner {
 
 // startWarmASRLocked spawns the resident ASR server and loads it in the background (caller holds asrMu).
 func (r *SherpaRunner) startWarmASRLocked() {
-	if !r.asrModels || r.asrClosed || r.warmASR != nil {
+	if !r.asrModels.Load() || r.asrClosed || r.warmASR != nil {
 		return
 	}
 	tok, enc, dec, joi, _ := findTransducerModel(r.streamDir)
@@ -217,7 +219,7 @@ func (r *SherpaRunner) SetStreamingModel(name string) error {
 	r.streamDir = dir
 	r.cfg.Engine.StreamingModelDir = dir
 	_, binExists := findSherpaBin("sherpa-onnx-online-websocket-server")
-	r.asrModels = binExists
+	r.asrModels.Store(binExists)
 	r.startWarmASRLocked()
 	return nil
 }
@@ -305,7 +307,7 @@ func containsCJK(s string) bool {
 }
 
 func (r *SherpaRunner) Name() string {
-	if r.asrModels {
+	if r.asrModels.Load() {
 		return "sherpa_onnx_native"
 	}
 	return "simulator"
@@ -324,12 +326,13 @@ func (r *SherpaRunner) DetectWakeWord(chunk []float32) (bool, string, float64) {
 // Endpointing is done by sherpa itself on decoded blank frames, so it is independent of
 // gain/noise-gate settings.
 func (r *SherpaRunner) ProcessASRChunk(chunk []float32, isDictation bool) (*ASRResult, error) {
-	if !r.asrModels {
+	if !r.asrModels.Load() {
 		return r.simulator.ProcessASRChunk(chunk, isDictation)
 	}
 
 	r.asrMu.Lock()
 	defer r.asrMu.Unlock()
+	r.streamDictation = isDictation
 
 	if r.stream == nil {
 		if !r.asrReady {
@@ -376,6 +379,9 @@ func (r *SherpaRunner) ASRReady() bool {
 
 // FlushASR finalizes the active stream, returning any speech not yet endpointed.
 func (r *SherpaRunner) FlushASR() string {
+	if !r.asrModels.Load() {
+		return r.simulator.FlushASR()
+	}
 	r.asrMu.Lock()
 	defer r.asrMu.Unlock()
 	if r.stream == nil {
@@ -385,7 +391,7 @@ func (r *SherpaRunner) FlushASR() string {
 	r.stream = nil
 	res := &ASRResult{IsFinal: true, Transcript: strings.Join(parts, " ")}
 	if res.Transcript != "" {
-		r.refineLocked(res, r.segAudio, true)
+		r.refineLocked(res, r.segAudio, r.streamDictation)
 	}
 	r.segAudio, r.segBase = nil, 0
 	return res.Transcript
@@ -773,7 +779,10 @@ func (r *SherpaRunner) Synthesize(req TTSRequest) (*TTSResult, error) {
 
 // SynthesizeStream runs streaming Kokoro TTS via in-process warm engine callback or fallback pipelines.
 func (r *SherpaRunner) SynthesizeStream(req TTSRequest, onChunk func(chunk TTSChunk) error) (*TTSResult, error) {
+	r.mu.Lock() // SetTTSModel mutates the Kokoro dir/file pair under mu
 	modelDir, modelExists := findKokoroModelDir(r.cfg.Engine.KokoroModelDir)
+	modelFile := r.resolveKokoroModelFile(modelDir)
+	r.mu.Unlock()
 	ttsBin, binExists := findSherpaBin(r.cfg.Engine.SherpaTtsBin)
 
 	if !modelExists {
@@ -781,7 +790,6 @@ func (r *SherpaRunner) SynthesizeStream(req TTSRequest, onChunk func(chunk TTSCh
 		return r.simulator.SynthesizeStream(req, onChunk)
 	}
 
-	modelFile := r.resolveKokoroModelFile(modelDir)
 	base := filepath.Base(modelDir)
 	version := detectKokoroVersion(base)
 	sid := mapVoiceToSID(req.Voice, version)
@@ -794,27 +802,36 @@ func (r *SherpaRunner) SynthesizeStream(req TTSRequest, onChunk func(chunk TTSCh
 		cleanText = optimizeStreamingClauses(cleanText)
 	}
 
-	// Speech speed parameter (0.5x to 2.0x)
-	speed := req.Speed
-	if speed <= 0 {
-		speed = 1.0
-	}
-	if speed < 0.5 {
-		speed = 0.5
-	} else if speed > 2.0 {
-		speed = 2.0
-	}
+	speed := clampSpeed(req.Speed) // 0.5x to 2.0x
 
 	// 1. Try In-Memory Warm Engine (sub-second latency with chunk-by-chunk streaming)
 	if isRegularFile(modelFile) {
 		if warm := r.getWarmTTS(modelDir, modelFile, lang); warm != nil {
 			log.Printf("[SherpaRunner] Synthesizing speech (WARM in-memory, streaming=%v): voice='%s' -> sid=%d, speed=%.2f",
 				onChunk != nil, req.Voice, sid, speed)
-			result, err := warm.SynthesizeStream(cleanText, sid, speed, onChunk)
+			// Track delivery: once the consumer got audio (or rejected a chunk), a CLI
+			// re-synthesis would duplicate it, so the warm error is final.
+			var delivered int
+			var consumerErr error
+			var tracked func(TTSChunk) error
+			if onChunk != nil {
+				tracked = func(c TTSChunk) error {
+					if err := onChunk(c); err != nil {
+						consumerErr = err
+						return err
+					}
+					delivered++
+					return nil
+				}
+			}
+			result, err := warm.SynthesizeStream(cleanText, sid, speed, tracked)
 			if err == nil {
 				log.Printf("[SherpaRunner] Warm TTS generation complete: %.2fs audio in %dms (RTF=%.3f)",
 					result.DurationSec, result.LatencyMs, float64(result.LatencyMs)/(result.DurationSec*1000.0))
 				return result, nil
+			}
+			if consumerErr != nil || delivered > 0 {
+				return nil, err
 			}
 			log.Printf("[SherpaRunner] Warm in-process TTS failed (%v), falling back to CLI process...", err)
 		}
@@ -908,7 +925,7 @@ func (r *SherpaRunner) SynthesizeStream(req TTSRequest, onChunk func(chunk TTSCh
 	latency := time.Since(startTime).Milliseconds()
 
 	if onChunk != nil {
-		_ = onChunk(TTSChunk{
+		if err := onChunk(TTSChunk{
 			Index:        0,
 			IsLast:       true,
 			AudioSamples: samples,
@@ -916,7 +933,9 @@ func (r *SherpaRunner) SynthesizeStream(req TTSRequest, onChunk func(chunk TTSCh
 			SampleRate:   sRate,
 			DurationSec:  duration,
 			LatencyMs:    latency,
-		})
+		}); err != nil {
+			return nil, fmt.Errorf("streaming synthesis aborted: %w", err)
+		}
 	}
 
 	return &TTSResult{
@@ -953,13 +972,15 @@ func (r *SherpaRunner) Close() error {
 
 // TTSModelInfo discovers and returns the current active Kokoro model name and neural status.
 func (r *SherpaRunner) TTSModelInfo() (string, bool) {
+	r.mu.Lock()
 	modelDir, modelExists := findKokoroModelDir(r.cfg.Engine.KokoroModelDir)
+	modelFile := r.cfg.Engine.KokoroModelFile
+	r.mu.Unlock()
 	if !modelExists {
 		return "Simulator (Fallback: Model Not Found)", false
 	}
 
 	base := filepath.Base(modelDir)
-	modelFile := r.cfg.Engine.KokoroModelFile
 	if modelFile == "" {
 		if isRegularFile(filepath.Join(modelDir, "model.onnx")) {
 			modelFile = "model.onnx"

@@ -68,7 +68,7 @@
 
           <!-- Live Visualizer -->
           <div class="visualizer-container">
-            <canvas id="scope-canvas" width="320" height="90"></canvas>
+            <canvas id="scope-canvas" width="320" height="90" role="img" aria-label="Microphone waveform and level oscilloscope"></canvas>
             <div class="meter-overlay">
               <div class="meter-bar-container">
                 <div id="vu-bar" class="meter-bar"></div>
@@ -153,7 +153,7 @@
             </div>
             <div class="form-group mt-2">
               <label for="kws-keyword">Wake Phrase</label>
-              <input type="text" id="kws-keyword" class="form-control" placeholder="Enter wake phrase (e.g. hey voxlab)..." value="hey voxlab" autocomplete="off">
+              <input type="text" id="kws-keyword" class="form-control" placeholder="Enter wake phrase (e.g. hey voxlab)..." value="hey voxlab" autocomplete="off" maxlength="100">
             </div>
             <div id="kws-acoustic-controls">
               <div class="slider-group">
@@ -165,7 +165,7 @@
               </div>
               <div class="ring-buffer-indicator">
                 <span>Pre-roll Buffer:</span>
-                <strong id="ring-buf-status">1000 ms armed</strong>
+                <strong id="ring-buf-status">1000 ms (configured)</strong>
               </div>
             </div>
           </div>
@@ -240,7 +240,7 @@
             <div class="quick-inject mb-3">
               <label for="custom-cmd-input">Quick Command Injections (Zero-Mic Bench Test):</label>
               <div class="custom-inject-form">
-                <input type="text" id="custom-cmd-input" class="form-control" placeholder="Type any voice command (e.g. open settings)..." autocomplete="off">
+                <input type="text" id="custom-cmd-input" class="form-control" placeholder="Type any voice command (e.g. open settings)..." autocomplete="off" maxlength="200">
                 <button id="btn-custom-inject" class="btn btn-sm btn-accent" title="Inject command">Inject</button>
               </div>
               <div class="quick-buttons">
@@ -261,7 +261,7 @@
                 <span id="asr-status-badge" class="badge badge-subtle">Ready</span>
               </div>
               <div class="card-body">
-                <div id="command-transcript-box" class="transcript-box">
+                <div id="command-transcript-box" class="transcript-box" aria-live="polite">
                   <span class="placeholder-text">Speak a command, inject text, or say "Hey VoxLab" to begin...</span>
                 </div>
               </div>
@@ -314,7 +314,7 @@
             <div class="quick-inject mb-3">
               <label for="custom-dict-input">Quick Dictation Injections (Zero-Mic Bench Test):</label>
               <div class="custom-inject-form">
-                <input type="text" id="custom-dict-input" class="form-control" placeholder="Type spoken phrase (e.g. vital signs normal period)..." autocomplete="off">
+                <input type="text" id="custom-dict-input" class="form-control" placeholder="Type spoken phrase (e.g. vital signs normal period)..." autocomplete="off" maxlength="500">
                 <button id="btn-custom-dict-inject" class="btn btn-sm btn-accent" title="Inject phrase">Inject</button>
               </div>
               <div class="quick-buttons">
@@ -333,7 +333,7 @@
                 <span id="dictation-status-badge" class="badge badge-subtle">Idle</span>
               </div>
               <div class="card-body">
-                <div id="dictation-live-box" class="transcript-box">
+                <div id="dictation-live-box" class="transcript-box" aria-live="polite">
                   <span class="placeholder-text">Press 'Start dictation' and begin speaking...</span>
                 </div>
               </div>
@@ -552,7 +552,7 @@
           <!-- Prompt Text -->
           <div class="form-group mt-2">
             <label for="tts-input-text">Text Prompt</label>
-            <textarea id="tts-input-text" class="form-control" rows="3">Settings updated successfully. Voice pipeline operational.</textarea>
+            <textarea id="tts-input-text" class="form-control" rows="3" maxlength="2000">Settings updated successfully. Voice pipeline operational.</textarea>
           </div>
 
           <!-- Quick Prompts -->
@@ -582,7 +582,7 @@
           <!-- Audio Player Card -->
           <div class="audio-playback-card mt-3">
             <audio id="tts-audio-player" controls class="tts-player"></audio>
-            <div id="tts-stream-banner" class="tts-stream-banner hidden" style="display: none; align-items: center; gap: 8px; font-size: 11px; padding: 4px 8px; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 4px; margin-bottom: 6px;">
+            <div id="tts-stream-banner" class="tts-stream-banner" style="display: none; align-items: center; gap: 8px; font-size: 11px; padding: 4px 8px; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 4px; margin-bottom: 6px;">
               <span class="badge badge-listen" style="padding: 2px 6px; font-size: 10px;">STREAMING</span>
               <span id="tts-stream-status" style="color: var(--cyan); font-family: monospace;">Receiving chunks...</span>
             </div>
@@ -613,6 +613,7 @@
           <!-- Benchmarks & Waterfall -->
           <div class="settings-box mt-3">
             <h3>Pipeline Latency Waterfall</h3>
+            <div class="helper-text" style="font-size: 11px;">Values prefixed with ~ or &lt; are nominal targets, not measurements.</div>
             <div class="latency-grid">
               <div class="latency-pill">
                 <span>VAD / Gate:</span>

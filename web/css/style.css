@@ -209,16 +209,6 @@ body {
   gap: 8px;
 }
 
-#tts-model-badge {
-  font-size: 10px;
-  padding: 2px 7px;
-  letter-spacing: 0.3px;
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .panel-header h2 {
   font-size: 14px;
   font-weight: 600;
@@ -278,7 +268,7 @@ body {
 
 #scope-canvas {
   width: 100%;
-  height: 80px;
+  height: auto; /* keep the 320x90 backing-store aspect so the waveform is not stretched */
   background: #040608;
   border-radius: 4px;
   display: block;

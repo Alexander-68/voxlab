@@ -87,7 +87,7 @@ func (r *EvalRunner) EvaluateSuite(ctx context.Context, manifest *EvalManifest, 
 		if ctx.Err() != nil {
 			return finish(), ctx.Err()
 		}
-		if err != nil {
+		if err != nil && res.Error == "" { // keep the stage EvaluateItem recorded
 			res.Error = err.Error()
 		}
 		results = append(results, *res)
@@ -159,7 +159,7 @@ func (r *EvalRunner) EvaluateItem(ctx context.Context, item EvalItem, wavPath st
 		ts   *httptest.Server
 	)
 	if r.wsURL != "" {
-		c, _, err := websocket.DefaultDialer.Dial(r.wsURL, nil)
+		c, _, err := websocket.DefaultDialer.DialContext(ctx, r.wsURL, nil)
 		if err != nil {
 			res.Error = fmt.Sprintf("ws dial failed: %v", err)
 			return res, err
@@ -172,7 +172,7 @@ func (r *EvalRunner) EvaluateItem(ctx context.Context, item EvalItem, wavPath st
 		defer ts.Close()
 
 		wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
-		c, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		c, _, err := websocket.DefaultDialer.DialContext(ctx, wsURL, nil)
 		if err != nil {
 			res.Error = fmt.Sprintf("ws dial failed: %v", err)
 			return res, err
@@ -305,26 +305,25 @@ func (r *EvalRunner) EvaluateItem(ctx context.Context, item EvalItem, wavPath st
 
 	// 1. Claim the pipeline, return to IDLE and activate. Waiting for each state keeps the
 	// item's audio inside its own turn.
-	_ = conn.WriteJSON(map[string]interface{}{"action": "eval_session"})
-	_ = conn.WriteJSON(map[string]interface{}{"action": "cancel"})
+	// A broken socket fails here with its real cause instead of as a later state timeout.
+	for _, action := range []string{"eval_session", "cancel"} {
+		if err := conn.WriteJSON(map[string]interface{}{"action": action}); err != nil {
+			return res, fmt.Errorf("sending %s: %w", action, err)
+		}
+	}
 	defer func() { _ = conn.WriteJSON(map[string]interface{}{"action": "cancel"}) }()
 	if err := waitFor(inState("IDLE"), stateWait); err != nil {
 		return res, fmt.Errorf("waiting for IDLE: %w", err)
 	}
 
 	listenState := "COMMAND_LISTEN"
+	activate := map[string]interface{}{"action": "activate", "mode": "command"}
 	if item.Mode == ModeDictation {
 		listenState = "ANNOTATION_LISTEN"
-		_ = conn.WriteJSON(map[string]interface{}{
-			"action":    "activate",
-			"mode":      "dictation",
-			"target_id": "eval_scope",
-		})
-	} else {
-		_ = conn.WriteJSON(map[string]interface{}{
-			"action": "activate",
-			"mode":   "command",
-		})
+		activate = map[string]interface{}{"action": "activate", "mode": "dictation", "target_id": "eval_scope"}
+	}
+	if err := conn.WriteJSON(activate); err != nil {
+		return res, fmt.Errorf("sending activate: %w", err)
 	}
 	if err := waitFor(inState(listenState), stateWait); err != nil {
 		return res, fmt.Errorf("waiting for %s: %w", listenState, err)
@@ -374,10 +373,9 @@ func (r *EvalRunner) EvaluateItem(ctx context.Context, item EvalItem, wavPath st
 	// 4. For dictation, stop and wait for the flush to finish: the state returns to IDLE only
 	// after the last segment reached the draft.
 	if item.Mode == ModeDictation {
-		_ = conn.WriteJSON(map[string]interface{}{
-			"action": "stop",
-			"mode":   "dictation",
-		})
+		if err := conn.WriteJSON(map[string]interface{}{"action": "stop", "mode": "dictation"}); err != nil {
+			return res, fmt.Errorf("sending stop: %w", err)
+		}
 		if err := waitFor(inState("IDLE"), flushWait); err != nil {
 			return res, fmt.Errorf("waiting for dictation flush: %w", err)
 		}

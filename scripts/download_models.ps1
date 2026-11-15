@@ -6,6 +6,7 @@
 # - Automatic detection of already present models and tools
 
 param (
+    [ValidateSet("auto", "int8", "v1_1", "v1_0", "v0_19")]
     [string]$KokoroVersion = "auto", # Options: "auto", "int8" (recommended fast), "v1_1" (full 103 voices), "v0_19"
     [switch]$SkipBinaries = $false,
     [switch]$SkipKokoro = $false,
@@ -33,13 +34,25 @@ function Invoke-FastDownload {
 
     if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
         # curl.exe uses libcurl, unthrottled streaming buffers, and resumable downloads
-        & curl.exe -L -C - --progress-bar --retry 3 --retry-delay 2 -o $OutFile $Url
+        & curl.exe -L -f -C - --progress-bar --retry 3 --retry-delay 2 -o $OutFile $Url
         if ($LASTEXITCODE -ne 0) {
             throw "curl.exe download failed for $Url (exit code $LASTEXITCODE)"
         }
     } else {
-        Invoke-WebRequest -Uri $Url -OutFile $OutFile
+        Invoke-WebRequest -Uri $Url -OutFile $OutFile -UseBasicParsing
     }
+}
+
+# Native commands don't trip $ErrorActionPreference; fail before the archive gets deleted.
+function Expand-Archive-Tar {
+    param([string]$Archive, [string]$Dest, [string[]]$TarArgs = @())
+    tar -xjf $Archive -C $Dest @TarArgs
+    if ($LASTEXITCODE -ne 0) { throw "tar failed extracting $Archive (exit code $LASTEXITCODE)" }
+}
+
+# A directory alone may be a leftover of an interrupted extraction; require real model files.
+function Test-ModelDir([string]$Dir) {
+    (Test-Path (Join-Path $Dir "tokens.txt")) -and (Test-Path (Join-Path $Dir "*.onnx"))
 }
 
 Write-Host "=================================================="
@@ -58,8 +71,8 @@ if (-not $SkipBinaries) {
         $SherpaBinUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-win-x64-shared-MT-Release.tar.bz2"
         Invoke-FastDownload -Url $SherpaBinUrl -OutFile $SherpaBinArchive -Description "Sherpa-ONNX Windows Tools & Shared Runtime"
         Write-Host "Extracting binaries and runtime DLLs into $BinDir..." -ForegroundColor Yellow
-        tar -xjf $SherpaBinArchive -C $BinDir --strip-components=2 "*/bin/*"
-        tar -xjf $SherpaBinArchive -C $BinDir --strip-components=2 "*/lib/*.dll"
+        Expand-Archive-Tar $SherpaBinArchive $BinDir @("--strip-components=2", "*/bin/*")
+        Expand-Archive-Tar $SherpaBinArchive $BinDir @("--strip-components=2", "*/lib/*.dll")
         Remove-Item $SherpaBinArchive -Force -ErrorAction SilentlyContinue
         Write-Host "[OK] Sherpa-ONNX binaries and C-API DLLs installed in bin/" -ForegroundColor Green
     } else {
@@ -78,6 +91,8 @@ if (-not $SkipKokoro) {
     if ($KokoroVersion -eq "auto") {
         if ($HasV11) {
             Write-Host "[2/3] Kokoro v1.1 model already installed." -ForegroundColor Yellow
+        } elseif ($HasV10) {
+            Write-Host "[2/3] Kokoro v1.0 model already installed." -ForegroundColor Yellow
         } elseif ($HasV019) {
             Write-Host "[2/3] Existing Kokoro v0.19 model found on disk (ready to use)." -ForegroundColor Yellow
             Write-Host "     (To upgrade to Kokoro v1.1 with 103 voices, run: .\scripts\download_models.ps1 -KokoroVersion v1_1)" -ForegroundColor Gray
@@ -94,12 +109,15 @@ if (-not $SkipKokoro) {
         if ($KokoroVersion -eq "v1_1") {
             $KokoroArchiveName = "kokoro-multi-lang-v1_1"
             $KokoroTargetDir = Join-Path $ModelsDir "kokoro-multi-lang-v1_1"
+        } elseif ($KokoroVersion -eq "v0_19") {
+            $KokoroArchiveName = "kokoro-en-v0_19"
+            $KokoroTargetDir = Join-Path $ModelsDir "kokoro-en-v0_19"
         } elseif ($KokoroVersion -eq "v1_0") {
             $KokoroArchiveName = "kokoro-multi-lang-v1_0"
             $KokoroTargetDir = Join-Path $ModelsDir "kokoro-multi-lang-v1_0"
         }
 
-        $AlreadyInstalled = (Test-Path $KokoroTargetDir) -or `
+        $AlreadyInstalled = (Test-ModelDir $KokoroTargetDir) -or `
                             ($KokoroVersion -eq "int8" -and (Test-Path (Join-Path $ModelsDir "kokoro-multi-lang-v1_1\model.int8.onnx")))
 
         if (-not $AlreadyInstalled) {
@@ -108,7 +126,7 @@ if (-not $SkipKokoro) {
             $KokoroArchive = Join-Path $ModelsDir "$KokoroArchiveName.tar.bz2"
             Invoke-FastDownload -Url $KokoroUrl -OutFile $KokoroArchive -Description "Kokoro Model ($KokoroArchiveName)"
             Write-Host "Extracting $KokoroArchiveName..." -ForegroundColor Yellow
-            tar -xjf $KokoroArchive -C $ModelsDir
+            Expand-Archive-Tar $KokoroArchive $ModelsDir
             Remove-Item $KokoroArchive -Force -ErrorAction SilentlyContinue
             # If kokoro-multi-lang-v1_1 already exists and int8 was downloaded, consolidate model.int8.onnx into it
             if ($KokoroVersion -eq "int8" -and (Test-Path (Join-Path $ModelsDir "kokoro-multi-lang-v1_1"))) {
@@ -133,12 +151,12 @@ if (-not $SkipAsr) {
     foreach ($AsrName in $AsrModels) {
         $AsrFolder = Join-Path $ModelsDir $AsrName
         $AsrArchive = Join-Path $ModelsDir "$AsrName.tar.bz2"
-        if (-not (Test-Path $AsrFolder)) {
+        if (-not (Test-ModelDir $AsrFolder)) {
             Write-Host "[3/3] Downloading ASR model $AsrName..." -ForegroundColor White
             $AsrUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/$AsrName.tar.bz2"
             Invoke-FastDownload -Url $AsrUrl -OutFile $AsrArchive -Description $AsrName
             Write-Host "Extracting ASR archive..." -ForegroundColor Yellow
-            tar -xjf $AsrArchive -C $ModelsDir
+            Expand-Archive-Tar $AsrArchive $ModelsDir
             Remove-Item $AsrArchive -Force -ErrorAction SilentlyContinue
             Write-Host "[OK] $AsrName installed!" -ForegroundColor Green
         } else {

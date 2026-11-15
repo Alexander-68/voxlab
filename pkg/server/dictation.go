@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 var (
@@ -20,7 +21,7 @@ var (
 	reNewlineSpaces = regexp.MustCompile(`[ \t]*\n[ \t]*`)
 	reMultiNewlines = regexp.MustCompile(`\n{3,}`)
 	reMultiSpaces   = regexp.MustCompile(`[ \t]{2,}`)
-	reEndsWithPunct = regexp.MustCompile(`[.;,!?:\n。！？；：，]$`)
+	reEndsWithPunct = regexp.MustCompile(`[.;,!?:\n。！？；：，…]["'”’)\]]*$`)
 	reLeadingChar   = regexp.MustCompile(`^(\s*)([a-z])`)
 	reAfterSentence = regexp.MustCompile(`([.?!]\s+)([a-z])`)
 	reAfterNewline  = regexp.MustCompile(`(\n+\s*)([a-z])`)
@@ -140,29 +141,41 @@ func formatDictationPhraseInternal(rawText string, isContinuation bool) string {
 		})
 	}
 
-	text = reAfterSentence.ReplaceAllStringFunc(text, func(s string) string {
-		r := []rune(s)
-		for i := len(r) - 1; i >= 0; i-- {
-			if unicode.IsLetter(r[i]) {
-				r[i] = unicode.ToUpper(r[i])
-				break
-			}
-		}
-		return string(r)
-	})
+	text = capitalizeAfterSentences(text)
+	return reAfterNewline.ReplaceAllStringFunc(text, upperLastLetter)
+}
 
-	text = reAfterNewline.ReplaceAllStringFunc(text, func(s string) string {
-		r := []rune(s)
-		for i := len(r) - 1; i >= 0; i-- {
-			if unicode.IsLetter(r[i]) {
-				r[i] = unicode.ToUpper(r[i])
-				break
-			}
+// upperLastLetter upper-cases the last letter of a regexp match.
+func upperLastLetter(s string) string {
+	r := []rune(s)
+	for i := len(r) - 1; i >= 0; i-- {
+		if unicode.IsLetter(r[i]) {
+			r[i] = unicode.ToUpper(r[i])
+			break
 		}
-		return string(r)
-	})
+	}
+	return string(r)
+}
 
-	return text
+// capitalizeAfterSentences upper-cases the letter after a sentence end, except after an
+// abbreviation: a single-letter token ("C. difficile") or one with inner dots ("p.o. b.i.d.").
+// ponytail: dot-shape heuristic, so a sentence ending in "vitamin C." stays lower-case next.
+func capitalizeAfterSentences(text string) string {
+	var b strings.Builder
+	last := 0
+	for _, m := range reAfterSentence.FindAllStringIndex(text, -1) {
+		b.WriteString(text[last:m[0]])
+		match := text[m[0]:m[1]]
+		token := text[strings.LastIndexAny(text[:m[0]], " \t\n")+1 : m[0]]
+		if text[m[0]] == '.' && (utf8.RuneCountInString(token) == 1 || strings.Contains(token, ".")) {
+			b.WriteString(match)
+		} else {
+			b.WriteString(upperLastLetter(match))
+		}
+		last = m[1]
+	}
+	b.WriteString(text[last:])
+	return b.String()
 }
 
 // AppendDictationPhrase appends a newly formatted phrase to the existing draft.
@@ -178,6 +191,14 @@ func AppendDictationPhrase(currentText, newPhrase string) string {
 	}
 	if strings.HasPrefix(formatted, "\n") {
 		return current + formatted
+	}
+	if strings.IndexAny(formatted, ".,;:?!") == 0 {
+		// A phrase opening with a spoken mark ("period", "comma and then") attaches to the
+		// previous text; a mark already there merges with it instead of doubling.
+		i := len(strings.TrimRight(current, ".,;:?!"))
+		j := len(current) + len(formatted) - len(strings.TrimLeft(formatted, ".,;:?!"))
+		joined := current + formatted
+		return joined[:i] + collapsePunctuation(joined[i:j]) + joined[j:]
 	}
 	return current + " " + formatted
 }
