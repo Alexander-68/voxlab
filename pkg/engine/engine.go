@@ -26,6 +26,7 @@ type TTSResult struct {
 	SampleRate   int       `json:"sample_rate"`
 	DurationSec  float64   `json:"duration_sec"`
 	LatencyMs    int64     `json:"latency_ms"`
+	Simulated    bool      `json:"simulated"` // tones from the simulator (including SherpaRunner fallbacks), not speech
 }
 
 // TTSChunk represents an incrementally synthesized audio fragment for low-latency streaming playback.

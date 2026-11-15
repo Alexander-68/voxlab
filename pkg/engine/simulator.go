@@ -270,6 +270,7 @@ func (s *SimulatorEngine) SynthesizeStream(req TTSRequest, onChunk func(chunk TT
 		SampleRate:   sampleRate,
 		DurationSec:  totalDuration,
 		LatencyMs:    latency,
+		Simulated:    true,
 	}, nil
 }
 

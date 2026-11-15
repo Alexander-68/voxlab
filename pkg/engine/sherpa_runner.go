@@ -430,6 +430,18 @@ func InstalledStreamingModels(modelsRoot string) []string {
 	return out
 }
 
+// ASRInstalled reports whether the streaming ASR server binary and a streaming model are on disk.
+func ASRInstalled(cfg *config.AppConfig) bool {
+	_, binOK := findSherpaBin(cfg.Engine.SherpaAsrBin)
+	return binOK && resolveModelDir(append([]string{cfg.Engine.StreamingModelDir}, InstalledStreamingModels(cfg.Engine.ModelDir)...)...) != ""
+}
+
+// TTSInstalled reports whether a Kokoro model is on disk; without one, Synthesize falls back to simulator tones.
+func TTSInstalled(cfg *config.AppConfig) bool {
+	_, ok := findKokoroModelDir(cfg.Engine.KokoroModelDir)
+	return ok
+}
+
 func isRegularFile(p string) bool {
 	fi, err := os.Stat(p)
 	return err == nil && !fi.IsDir()

@@ -1,10 +1,24 @@
 package corpus
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"voxlab/pkg/audio"
+	"voxlab/pkg/engine"
 )
+
+func TestLoadOrSynthesizeClipRejectsSimulatorTones(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "clip.wav")
+	_, err := LoadOrSynthesizeClip(path, engine.NewSimulatorEngine(), engine.TTSRequest{Text: "hello", SampleRate: 24000})
+	if err == nil {
+		t.Fatal("expected an error for simulator (non-speech) synthesis")
+	}
+	if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+		t.Fatalf("tone clip was written to %s", path)
+	}
+}
 
 func TestScoreDictation(t *testing.T) {
 	exact := 0.0

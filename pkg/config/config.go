@@ -49,7 +49,7 @@ type DictationConfig struct {
 
 // EngineConfig configures Sherpa-ONNX model paths and binaries.
 type EngineConfig struct {
-	Mode                string `json:"mode"`                        // "simulator" or "sherpa"
+	Mode                string `json:"mode"`                        // "auto", "simulator" or "sherpa"
 	ModelDir            string `json:"model_dir"`                   // e.g. "models"
 	SherpaTtsBin        string `json:"sherpa_tts_bin"`              // e.g. "sherpa-onnx-offline-tts"
 	SherpaKwsBin        string `json:"sherpa_kws_bin"`              // e.g. "sherpa-onnx-keyword-spotter"
@@ -129,7 +129,7 @@ func DefaultConfig() *AppConfig {
 			MaxDurationSec:    30.0,
 		},
 		Engine: EngineConfig{
-			Mode:                "simulator",
+			Mode:                "auto", // cmd/voxlab resolves it to sherpa if installed, else simulator; NewServer treats it as simulator
 			ModelDir:            "models",
 			SherpaTtsBin:        "sherpa-onnx-offline-tts",
 			SherpaKwsBin:        "sherpa-onnx-keyword-spotter",

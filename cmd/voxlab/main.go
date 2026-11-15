@@ -2,16 +2,18 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"net/http"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 
 	"voxlab/pkg/config"
+	"voxlab/pkg/engine"
 	"voxlab/pkg/server"
 )
 
@@ -19,7 +21,7 @@ func main() {
 	portFlag := flag.Int("port", 8080, "HTTP and WebSocket server port")
 	hostFlag := flag.String("host", "127.0.0.1", "Host address to bind (0.0.0.0 exposes the mic and controls to the LAN, unauthenticated)")
 	configFlag := flag.String("config", "config.json", "Path to config file")
-	engineFlag := flag.String("engine", "simulator", "Speech engine: 'simulator' or 'sherpa'")
+	engineFlag := flag.String("engine", "auto", "Speech engine: 'auto', 'simulator' or 'sherpa'")
 	modelsFlag := flag.String("models", "models", "Directory containing Sherpa-ONNX model files")
 	uiFlag := flag.String("ui", "web", "Directory containing static web UI assets")
 	threadsFlag := flag.Int("threads", 4, "Number of threads for neural network inference")
@@ -43,45 +45,34 @@ func main() {
 	if cfg.Host == "" {
 		cfg.Host = *hostFlag
 	}
-	engineExplicit := false
 	flag.Visit(func(f *flag.Flag) {
-		if f.Name == "engine" {
-			engineExplicit = true
-		}
-		if f.Name == "host" {
+		switch f.Name {
+		case "host":
 			cfg.Host = *hostFlag
-		}
-		if f.Name == "port" {
+		case "port":
 			cfg.Port = *portFlag
-		}
-	})
-
-	if engineExplicit {
-		cfg.Engine.Mode = *engineFlag
-	} else if cfg.Engine.Mode == "simulator" {
-		// Auto-detect if sherpa tools and models are installed on disk
-		binMatch, _ := filepath.Glob("bin/sherpa-onnx*")
-		modelMatch, _ := filepath.Glob("models/sherpa-onnx-*streaming*")
-		if len(binMatch) > 0 && len(modelMatch) > 0 {
-			log.Printf("[VoxLab] Detected installed Sherpa-ONNX binaries and streaming ASR model: Auto-activating 'sherpa' neural engine!")
-			cfg.Engine.Mode = "sherpa"
-		}
-	}
-
-	if *modelsFlag != "models" {
-		cfg.Engine.ModelDir = *modelsFlag
-	}
-	if *uiFlag != "web" {
-		cfg.StaticDir = *uiFlag
-	}
-	flag.Visit(func(f *flag.Flag) {
-		if f.Name == "threads" {
+		case "engine":
+			cfg.Engine.Mode = *engineFlag
+		case "models":
+			cfg.Engine.ModelDir = *modelsFlag
+		case "ui":
+			cfg.StaticDir = *uiFlag
+		case "threads":
 			cfg.Engine.NumThreads = *threadsFlag
-		}
-		if f.Name == "provider" {
+		case "provider":
 			cfg.Engine.Provider = *providerFlag
 		}
 	})
+
+	switch installed := engine.ASRInstalled(cfg); {
+	case cfg.Engine.Mode == "auto" && installed:
+		log.Printf("[VoxLab] Detected installed Sherpa-ONNX binaries and streaming ASR model: Auto-activating 'sherpa' neural engine!")
+		cfg.Engine.Mode = "sherpa"
+	case cfg.Engine.Mode == "auto":
+		cfg.Engine.Mode = "simulator"
+	case cfg.Engine.Mode == "simulator" && installed:
+		log.Printf("[Notice] Engine mode 'simulator' is set explicitly although Sherpa-ONNX is installed; use -engine auto, or set engine.mode to \"auto\" in %s, to enable it", *configFlag)
+	}
 
 	srv, err := server.NewServer(cfg)
 	if err != nil {
@@ -102,16 +93,21 @@ func main() {
 
 	fmt.Printf("\n VoxLab v%s is active!\n Web UI:   http://localhost:%d\n Engine:   %s\n Press Ctrl+C to stop.\n\n", config.Version, cfg.Port, cfg.Engine.Mode)
 
+	failed := false
 	select {
 	case <-sigChan:
 	case err := <-serveErr:
 		log.Printf("[Server] Stopped: %v", err)
+		failed = !errors.Is(err, http.ErrServerClosed)
 	}
 	log.Println("[VoxLab] Shutting down...")
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
 	if err := srv.Stop(ctx); err != nil {
 		log.Printf("[Error] Shutdown error: %v", err)
+	}
+	cancel()
+	if failed {
+		os.Exit(1)
 	}
 	log.Println("[VoxLab] Exited cleanly.")
 }

@@ -745,6 +745,9 @@ func LoadOrSynthesizeClip(path string, runner engine.SpeechEngine, req engine.TT
 	if err != nil {
 		return nil, fmt.Errorf("synthesis failed: %w", err)
 	}
+	if res.Simulated {
+		return nil, fmt.Errorf("synthesizing %s: Kokoro TTS unavailable, got simulator tones instead of speech", path)
+	}
 
 	resampled := audio.Resample(res.AudioSamples, 24000, 16000)
 	samples := make([]float32, 16000*200/1000) // 200 ms lead
