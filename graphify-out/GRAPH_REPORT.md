@@ -1,22 +1,22 @@
-# Graph Report - voxlab  (2026-11-08)
+# Graph Report - voxlab  (2026-11-15)
 
 ## Corpus Check
-- 90 files · ~90,504 words
+- 91 files · ~110,547 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 2 file(s) not represented in the graph (top: (none) 1, .css 1)
 
 ## Summary
-- 844 nodes · 2426 edges · 46 communities (34 shown, 12 thin omitted)
-- Extraction: 82% EXTRACTED · 18% INFERRED · 0% AMBIGUOUS · INFERRED: 447 edges (avg confidence: 0.84)
+- 850 nodes · 2499 edges · 44 communities (33 shown, 11 thin omitted)
+- Extraction: 79% EXTRACTED · 21% INFERRED · 0% AMBIGUOUS · INFERRED: 515 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `53b6862a`
+- Built from commit: `978a0e5c`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- Speech Denoiser & Audio Generation
+- testing.T
 - Evaluation Runner & Manifest
 - TTSResult
 - Embedded Voice Architecture Reference
@@ -27,7 +27,7 @@
 - Persistent Warm TTS Synthesis
 - HTTP Web Server & Networking
 - DSP Audio Preprocessor Controls
-- testing.T
+- warm_tts_windows.go
 - Warm ASR Daemon Management
 - ASR Audio Streaming Pipeline
 - Command Catalog & Slot Extraction
@@ -41,10 +41,8 @@
 - Audio Visualizer & PCM Player
 - ONNX Metadata Patching Utilities
 - TTSManager
-- Thread-Safe Ring Buffer
+- EncodeWAV
 - WebSocket Client Connection Lifecycle
-- Dictation Phrase Formatting & Normalization
-- Benchmark Metrics Reporting
 - Evaluation Manifest Tier 1
 - Evaluation Manifest Tier 2
 - Q: Are the 16 inferred relationships involving setupTestServer() correct?
@@ -63,7 +61,7 @@
 
 ## God Nodes (most connected - your core abstractions)
 1. `Server` - 80 edges
-2. `SherpaRunner` - 37 edges
+2. `SherpaRunner` - 38 edges
 3. `VoiceClient` - 35 edges
 4. `setupTestServer()` - 31 edges
 5. `NewServer()` - 29 edges
@@ -74,16 +72,16 @@
 10. `NewSherpaRunner()` - 17 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `Audio In & DSP Panel` --conceptually_related_to--> `DSP Preprocessing Pipeline`  [INFERRED]
-  web/index.html → README.md
-- `Voice Commands Tab` --conceptually_related_to--> `Voice Commands Pipeline`  [INFERRED]
-  web/index.html → README.md
-- `Voice Dictations Tab` --conceptually_related_to--> `Voice Dictations Pipeline`  [INFERRED]
-  web/index.html → README.md
-- `NewServer()` --calls--> `run()`  [EXTRACTED]
-  pkg/server/server.go → cmd/eval_bench/main.go
-- `NewServer()` --calls--> `main()`  [EXTRACTED]
-  pkg/server/server.go → cmd/voxlab/main.go
+- `Quick Wins` --references--> `escapeHtml()`  [INFERRED]
+  review-261115.md → web/js/bench-ui.js
+- `Top Issues` --references--> `LoadConfig()`  [INFERRED]
+  review-261115.md → pkg/config/config.go
+- `Cross-Cutting Concerns` --references--> `EncodeWAV()`  [INFERRED]
+  review-261115.md → pkg/audio/wav.go
+- `Top Issues` --references--> `getFreeTCPPort()`  [INFERRED]
+  review-261115.md → pkg/engine/warm_asr.go
+- `Top Issues` --references--> `toCString()`  [INFERRED]
+  review-261115.md → pkg/engine/warm_tts_windows.go
 
 ## Import Cycles
 - 2-file cycle: `pkg/evaluation/smoke_test.go -> pkg/server/server.go -> pkg/evaluation/smoke_test.go`
@@ -106,19 +104,19 @@
 - **** — ref_linux_wpe_voice_recipe_interaction_state_machine, ref_linux_wpe_voice_recipe_command_catalog_slots, ref_linux_wpe_voice_recipe_annotation_dictation_mode, ref_linux_wpe_voice_recipe_echo_control_policy [INFERRED]
 - **** — ref_embedded_voice_architecture_recipe_silero_vad, ref_embedded_voice_architecture_recipe_wake_word_detector, ref_embedded_voice_architecture_recipe_streaming_asr_zipformer, ref_embedded_voice_architecture_recipe_semantic_intent_router, ref_embedded_voice_architecture_recipe_piper_tts [INFERRED]
 
-## Communities (46 total, 12 thin omitted)
+## Communities (44 total, 11 thin omitted)
 
-### Community 0 - "Speech Denoiser & Audio Generation"
-Cohesion: 0.14
-Nodes (11): cGeneratedAudio, cKittenModelConfig, cKokoroModelConfig, cMatchaModelConfig, cOfflineTtsConfig, cOfflineTtsModelConfig, cPocketModelConfig, cSupertonicModelConfig (+3 more)
+### Community 0 - "testing.T"
+Cohesion: 0.07
+Nodes (70): main(), main(), jobObjectExtendedLimit, NewDSPProcessor(), TestDSPHighPassAndAGC(), TestDSPNoiseGateAndEcho(), DefaultConfig(), TestTailWriterKeepsEnd() (+62 more)
 
 ### Community 1 - "Evaluation Runner & Manifest"
 Cohesion: 0.10
-Nodes (36): EvalItem, EvalManifest, DimensionGroup, ItemResult, LatencyPercentiles, LatencyStatistics, RunConfig, SNRCurvePoint (+28 more)
+Nodes (35): EvalItem, EvalManifest, DimensionGroup, ItemResult, LatencyPercentiles, LatencyStatistics, RunConfig, SNRCurvePoint (+27 more)
 
 ### Community 2 - "TTSResult"
-Cohesion: 0.15
-Nodes (13): main(), stubWarmTTS, Float32ToBytesPCM(), Float32ToInt16(), TestWAVEncodeDecode(), EncodeWAV(), GenerateChime(), TTSChunk (+5 more)
+Cohesion: 0.28
+Nodes (4): TTSChunk, TTSRequest, TTSResult, float32SliceToTTSResult()
 
 ### Community 3 - "Embedded Voice Architecture Reference"
 Cohesion: 0.07
@@ -130,35 +128,35 @@ Nodes (25): Ref Architectural Ideas, VoxLab App Specification, Dynamic Model Swi
 
 ### Community 6 - "Audio Capture Sources & Devices"
 Cohesion: 0.08
-Nodes (16): AudioSource, tailWriter, detectWindowsDirectShowMic(), HostNativeSource, WavFileSource, WebSocketSource, NewWavFileSource(), NewWebSocketSource() (+8 more)
+Nodes (15): AudioSource, tailWriter, detectWindowsDirectShowMic(), HostNativeSource, WavFileSource, WebSocketSource, NewWavFileSource(), NewWebSocketSource() (+7 more)
+
+### Community 7 - "Simulator Engine & Test Generation"
+Cohesion: 0.11
+Nodes (4): SimulatorEngine, SpeechEngine, GenerateTier1Corpus(), LoadOrSynthesizeClip()
 
 ### Community 8 - "Persistent Warm TTS Synthesis"
-Cohesion: 0.17
-Nodes (5): WarmTTS, windowsWarmTTS, warmTTSKey(), newPlatformWarmTTS(), newPlatformWarmTTS()
+Cohesion: 0.12
+Nodes (11): stubWarmTTS, WarmTTS, windowsWarmTTS, optimizeStreamingClauses(), warmTTSKey(), getFreeTCPPort(), TestGetFreeTCPPort(), newPlatformWarmTTS() (+3 more)
 
 ### Community 9 - "HTTP Web Server & Networking"
 Cohesion: 0.14
 Nodes (3): isLoopbackName(), EvalState, Server
 
-### Community 10 - "DSP Audio Preprocessor Controls"
-Cohesion: 0.12
-Nodes (4): DSPProcessor, NewServer(), NewStateMachine(), TestStateMachine()
-
-### Community 11 - "testing.T"
-Cohesion: 0.05
-Nodes (70): main(), main(), NewHostNativeSource(), TestHostNativeCapture(), CalculateRMS(), NewDSPProcessor(), TestCalculateRMS(), TestDSPHighPassAndAGC() (+62 more)
+### Community 11 - "warm_tts_windows.go"
+Cohesion: 0.14
+Nodes (15): cDenoisedAudio, cDenoiserModelConfig, cDpdfNetModelConfig, cGtcrnModelConfig, cOnlineSpeechDenoiserConfig, cGeneratedAudio, cKittenModelConfig, cKokoroModelConfig (+7 more)
 
 ### Community 12 - "Warm ASR Daemon Management"
-Cohesion: 0.13
-Nodes (15): daemon, WarmASR, WarmOffline, killWithParent(), startDaemon(), killWithParent(), StartWarmOffline(), findSherpaBin() (+7 more)
+Cohesion: 0.19
+Nodes (9): daemon, WarmASR, WarmOffline, killWithParent(), startDaemon(), killWithParent(), NewWarmASR(), StartWarmASR() (+1 more)
 
 ### Community 13 - "ASR Audio Streaming Pipeline"
-Cohesion: 0.18
-Nodes (4): ASRStream, ASRResult, containsCJK(), fakeEngine
+Cohesion: 0.16
+Nodes (5): ASRStream, ASRResult, containsCJK(), normalizeCase(), fakeEngine
 
 ### Community 14 - "Command Catalog & Slot Extraction"
-Cohesion: 0.17
-Nodes (18): CommandCatalog, CommandEntry, IntentDecision, MatchCandidate, DefaultCatalog(), LoadCatalog(), Tokenize(), calculateSimilarity() (+10 more)
+Cohesion: 0.10
+Nodes (25): CommandCatalog, CommandEntry, IntentDecision, MatchCandidate, TestRingBuffer(), NewRingBuffer(), DefaultCatalog(), LoadCatalog() (+17 more)
 
 ### Community 15 - "Voice Interaction State Machine"
 Cohesion: 0.20
@@ -166,47 +164,43 @@ Nodes (4): State, StateMachine, asrWorkItem, StateEvent
 
 ### Community 16 - "Benchmark UI & Audio Helpers"
 Cohesion: 0.13
-Nodes (11): escapeHtml(), getLanguageGroup(), handleCustomDictInject(), handleKwsToggle(), logEvent(), populateVoicesDropdown(), renderCasesTable(), renderEvalReport() (+3 more)
+Nodes (12): escapeHtml(), getLanguageGroup(), handleCustomDictInject(), handleKwsToggle(), logEvent(), populateVoicesDropdown(), renderCasesTable(), renderEvalReport() (+4 more)
 
 ### Community 17 - "Neural Speech Denoisers & Enhancer"
-Cohesion: 0.06
-Nodes (23): AudioConfig, DictationConfig, EngineConfig, IntentConfig, KWSConfig, TTSConfig, BypassEnhancer, cDenoisedAudio (+15 more)
+Cohesion: 0.08
+Nodes (19): AudioConfig, DictationConfig, EngineConfig, IntentConfig, KWSConfig, TTSConfig, BypassEnhancer, windowsSpeechEnhancer (+11 more)
 
 ### Community 18 - "TTS Model Selection & Warmup"
-Cohesion: 0.19
-Nodes (13): detectKokoroVersion(), FindInstalledKokoroModels(), findKokoroModelDir(), isRegularFile(), isValidKokoroDir(), kokoroLang(), kokoroLexicons(), mapVoiceToSID() (+5 more)
-
-### Community 19 - ".processIncomingAudio"
-Cohesion: 0.14
-Nodes (3): AppendDictationPhrase(), appendJSONLine(), downsampleWave()
+Cohesion: 0.16
+Nodes (10): detectKokoroVersion(), FindInstalledKokoroModels(), findKokoroModelDir(), isRegularFile(), isValidKokoroDir(), kokoroLang(), kokoroLexicons(), mapVoiceToSID() (+2 more)
 
 ### Community 20 - "Sherpa-ONNX Runner Integration"
-Cohesion: 0.21
-Nodes (7): SherpaRunner, InstalledStreamingModels(), NewSherpaRunner(), resolveModelDir(), TestKokoroFP16Model(), TestKokoroINT8Model(), findTransducerModel()
+Cohesion: 0.23
+Nodes (8): SherpaRunner, StartWarmOffline(), findSherpaBin(), InstalledStreamingModels(), NewSherpaRunner(), resolveModelDir(), findTransducerModel(), TestWarmASRStreaming()
 
 ### Community 21 - "Acoustic Perturbations & Corpus Generator"
-Cohesion: 0.21
-Nodes (15): BaseUtterance, MatrixVariation, AddNoiseAtSNR(), ApplyReverb(), GenerateBabbleNoise(), GeneratePinkNoise(), GenerateTypingNoise(), GenerateWhiteNoise() (+7 more)
+Cohesion: 0.13
+Nodes (23): BaseUtterance, MatrixVariation, NewHostNativeSource(), TestHostNativeCapture(), CalculateRMS(), TestCalculateRMS(), AddNoiseAtSNR(), ApplyReverb() (+15 more)
+
+### Community 22 - "Audio Visualizer & PCM Player"
+Cohesion: 0.11
+Nodes (11): main(), pct(), printLatencyLine(), printReportSummary(), run(), truncateString(), Cross-Cutting Concerns, Module Hotspots (+3 more)
 
 ### Community 23 - "ONNX Metadata Patching Utilities"
 Cohesion: 0.33
 Nodes (3): inspect_metadata(), main(), patch_metadata()
 
-### Community 25 - "Thread-Safe Ring Buffer"
-Cohesion: 0.25
-Nodes (3): TestRingBuffer(), RingBuffer, NewRingBuffer()
+### Community 24 - "TTSManager"
+Cohesion: 0.21
+Nodes (3): VoiceProfile, appendJSONLine(), TTSManager
+
+### Community 25 - "EncodeWAV"
+Cohesion: 0.40
+Nodes (6): main(), Float32ToBytesPCM(), Float32ToInt16(), TestWAVEncodeDecode(), EncodeWAV(), GenerateChime()
 
 ### Community 26 - "WebSocket Client Connection Lifecycle"
 Cohesion: 0.39
 Nodes (3): newWSClient(), wsClient, wsFrame
-
-### Community 27 - "Dictation Phrase Formatting & Normalization"
-Cohesion: 0.40
-Nodes (4): FormatDictationPhrase(), formatDictationPhraseInternal(), replaceSpokenWord(), TestFormatDictationPhrase()
-
-### Community 28 - "Benchmark Metrics Reporting"
-Cohesion: 0.29
-Nodes (6): main(), pct(), printLatencyLine(), printReportSummary(), run(), truncateString()
 
 ### Community 29 - "Evaluation Manifest Tier 1"
 Cohesion: 0.50
@@ -246,23 +240,23 @@ Nodes (4): Answer, Outcome, Q: Why does SpeechEngine connect Simulator Engine & 
 
 ## Knowledge Gaps
 - **24 isolated node(s):** `voxlab`, `Host Voice Daemon Reference`, `Web Audio Canvas Oscilloscope & Spectrum`, `Piper TTS Pipeline`, `PipeWire Audio Server Subsystem` (+19 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 127 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **12 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 124 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **11 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Server` connect `HTTP Web Server & Networking` to `Speech Denoiser & Audio Generation`, `Evaluation Runner & Manifest`, `Audio Capture Sources & Devices`, `Simulator Engine & Test Generation`, `DSP Audio Preprocessor Controls`, `testing.T`, `Command Catalog & Slot Extraction`, `Voice Interaction State Machine`, `Neural Speech Denoisers & Enhancer`, `.processIncomingAudio`, `TTSManager`, `Thread-Safe Ring Buffer`, `WebSocket Client Connection Lifecycle`?**
-  _High betweenness centrality (0.134) - this node is a cross-community bridge._
+- **Why does `Server` connect `HTTP Web Server & Networking` to `testing.T`, `Evaluation Runner & Manifest`, `Audio Capture Sources & Devices`, `Simulator Engine & Test Generation`, `DSP Audio Preprocessor Controls`, `Command Catalog & Slot Extraction`, `Voice Interaction State Machine`, `Neural Speech Denoisers & Enhancer`, `.processIncomingAudio`, `TTSManager`, `WebSocket Client Connection Lifecycle`?**
+  _High betweenness centrality (0.135) - this node is a cross-community bridge._
 - **Are the 16 inferred relationships involving `setupTestServer()` (e.g. with `TestCancelledRunLeavesNoReportAndAllowsANewRun()` and `TestDictationIsIsolatedFromOtherActions()`) actually correct?**
   _`setupTestServer()` has 16 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `voxlab`, `Host Voice Daemon Reference`, `Web Audio Canvas Oscilloscope & Spectrum` to the rest of the system?**
   _24 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `Speech Denoiser & Audio Generation` be split into smaller, more focused modules?**
-  _Cohesion score 0.13927376970855232 - nodes in this community are weakly interconnected._
+- **Should `testing.T` be split into smaller, more focused modules?**
+  _Cohesion score 0.06877271456527817 - nodes in this community are weakly interconnected._
 - **Why does `SherpaRunner` connect `Sherpa-ONNX Runner Integration` to `TTSResult`, `Audio Capture Sources & Devices`, `Simulator Engine & Test Generation`, `Persistent Warm TTS Synthesis`, `Warm ASR Daemon Management`, `ASR Audio Streaming Pipeline`, `Neural Speech Denoisers & Enhancer`, `TTS Model Selection & Warmup`?**
-  _High betweenness centrality (0.047) - this node is a cross-community bridge._
+  _High betweenness centrality (0.054) - this node is a cross-community bridge._
 - **Should `Evaluation Runner & Manifest` be split into smaller, more focused modules?**
-  _Cohesion score 0.09619450317124736 - nodes in this community are weakly interconnected._
-- **Why does `SpeechEngine` connect `Simulator Engine & Test Generation` to `Speech Denoiser & Audio Generation`, `Evaluation Runner & Manifest`, `TTSResult`, `HTTP Web Server & Networking`, `DSP Audio Preprocessor Controls`, `testing.T`, `ASR Audio Streaming Pipeline`, `Acoustic Perturbations & Corpus Generator`, `TTSManager`?**
-  _High betweenness centrality (0.025) - this node is a cross-community bridge._
+  _Cohesion score 0.09966777408637874 - nodes in this community are weakly interconnected._
+- **Should `Embedded Voice Architecture Reference` be split into smaller, more focused modules?**
+  _Cohesion score 0.06507936507936508 - nodes in this community are weakly interconnected._

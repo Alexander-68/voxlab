@@ -1,4 +1,5 @@
 :root {
+  color-scheme: dark;
   --bg-dark: #0a0e14;
   --bg-panel: #121820;
   --bg-card: #18222d;
@@ -8,7 +9,6 @@
   --text-main: #e2e8f0;
   --text-muted: #8e9cae;
   --accent: #3b82f6;
-  --accent-hover: #2563eb;
   --success: #10b981;
   --warning: #f59e0b;
   --danger: #ef4444;
@@ -30,6 +30,7 @@ body {
   font-size: 14px;
   line-height: 1.5;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -37,6 +38,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   padding: 12px 16px;
   gap: 12px;
 }
@@ -114,9 +116,8 @@ body {
 
 /* Badges with stable fixed width to prevent header text jumping */
 .badge {
-  display: inline-flex;
-  justify-content: center;
-  align-items: center;
+  display: inline-block;
+  vertical-align: middle;
   text-align: center;
   padding: 3px 6px;
   border-radius: 4px;
@@ -126,6 +127,9 @@ body {
   text-transform: uppercase;
   box-sizing: border-box;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: 1px solid transparent;
 }
 
 /* Stable fixed widths: only the badge color/text changes, never shifting line layout */
@@ -160,6 +164,10 @@ body {
   50% { opacity: 0.85; transform: scale(1.03); }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .badge-listen { animation: none; }
+}
+
 /* Test Bench Grid */
 .testbench-grid {
   display: grid;
@@ -167,6 +175,13 @@ body {
   gap: 12px;
   flex: 1;
   min-height: 0;
+}
+
+/* Narrow viewports: stack the columns and let the page scroll */
+@media (max-width: 1100px) {
+  body, .app-container { height: auto; overflow: visible; }
+  .app-header, .header-status-bar { flex-wrap: wrap; gap: 8px; }
+  .testbench-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Panels */
@@ -332,12 +347,6 @@ body {
   transition: opacity 0.2s ease, filter 0.2s ease;
 }
 
-.settings-box.section-disabled input,
-.settings-box.section-disabled select,
-.settings-box.section-disabled button {
-  cursor: not-allowed;
-}
-
 .slider-group {
   margin-bottom: 8px;
 }
@@ -362,6 +371,15 @@ input[type="range"] {
   height: 4px;
   border-radius: 2px;
   outline: none;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+audio:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
 }
 
 .toggle-list {
@@ -405,7 +423,7 @@ input[type="range"] {
   border-radius: 6px;
   border: 1px solid transparent;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
 }
 
 .btn-block { width: 100%; }
@@ -495,7 +513,7 @@ input[type="range"] {
 }
 
 .placeholder-text {
-  color: #475569;
+  color: var(--text-muted);
   font-style: italic;
   font-size: 13px;
 }
